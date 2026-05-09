@@ -1,0 +1,392 @@
+@import "tailwindcss";
+
+/* ----------------------------------------------------------------------------
+ * Smile NOLA brand tokens (from Brand Brief §6)
+ * Black & gold luxury · Gatsby/Art Deco · cinematic warmth
+ * -------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: "Holimount";
+  src: url("/fonts/Holimount.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Broadway";
+  src: url("/fonts/Broadway.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* Brand colors */
+  --sn-black: #050505;
+  --sn-soft-black: #111111;
+  --sn-gold: #d4af37;
+  --sn-antique-gold: #b8860b;
+  --sn-champagne: #f6e7c8;
+  --sn-ivory: #f8f4ea;
+  --sn-amber: #ffb23f;
+  --sn-muted-stone: #b8b2a5;
+
+  /* Soft tints (with alpha) for layered atmosphere */
+  --sn-gold-12: rgba(212, 175, 55, 0.12);
+  --sn-gold-24: rgba(212, 175, 55, 0.24);
+  --sn-gold-40: rgba(212, 175, 55, 0.4);
+  --sn-amber-20: rgba(255, 178, 63, 0.2);
+  --sn-amber-40: rgba(255, 178, 63, 0.4);
+
+  /* Type scale */
+  --font-signature: "Holimount", "Pinyon Script", cursive;
+  --font-deco: "Broadway", "Limelight", "Cinzel Decorative", serif;
+  --font-body: var(--font-poppins, "Poppins"), system-ui, sans-serif;
+}
+
+/* Tailwind v4 theme bridge — exposes tokens as utilities */
+@theme inline {
+  --color-sn-black: var(--sn-black);
+  --color-sn-soft-black: var(--sn-soft-black);
+  --color-sn-gold: var(--sn-gold);
+  --color-sn-antique-gold: var(--sn-antique-gold);
+  --color-sn-champagne: var(--sn-champagne);
+  --color-sn-ivory: var(--sn-ivory);
+  --color-sn-amber: var(--sn-amber);
+  --color-sn-muted-stone: var(--sn-muted-stone);
+
+  --font-signature: var(--font-signature);
+  --font-deco: var(--font-deco);
+  --font-body: var(--font-body);
+}
+
+/* ----------------------------------------------------------------------------
+ * Base
+ * -------------------------------------------------------------------------- */
+
+html,
+body {
+  height: 100%;
+  background-color: var(--sn-black);
+  color: var(--sn-ivory);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  /* Prevent over-scroll bounce on iPad kiosk */
+  overscroll-behavior: none;
+}
+
+body {
+  /* Prevent text selection on chrome elements; explicit opt-in inside inputs/textareas */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+  font-family: var(--font-body);
+}
+
+/* Reduce motion — respect user preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ----------------------------------------------------------------------------
+ * Reusable brand utilities
+ * -------------------------------------------------------------------------- */
+
+.font-deco {
+  font-family: var(--font-deco);
+  letter-spacing: 0.04em;
+}
+
+.font-signature {
+  font-family: var(--font-signature);
+  letter-spacing: 0.01em;
+}
+
+.font-body {
+  font-family: var(--font-body);
+}
+
+/* Ambient amber glow used behind welcome / step entrances */
+.ambient-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      40% 50% at 30% 35%,
+      var(--sn-amber-20) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      35% 45% at 75% 70%,
+      var(--sn-gold-12) 0%,
+      transparent 70%
+    );
+  filter: blur(40px);
+  animation: ambient-drift 28s ease-in-out infinite;
+}
+
+@keyframes ambient-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translate3d(2%, -1%, 0) scale(1.05);
+    opacity: 0.95;
+  }
+}
+
+/* Subtle gold light sweep behind step headlines */
+.light-sweep {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    var(--sn-gold-24) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  background-position: -100% 0;
+  animation: light-sweep 1.4s ease-out forwards;
+  mix-blend-mode: screen;
+}
+
+@keyframes light-sweep {
+  0% {
+    background-position: -100% 0;
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.9;
+  }
+  100% {
+    background-position: 200% 0;
+    opacity: 0;
+  }
+}
+
+/* Form chrome */
+.brand-card {
+  background-color: var(--sn-soft-black);
+  border: 1px solid var(--sn-gold-24);
+  position: relative;
+}
+
+.brand-card::before,
+.brand-card::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--sn-gold);
+  pointer-events: none;
+}
+
+.brand-card::before {
+  top: -1px;
+  left: -1px;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.brand-card::after {
+  bottom: -1px;
+  right: -1px;
+  border-left: 0;
+  border-top: 0;
+}
+
+/* Field underline (idle + focus glow) */
+.sn-field-wrap {
+  position: relative;
+}
+.sn-underline,
+.sn-underline-glow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  pointer-events: none;
+}
+.sn-underline {
+  background-color: var(--sn-gold-24);
+}
+.sn-underline-glow {
+  background-color: var(--sn-gold);
+  box-shadow:
+    0 0 12px var(--sn-amber-40),
+    0 0 1px var(--sn-gold);
+  transform-origin: left center;
+  transform: scaleX(0);
+  opacity: 0;
+  transition:
+    transform 450ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 250ms ease;
+}
+.sn-field-wrap:focus-within .sn-underline-glow {
+  transform: scaleX(1);
+  opacity: 1;
+}
+
+/* Buttons */
+.btn-gold {
+  background-color: var(--sn-gold);
+  color: var(--sn-black);
+  font-family: var(--font-body);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  padding: 1rem 2.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--sn-gold);
+  transition:
+    transform 200ms ease,
+    box-shadow 200ms ease,
+    background-color 200ms ease;
+  cursor: pointer;
+  min-height: 52px;
+}
+
+.btn-gold:hover:not(:disabled),
+.btn-gold:focus-visible:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 0 24px var(--sn-amber-40);
+  outline: none;
+}
+
+.btn-gold:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-gold:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  background-color: transparent;
+  color: var(--sn-ivory);
+  border: 1px solid var(--sn-gold-40);
+  font-family: var(--font-body);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  padding: 1rem 2.25rem;
+  border-radius: 999px;
+  transition: all 200ms ease;
+  cursor: pointer;
+  min-height: 52px;
+}
+
+.btn-ghost:hover:not(:disabled),
+.btn-ghost:focus-visible:not(:disabled) {
+  border-color: var(--sn-gold);
+  color: var(--sn-gold);
+  outline: none;
+}
+
+/* Chip */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0.6rem 1.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--sn-gold-40);
+  background-color: transparent;
+  color: var(--sn-ivory);
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition:
+    background-color 220ms ease,
+    color 220ms ease,
+    border-color 220ms ease,
+    transform 120ms ease,
+    box-shadow 220ms ease;
+}
+
+.chip:hover {
+  border-color: var(--sn-gold);
+}
+
+.chip[data-selected="true"] {
+  background-color: var(--sn-gold);
+  color: var(--sn-black);
+  border-color: var(--sn-gold);
+  box-shadow: 0 0 18px var(--sn-amber-40);
+}
+
+.chip:active {
+  transform: scale(0.97);
+}
+
+/* Smooth focus-visible everywhere */
+:focus-visible {
+  outline: 2px solid var(--sn-gold);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* iOS-specific tap fix: 16px input prevents zoom */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
+/* Hide spin buttons on number inputs */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+/* iOS date input baseline */
+input[type="date"] {
+  font-family: var(--font-body);
+}
+
+/* Scrollbar hide for kiosk feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--sn-gold-24);
+  border-radius: 3px;
+}
