@@ -3,51 +3,20 @@ import { collectionLabel, type HydratedLead } from "./schema";
 /**
  * HoneyBook CSV exporter.
  *
- * HoneyBook accepts CSV imports for contacts. Their canonical contact import
- * fields (verified against current import flow): First Name, Last Name, Email,
- * Phone, plus arbitrary additional columns that pass through as notes-style
- * data. We map our richer shape into a clean import-friendly format and
- * collapse the rest into a structured Notes field that's easy to read in
- * HoneyBook's contact view.
+ * One column per data point. We keep auto-derived columns (split First/Last
+ * name, "[Partner 1] & [Partner 2] Wedding" project name, joined Services
+ * Interested) AS WELL AS the raw underlying columns so you can map either
+ * one to HoneyBook custom fields without losing fidelity.
  *
- * If HoneyBook's column names change, only this file needs to update.
+ * Easy to extend: add a new column to COLUMN_DEFS and the export updates.
  */
 
-interface Row {
-  "First Name": string;
-  "Last Name": string;
-  Email: string;
-  Phone: string;
-  "Project Name": string;
-  "Event Date": string;
-  "Event Type": string;
-  Source: string;
-  Setting: string;
-  "Preferred Contact": string;
-  "POC Relationship": string;
-  Venue: string;
-  "Services Interested": string;
-  Notes: string;
-  "Captured At": string;
+interface ColumnDef {
+  /** Column header as it appears in the CSV. */
+  header: string;
+  /** How to derive the cell value from a hydrated lead. */
+  value: (lead: HydratedLead) => string;
 }
-
-const COLUMNS: (keyof Row)[] = [
-  "First Name",
-  "Last Name",
-  "Email",
-  "Phone",
-  "Project Name",
-  "Event Date",
-  "Event Type",
-  "Source",
-  "Setting",
-  "Preferred Contact",
-  "POC Relationship",
-  "Venue",
-  "Services Interested",
-  "Notes",
-  "Captured At",
-];
 
 function splitName(full: string): [string, string] {
   const cleaned = full.trim().replace(/\s+/g, " ");
@@ -59,6 +28,13 @@ function splitName(full: string): [string, string] {
   return [first, last];
 }
 
+function projectName(p1: string, p2: string | null | undefined): string {
+  const left = p1.trim();
+  const right = (p2 ?? "").trim();
+  if (right) return `${left} & ${right} Wedding`;
+  return `${left} Wedding`;
+}
+
 function escapeField(value: string): string {
   // RFC 4180: wrap in quotes if contains comma, quote, CR, or LF; double-up quotes.
   if (/[",\r\n]/.test(value)) {
@@ -67,42 +43,45 @@ function escapeField(value: string): string {
   return value;
 }
 
-function projectName(p1: string, p2: string | null | undefined): string {
-  const left = p1.trim();
-  const right = (p2 ?? "").trim();
-  if (right) return `${left} & ${right} Wedding`;
-  return `${left} Wedding`;
-}
+const COLUMN_DEFS: ColumnDef[] = [
+  // --- Identity / contact ----------------------------------------------------
+  { header: "POC Name", value: (l) => l.pocName },
+  { header: "First Name", value: (l) => splitName(l.pocName)[0] },
+  { header: "Last Name", value: (l) => splitName(l.pocName)[1] },
+  { header: "Email", value: (l) => l.pocEmail },
+  { header: "Phone", value: (l) => l.pocPhone },
+  { header: "POC Relationship", value: (l) => l.pocRelationship },
+  { header: "Preferred Contact", value: (l) => l.preferredContact },
 
-function leadToRow(lead: HydratedLead): Row {
-  const [first, last] = splitName(lead.pocName);
-  const services = lead.collectionsInterested.map(collectionLabel).join(", ");
-  return {
-    "First Name": first,
-    "Last Name": last,
-    Email: lead.pocEmail,
-    Phone: lead.pocPhone,
-    "Project Name": projectName(lead.partner1Name, lead.partner2Name),
-    "Event Date": lead.eventDate,
-    "Event Type": "Wedding",
-    Source: lead.source,
-    Setting: lead.setting,
-    "Preferred Contact": lead.preferredContact,
-    "POC Relationship": lead.pocRelationship,
-    Venue: lead.venueName ?? "",
-    "Services Interested": services,
-    Notes: lead.notes ?? "",
-    "Captured At": lead.capturedAt,
-  };
-}
+  // --- The couple ------------------------------------------------------------
+  { header: "Partner 1", value: (l) => l.partner1Name },
+  { header: "Partner 2", value: (l) => l.partner2Name ?? "" },
+
+  // --- The event -------------------------------------------------------------
+  { header: "Project Name", value: (l) => projectName(l.partner1Name, l.partner2Name) },
+  { header: "Event Date", value: (l) => l.eventDate },
+  { header: "Event Type", value: () => "Wedding" },
+  { header: "Venue", value: (l) => l.venueName ?? "" },
+  { header: "Setting", value: (l) => l.setting },
+
+  // --- Vision ----------------------------------------------------------------
+  {
+    header: "Services Interested",
+    value: (l) => l.collectionsInterested.map(collectionLabel).join(", "),
+  },
+  { header: "Notes", value: (l) => l.notes ?? "" },
+
+  // --- Provenance ------------------------------------------------------------
+  { header: "Source", value: (l) => l.source },
+  { header: "Captured At", value: (l) => l.capturedAt },
+];
 
 /** Render an array of leads as a HoneyBook-friendly CSV string. */
 export function leadsToHoneybookCsv(leads: HydratedLead[]): string {
-  const header = COLUMNS.map(escapeField).join(",");
-  const lines = leads.map((lead) => {
-    const row = leadToRow(lead);
-    return COLUMNS.map((c) => escapeField(String(row[c] ?? ""))).join(",");
-  });
+  const header = COLUMN_DEFS.map((c) => escapeField(c.header)).join(",");
+  const lines = leads.map((lead) =>
+    COLUMN_DEFS.map((c) => escapeField(String(c.value(lead) ?? ""))).join(","),
+  );
   // BOM helps Excel detect UTF-8
   return "\uFEFF" + [header, ...lines].join("\r\n") + "\r\n";
 }
