@@ -8,6 +8,7 @@ import { LeadSchema, type Lead } from "@/lib/schema";
 import { stepVariants } from "@/lib/motion";
 import { Progress } from "@/components/form/Progress";
 import { DecoCorner } from "@/components/brand/DecoCorner";
+import { DensityToggle } from "@/components/brand/DensityToggle";
 import { StepWelcome } from "@/components/form/steps/StepWelcome";
 import { StepPOC } from "@/components/form/steps/StepPOC";
 import { StepCelebration } from "@/components/form/steps/StepCelebration";
@@ -121,45 +122,54 @@ export function IntakeForm() {
   const progressVisible = step >= 1 && step <= 3;
   const progressCurrent = Math.max(0, step - 1); // 0,1,2
 
+  const isFillingStep = step >= 1 && step <= 3;
+
   return (
     <FormProvider {...methods}>
-      <div className="relative w-full min-h-screen flex items-center justify-center px-4 sm:px-6 py-6 sm:py-10">
-        {/* Subtle ambient atmosphere on filling steps too */}
+      <div className="sn-viewport relative w-full overflow-hidden">
+        {/* Ambient atmosphere */}
         <span
           className="ambient-glow"
           aria-hidden="true"
-          style={{ opacity: step >= 1 && step <= 3 ? 0.7 : 1 }}
+          style={{ opacity: isFillingStep ? 0.55 : 1 }}
         />
 
-        <div className="relative w-full max-w-3xl flex flex-col gap-6">
-          {/* Progress bar (only on filling steps) */}
-          <div className="px-2">
+        {/* Top toolbar — density toggle (left) + progress (center). Always visible. */}
+        <div className="absolute top-0 left-0 right-0 z-20 flex items-start justify-between gap-4 px-4 sm:px-6 pt-3 sm:pt-4 pointer-events-none">
+          <div className="pointer-events-auto">
+            <DensityToggle />
+          </div>
+          <div className="flex-1 max-w-md mx-auto pt-1">
             <Progress
               currentStep={progressCurrent}
               totalSteps={PROGRESS_STEPS}
               visible={progressVisible}
             />
           </div>
+          {/* Spacer to balance the toggle width */}
+          <div className="w-[88px] shrink-0" aria-hidden="true" />
+        </div>
 
-          {/* Submission error toast */}
-          <AnimatePresence>
-            {submitError && (
-              <motion.div
-                role="alert"
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="mx-auto max-w-md w-full px-4 py-3 rounded-md border border-[color:var(--sn-amber)] bg-[color:var(--sn-soft-black)] text-[color:var(--sn-amber)] text-sm font-body text-center"
-              >
-                {submitError}
-              </motion.div>
-            )}
-          </AnimatePresence>
+        {/* Submission error toast */}
+        <AnimatePresence>
+          {submitError && (
+            <motion.div
+              role="alert"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="absolute top-16 left-1/2 -translate-x-1/2 z-30 max-w-md w-[90%] px-4 py-3 rounded-md border border-[color:var(--sn-amber)] bg-[color:var(--sn-soft-black)] text-[color:var(--sn-amber)] text-sm font-body text-center"
+            >
+              {submitError}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-          {/* Card */}
-          <div className="relative">
-            {/* Card frame on filling steps only — welcome and thank-you are full-bleed atmospheres */}
-            {step >= 1 && step <= 3 && (
+        {/* Main shell — viewport height, three regions handled per-step */}
+        <div className="relative h-full w-full flex items-center justify-center px-3 sm:px-6 pt-14 pb-4">
+          <div className="relative w-full max-w-3xl h-full max-h-full flex flex-col">
+            {/* Card frame on filling steps */}
+            {isFillingStep && (
               <div className="absolute inset-0 brand-card rounded-md pointer-events-none">
                 <span className="absolute -top-px -left-px text-[color:var(--sn-gold)]">
                   <DecoCorner position="tl" size={22} />
@@ -177,7 +187,17 @@ export function IntakeForm() {
             )}
 
             <div
-              className={`relative ${step >= 1 && step <= 3 ? "p-6 sm:p-10 md:p-12" : ""}`}
+              className="relative flex-1 min-h-0 flex flex-col"
+              style={
+                isFillingStep
+                  ? {
+                      paddingLeft: "var(--sn-step-padding-x)",
+                      paddingRight: "var(--sn-step-padding-x)",
+                      paddingTop: "var(--sn-step-padding-y)",
+                      paddingBottom: "var(--sn-step-padding-y)",
+                    }
+                  : undefined
+              }
             >
               <AnimatePresence mode="wait" custom={direction}>
                 <motion.div
@@ -187,6 +207,7 @@ export function IntakeForm() {
                   initial="enter"
                   animate="center"
                   exit="exit"
+                  className="flex-1 min-h-0 flex flex-col"
                 >
                   {step === 0 && (
                     <StepWelcome onBegin={() => goTo(1)} />

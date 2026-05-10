@@ -1,106 +1,109 @@
+/* eslint-disable @next/next/no-img-element */
+
 interface Props {
+  /** Pixel size of the rendered mark on the largest dimension. */
   size?: number;
   className?: string;
-  /** When true, render only the camera/SN floral submark glyph */
+  /** Render only the camera/SN floral submark glyph. */
   submarkOnly?: boolean;
+  /** Render only the Holimount script wordmark with PHOTO/VIDEO BOOTH subtitle. */
+  wordmarkOnly?: boolean;
+  /**
+   * Color the mark via CSS mask. Pass any CSS color (var, hex, rgb).
+   * Defaults to the brand gold token. Set to "gold-art" to use the
+   * pre-colored gold SVG without masking (preserves any internal color
+   * variations the artwork may carry).
+   */
+  color?: string | "gold-art";
+  /** Optional soft amber glow drop-shadow. */
+  glow?: boolean;
 }
 
 /**
- * Brand wordmark placeholder.
+ * Smile NOLA brand mark, served from public/logos/.
  *
- * NOTE: Per Brand Brief §15, the official Smile NOLA logo artwork should be
- * used wherever possible (gold script). Until that file is provided, we use
- * a Broadway wordmark as a tasteful, on-brand stand-in. Replace this
- * component with an <Image src="/logo-gold.svg" /> once artwork is in hand.
+ * Three artwork variants:
+ *   • full   — submark + Holimount script + PHOTO/VIDEO BOOTH (default)
+ *   • submark — camera/SN floral monogram only
+ *   • wordmark — script + subtitle only, no submark
+ *
+ * Coloring strategy: each SVG is shipped as currentColor. We recolor by
+ * applying CSS mask-image so we can use any token (gold, ivory, champagne)
+ * and add filter glows without committing to a baked color in the file.
+ *
+ * Aspect ratios are preserved automatically.
  */
 export function LogoMark({
-  size = 48,
+  size = 200,
   className = "",
   submarkOnly = false,
+  wordmarkOnly = false,
+  color = "var(--sn-gold)",
+  glow = false,
 }: Props) {
-  if (submarkOnly) {
-    // Geometric monogram: SN inside a thin gold ring with deco accents.
+  // Aspect ratios (width / height) from the official SVG viewBoxes.
+  // submark: 1445×919 ≈ 1.57:1
+  // wordmark: 3547×990 ≈ 3.58:1
+  // full: 3487×1468 ≈ 2.37:1
+  const aspect = submarkOnly
+    ? 1445 / 919
+    : wordmarkOnly
+      ? 3547 / 990
+      : 3487 / 1468;
+  const width = Math.round(size * aspect);
+  const height = size;
+
+  const src = submarkOnly
+    ? "/logos/icon.svg"
+    : wordmarkOnly
+      ? "/logos/wordmark.svg"
+      : "/logos/full-logo.svg";
+
+  // If user requested the pre-colored gold artwork, just render it directly.
+  if (color === "gold-art") {
     return (
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 48 48"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
+      <img
+        src={src.replace("/full-logo.svg", "/full-logo-gold.svg")}
+        alt="Smile NOLA"
+        width={width}
+        height={height}
         className={className}
-        aria-label="Smile NOLA"
-      >
-        <circle
-          cx="24"
-          cy="24"
-          r="22"
-          stroke="currentColor"
-          strokeWidth="0.75"
-          opacity="0.6"
-        />
-        <circle
-          cx="24"
-          cy="24"
-          r="20"
-          stroke="currentColor"
-          strokeWidth="1.25"
-        />
-        <text
-          x="24"
-          y="29"
-          textAnchor="middle"
-          fontFamily="var(--font-deco)"
-          fontSize="14"
-          fill="currentColor"
-          letterSpacing="2"
-        >
-          SN
-        </text>
-        <path
-          d="M11 12 L9 12 L9 14"
-          stroke="currentColor"
-          strokeWidth="0.75"
-          opacity="0.7"
-        />
-        <path
-          d="M37 36 L39 36 L39 34"
-          stroke="currentColor"
-          strokeWidth="0.75"
-          opacity="0.7"
-        />
-      </svg>
+        style={
+          glow
+            ? {
+                filter:
+                  "drop-shadow(0 0 24px rgba(255, 178, 63, 0.45)) drop-shadow(0 0 1px rgba(212, 175, 55, 0.6))",
+              }
+            : undefined
+        }
+      />
     );
   }
 
-  // Full wordmark
+  // Mask-based recoloring: the SVG becomes the mask, we paint with `color`.
+  // If `className` includes width/height utilities, they override our defaults.
+  const overridden = /\b(w-|h-)/.test(className);
   return (
-    <div
-      className={`inline-flex flex-col items-center text-[color:var(--sn-gold)] ${className}`}
-      style={{ lineHeight: 1 }}
+    <span
+      role="img"
       aria-label="Smile NOLA"
-    >
-      <span
-        className="font-deco"
-        style={{
-          fontSize: size,
-          letterSpacing: "0.16em",
-          textTransform: "uppercase",
-        }}
-      >
-        Smile
-      </span>
-      <span
-        className="font-deco"
-        style={{
-          fontSize: size * 0.62,
-          letterSpacing: "0.5em",
-          marginTop: size * 0.08,
-          marginLeft: "0.5em",
-          opacity: 0.9,
-        }}
-      >
-        NOLA
-      </span>
-    </div>
+      className={className}
+      style={{
+        display: "inline-block",
+        ...(overridden ? {} : { width, height }),
+        backgroundColor: color,
+        WebkitMaskImage: `url(${src})`,
+        maskImage: `url(${src})`,
+        WebkitMaskRepeat: "no-repeat",
+        maskRepeat: "no-repeat",
+        WebkitMaskPosition: "center",
+        maskPosition: "center",
+        WebkitMaskSize: "contain",
+        maskSize: "contain",
+        filter: glow
+          ? "drop-shadow(0 0 24px rgba(255, 178, 63, 0.4)) drop-shadow(0 0 1px rgba(212, 175, 55, 0.55))"
+          : undefined,
+      }}
+    />
   );
 }

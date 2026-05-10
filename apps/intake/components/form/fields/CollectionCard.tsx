@@ -55,7 +55,7 @@ export function CollectionCardGrid({ values, onToggle, error }: Props) {
               </span>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex flex-col gap-1">
-                  <span className="font-deco text-[color:var(--sn-gold)] text-sm sm:text-base tracking-[0.12em] uppercase leading-tight">
+                  <span className="font-deco text-[color:var(--sn-gold)] text-base sm:text-lg tracking-[0.06em] lowercase leading-tight">
                     {c.label}
                   </span>
                   <span className="font-body text-[12px] tracking-wide text-[color:var(--sn-champagne)] opacity-80">

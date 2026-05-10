@@ -38,10 +38,10 @@ export function StepCelebration({ onBack, onNext }: Props) {
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
   return (
-    <div>
+    <div className="flex flex-col flex-1 min-h-0">
       <StepHeader
         eyebrow="02 — About the celebration"
-        headline="The moment itself"
+        headline="the moment itself"
         subhead="Two of you (or one for now), the date, and the place — if you've picked one."
       />
 
@@ -49,7 +49,7 @@ export function StepCelebration({ onBack, onNext }: Props) {
         variants={fieldStaggerContainer}
         initial="hidden"
         animate="visible"
-        className="flex flex-col gap-6 max-w-md mx-auto"
+        className="flex-1 min-h-0 overflow-y-auto sn-step-content flex flex-col sn-step-gap max-w-md mx-auto w-full"
       >
         <motion.div variants={fieldStaggerItem}>
           <TextField
@@ -94,7 +94,7 @@ export function StepCelebration({ onBack, onNext }: Props) {
         </motion.div>
       </motion.div>
 
-      <div className="max-w-md mx-auto">
+      <div className="max-w-md mx-auto w-full">
         <StepActions onBack={onBack} onNext={handleNext} />
       </div>
     </div>

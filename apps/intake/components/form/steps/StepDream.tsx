@@ -48,10 +48,10 @@ export function StepDream({ onBack, onSubmit, loading }: Props) {
   };
 
   return (
-    <div>
+    <div className="flex flex-col flex-1 min-h-0">
       <StepHeader
         eyebrow="03 — Setting the scene"
-        headline="Your vision"
+        headline="your vision"
         subhead="Indoors, outdoors, the experiences you're drawn to. Anything else you want us to know."
       />
 
@@ -59,7 +59,7 @@ export function StepDream({ onBack, onSubmit, loading }: Props) {
         variants={fieldStaggerContainer}
         initial="hidden"
         animate="visible"
-        className="flex flex-col gap-7 max-w-xl mx-auto"
+        className="flex-1 min-h-0 overflow-y-auto sn-step-content flex flex-col sn-step-gap max-w-xl mx-auto w-full"
       >
         <motion.div variants={fieldStaggerItem}>
           <ChipSelector
@@ -88,13 +88,14 @@ export function StepDream({ onBack, onSubmit, loading }: Props) {
           <Textarea
             label="Anything else we should know?"
             placeholder="The vibe, must-haves, surprises…"
+            rows={3}
             error={errors.notes?.message}
             {...register("notes")}
           />
         </motion.div>
       </motion.div>
 
-      <div className="max-w-xl mx-auto">
+      <div className="max-w-xl mx-auto w-full">
         <StepActions
           onBack={onBack}
           onNext={handleSubmit}

@@ -52,10 +52,10 @@ export function StepPOC({ onNext }: Props) {
   };
 
   return (
-    <div>
+    <div className="flex flex-col flex-1 min-h-0">
       <StepHeader
         eyebrow="01 — Who are we speaking with?"
-        headline="Tell us about you"
+        headline="tell us about you"
         subhead="So we know who's bringing this celebration to life."
       />
 
@@ -63,7 +63,7 @@ export function StepPOC({ onNext }: Props) {
         variants={fieldStaggerContainer}
         initial="hidden"
         animate="visible"
-        className="flex flex-col gap-6 max-w-md mx-auto"
+        className="flex-1 min-h-0 overflow-y-auto sn-step-content flex flex-col sn-step-gap max-w-md mx-auto w-full"
       >
         <motion.div variants={fieldStaggerItem}>
           <TextField
@@ -129,7 +129,7 @@ export function StepPOC({ onNext }: Props) {
         </motion.div>
       </motion.div>
 
-      <div className="max-w-md mx-auto">
+      <div className="max-w-md mx-auto w-full">
         <StepActions onNext={handleNext} />
       </div>
     </div>

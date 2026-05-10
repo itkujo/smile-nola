@@ -41,7 +41,11 @@ export const Textarea = forwardRef<HTMLTextAreaElement, Props>(function Textarea
           rows={rows}
           aria-invalid={!!error}
           aria-describedby={describedById}
-          className="w-full resize-none bg-transparent text-[color:var(--sn-ivory)] font-body text-[16px] leading-relaxed py-3 outline-none placeholder:text-[color:var(--sn-muted-stone)] placeholder:opacity-50 caret-[color:var(--sn-gold)]"
+          className="w-full resize-none bg-transparent text-[color:var(--sn-ivory)] font-body text-[16px] leading-relaxed outline-none placeholder:text-[color:var(--sn-muted-stone)] placeholder:opacity-50 caret-[color:var(--sn-gold)]"
+          style={{
+            paddingTop: "var(--sn-input-padding-y)",
+            paddingBottom: "var(--sn-input-padding-y)",
+          }}
           {...rest}
         />
         <span className="sn-underline" aria-hidden="true" />

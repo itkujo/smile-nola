@@ -15,7 +15,7 @@ export function StepWelcome({ onBegin }: Props) {
       type="button"
       onClick={onBegin}
       aria-label="Begin inquiry"
-      className="relative w-full min-h-[70vh] flex flex-col items-center justify-center gap-8 px-6 cursor-pointer outline-none focus-visible:outline-none"
+      className="relative w-full flex-1 min-h-0 flex flex-col items-center justify-center gap-6 px-6 cursor-pointer outline-none focus-visible:outline-none"
       style={{ WebkitTapHighlightColor: "transparent" }}
     >
       <span className="ambient-glow" aria-hidden="true" />
@@ -23,10 +23,10 @@ export function StepWelcome({ onBegin }: Props) {
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full max-w-[min(560px,80vw)]"
+        style={{ height: "clamp(80px, 18vh, 160px)" }}
       >
-        <span className="text-[color:var(--sn-gold)]">
-          <LogoMark size={56} />
-        </span>
+        <LogoMark size={120} glow color="var(--sn-gold)" className="w-full h-full" />
       </motion.div>
 
       <motion.div
@@ -39,12 +39,10 @@ export function StepWelcome({ onBegin }: Props) {
           New Orleans Bridal & Wedding Expo
         </p>
         <h1
-          className="font-deco text-[color:var(--sn-gold)] text-4xl sm:text-5xl md:text-6xl tracking-[0.06em] leading-[1.05]"
+          className="font-deco text-[color:var(--sn-gold)] text-3xl sm:text-4xl md:text-5xl tracking-[0.06em] leading-[1.05] lowercase"
           style={{ textShadow: "0 0 30px var(--sn-amber-20)" }}
         >
-          Let's design
-          <br />
-          your moment.
+          let&apos;s design your moment.
         </h1>
         <div className="w-32 mt-2">
           <GoldDivider />

@@ -43,6 +43,29 @@
   --font-signature: "Holimount", "Pinyon Script", cursive;
   --font-deco: "Broadway", "Limelight", "Cinzel Decorative", serif;
   --font-body: var(--font-poppins, "Poppins"), system-ui, sans-serif;
+
+  /* -------------------------------------------------------------------------
+   * Density tokens — driven by [data-density] on <html>. Used by the form
+   * shell + step components to keep everything inside the viewport on iPad
+   * regardless of which text size the operator chose.
+   * ------------------------------------------------------------------------- */
+  --sn-density-scale: 1;        /* multiplied into base font size */
+  --sn-step-gap: 1.25rem;       /* vertical gap between fields */
+  --sn-step-padding-y: 1.5rem;  /* vertical padding inside the card */
+  --sn-step-padding-x: 1.75rem; /* horizontal padding inside the card */
+  --sn-headline-size: clamp(1.25rem, 4.2vh, 2rem);
+  --sn-input-padding-y: 0.625rem;
+  --sn-base-font-size: 16px;
+}
+
+html[data-density="large"] {
+  --sn-density-scale: 1.18;
+  --sn-step-gap: 1.5rem;
+  --sn-step-padding-y: 1.5rem;
+  --sn-step-padding-x: 1.5rem;
+  --sn-headline-size: clamp(1.5rem, 4.6vh, 2.4rem);
+  --sn-input-padding-y: 0.75rem;
+  --sn-base-font-size: 19px;
 }
 
 /* Tailwind v4 theme bridge — exposes tokens as utilities */
@@ -71,11 +94,49 @@ body {
   background-color: var(--sn-black);
   color: var(--sn-ivory);
   font-family: var(--font-body);
+  font-size: var(--sn-base-font-size);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   /* Prevent over-scroll bounce on iPad kiosk */
   overscroll-behavior: none;
+}
+
+/* Use dynamic viewport height — accounts for iPad URL bar / Safari chrome */
+.sn-viewport {
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* Form shell: column layout with progress fixed top, content middle, actions bottom */
+.sn-form-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.sn-step-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  /* Hide scrollbars on the form content if it does need to scroll on tiny screens */
+  scrollbar-width: thin;
+}
+
+/* Density-aware step gap helper */
+.sn-step-gap {
+  gap: var(--sn-step-gap);
+}
+
+.sn-headline {
+  font-family: var(--font-deco);
+  font-size: var(--sn-headline-size);
+  line-height: 1.1;
+  letter-spacing: 0.06em;
+  color: var(--sn-gold);
+  text-transform: lowercase;
+  text-shadow: 0 0 24px var(--sn-amber-20);
 }
 
 body {

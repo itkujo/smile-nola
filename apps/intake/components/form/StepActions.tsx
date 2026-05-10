@@ -24,7 +24,7 @@ export function StepActions({
       initial="hidden"
       animate="visible"
       transition={{ delay: 0.4 }}
-      className="mt-8 flex flex-col-reverse sm:flex-row items-center justify-between gap-4"
+      className="mt-4 sm:mt-5 pt-3 flex flex-col-reverse sm:flex-row items-center justify-between gap-3 shrink-0"
     >
       {onBack ? (
         <button

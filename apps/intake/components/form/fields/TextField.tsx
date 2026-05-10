@@ -47,7 +47,11 @@ export const TextField = forwardRef<HTMLInputElement, Props>(function TextField(
           id={inputId}
           aria-invalid={!!error}
           aria-describedby={describedById}
-          className="w-full bg-transparent text-[color:var(--sn-ivory)] font-body text-[16px] py-3 outline-none placeholder:text-[color:var(--sn-muted-stone)] placeholder:opacity-50 caret-[color:var(--sn-gold)]"
+          className="w-full bg-transparent text-[color:var(--sn-ivory)] font-body text-[16px] outline-none placeholder:text-[color:var(--sn-muted-stone)] placeholder:opacity-50 caret-[color:var(--sn-gold)]"
+          style={{
+            paddingTop: "var(--sn-input-padding-y)",
+            paddingBottom: "var(--sn-input-padding-y)",
+          }}
           {...rest}
         />
         <span className="sn-underline" aria-hidden="true" />

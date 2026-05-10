@@ -41,7 +41,7 @@ export function StepThankYou({ partner1, partner2, onReset }: Props) {
       type="button"
       onClick={onReset}
       aria-label="Tap to begin again"
-      className="relative w-full min-h-[70vh] flex flex-col items-center justify-center gap-8 px-6 outline-none focus-visible:outline-none cursor-pointer"
+      className="relative w-full flex-1 min-h-0 flex flex-col items-center justify-center gap-6 px-6 outline-none focus-visible:outline-none cursor-pointer"
       style={{ WebkitTapHighlightColor: "transparent" }}
     >
       <span className="ambient-glow" aria-hidden="true" />
@@ -51,9 +51,8 @@ export function StepThankYou({ partner1, partner2, onReset }: Props) {
         initial={{ opacity: 0, scale: 0.94 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-        className="text-[color:var(--sn-gold)]"
       >
-        <LogoMark submarkOnly size={56} />
+        <LogoMark submarkOnly size={88} glow color="var(--sn-gold)" />
       </motion.div>
 
       <motion.h1

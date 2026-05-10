@@ -39,17 +39,15 @@ export default async function AdminPage() {
   return (
     <main className="min-h-screen px-6 py-10 sm:px-12">
       <header className="max-w-6xl mx-auto flex flex-col items-center text-center gap-3 mb-10">
-        <span className="text-[color:var(--sn-gold)]">
-          <LogoMark size={36} />
-        </span>
+        <LogoMark size={64} color="var(--sn-gold)" />
         <p className="font-body text-[10px] tracking-[0.5em] uppercase text-[color:var(--sn-muted-stone)]">
           {SOURCE_DEFAULT}
         </p>
         <h1
-          className="font-deco text-[color:var(--sn-gold)] text-3xl sm:text-4xl tracking-[0.06em]"
+          className="font-deco text-[color:var(--sn-gold)] text-3xl sm:text-4xl tracking-[0.06em] lowercase"
           style={{ textShadow: "0 0 24px var(--sn-amber-20)" }}
         >
-          Captured Leads
+          captured leads
         </h1>
         <div className="w-32 mt-1">
           <GoldDivider />
