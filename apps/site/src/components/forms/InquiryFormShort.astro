@@ -218,6 +218,38 @@ const {
   // form will receive a 404 and surface the error in the error-region — which
   // is the right behavior for development and surfaces a clear signal.
 
+  /** Inline-text escape: keeps user input out of HTML interpretation. */
+  function escapeForHtml(s: string): string {
+    return s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+  /** Used when we want the value to land in textContent semantics but it
+   *  still needs HTML-safety in case we render via innerHTML later. */
+  function escapeForText(s: string): string {
+    return escapeForHtml(s);
+  }
+
+  // If the URL carries ?package=<slug>, inject it as a hidden field on every
+  // inquiry-form on the page. Same effect as clicking a Reserve CTA, but
+  // works when the page is loaded directly from a share/bookmark.
+  const urlPackage = new URL(window.location.href).searchParams.get("package");
+  if (urlPackage) {
+    document.querySelectorAll<HTMLFormElement>(".inquiry-form").forEach((form) => {
+      let hidden = form.querySelector<HTMLInputElement>('input[name="selected_package"]');
+      if (!hidden) {
+        hidden = document.createElement("input");
+        hidden.type = "hidden";
+        hidden.name = "selected_package";
+        form.appendChild(hidden);
+      }
+      hidden.value = urlPackage;
+    });
+  }
+
   document.querySelectorAll<HTMLFormElement>(".inquiry-form").forEach((form) => {
     const submitBtn = form.querySelector<HTMLButtonElement>(".submit-btn");
     const errorRegion = form.querySelector<HTMLElement>(".error-region");
@@ -259,12 +291,31 @@ const {
           throw new Error(data.error || `Server responded ${res.status}`);
         }
 
-        // Replace the form with a thank-you state.
+        // Build a personalized thank-you. Falls back gracefully when the
+        // user didn't share a first name or event date.
+        const firstName = typeof payload.first_name === "string" ? payload.first_name.trim() : "";
+        const eventDate = typeof payload.event_date === "string" ? payload.event_date.trim() : "";
+
+        const greeting = firstName ? `thank you, ${escapeForText(firstName)}.` : "thank you.";
+
+        // Format event date nicely if present (YYYY-MM-DD → "September 15th").
+        let dateLine = "Daniel will reach out personally within 24 hours.";
+        if (eventDate && /^\d{4}-\d{2}-\d{2}$/.test(eventDate)) {
+          const d = new Date(eventDate + "T12:00:00Z");
+          if (!Number.isNaN(d.getTime())) {
+            const fmt = d.toLocaleDateString("en-US", {
+              month: "long", day: "numeric", year: "numeric",
+              timeZone: "UTC",
+            });
+            dateLine = `Daniel will reach out personally within 24 hours to confirm your event on <strong>${escapeForHtml(fmt)}</strong>.`;
+          }
+        }
+
         const thanks = document.createElement("div");
         thanks.className = "inquiry-thanks";
         thanks.innerHTML = `
-          <h3 class="font-deco">thank you.</h3>
-          <p>We received your inquiry. Daniel will reach out personally within 24 hours.</p>
+          <h3 class="font-deco">${escapeForHtml(greeting)}</h3>
+          <p>${dateLine}</p>
         `;
         form.replaceWith(thanks);
       } catch (err) {

@@ -46,6 +46,8 @@ export const InquiryShortSchema = z.object({
     errorMap: () => ({ message: "Unknown collection" }),
   }),
   source: trim(80).default("contact"),
+  /** Tier slug from the PackagesWidget Reserve CTA (e.g. "memory", "mirror"). */
+  selected_package: optionalTrim(60),
 });
 
 export type InquiryShortInput = z.infer<typeof InquiryShortSchema>;

@@ -565,11 +565,36 @@ const BUDGET_RANGES = [
           throw new Error(data.error || `Server responded ${res.status}`);
         }
 
+        // Personalize the thank-you using whatever the user shared.
+        const firstName = typeof payload.first_name === "string" ? payload.first_name.trim() : "";
+        const eventDate = typeof payload.event_date === "string" ? payload.event_date.trim() : "";
+
+        const escapeHtml = (s: string) =>
+          s.replace(/&/g, "&amp;")
+           .replace(/</g, "&lt;")
+           .replace(/>/g, "&gt;")
+           .replace(/"/g, "&quot;")
+           .replace(/'/g, "&#39;");
+
+        const greeting = firstName ? `thank you, ${escapeHtml(firstName)}.` : "thank you.";
+
+        let dateLine = "Daniel will reach out personally within 24 hours.";
+        if (eventDate && /^\d{4}-\d{2}-\d{2}$/.test(eventDate)) {
+          const d = new Date(eventDate + "T12:00:00Z");
+          if (!Number.isNaN(d.getTime())) {
+            const fmt = d.toLocaleDateString("en-US", {
+              month: "long", day: "numeric", year: "numeric",
+              timeZone: "UTC",
+            });
+            dateLine = `Daniel will reach out personally within 24 hours to confirm your event on <strong>${escapeHtml(fmt)}</strong>.`;
+          }
+        }
+
         const thanks = document.createElement("div");
         thanks.className = "inquiry-thanks";
         thanks.innerHTML = `
-          <h3 class="font-deco">thank you.</h3>
-          <p>We received your inquiry. Daniel will reach out personally within 24 hours.</p>
+          <h3 class="font-deco">${greeting}</h3>
+          <p>${dateLine}</p>
         `;
         form.replaceWith(thanks);
         window.scrollTo({ top: 0, behavior: "smooth" });

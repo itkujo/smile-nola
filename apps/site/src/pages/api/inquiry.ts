@@ -75,6 +75,13 @@ export const POST: APIRoute = async ({ request }) => {
   // ---- 4. Persist ---------------------------------------------------------
   let saved: { id: number; createdAt: string };
   try {
+    // If a tier slug came through from a Reserve CTA, nest it under
+    // collection_fields.<slug>.selected_package so it shows up in the admin
+    // detail view + CSV export under the right collection bucket.
+    const collectionFields: Record<string, Record<string, string>> | null = data.selected_package
+      ? { [data.collection]: { selected_package: data.selected_package } }
+      : null;
+
     saved = insertInquiry({
       source: data.source || `collection-${data.collection}`,
       first_name: data.first_name,
@@ -84,6 +91,7 @@ export const POST: APIRoute = async ({ request }) => {
       event_date: data.event_date ?? null,
       message: data.message ?? null,
       collections_interested: [data.collection],
+      collection_fields: collectionFields,
     });
   } catch (err) {
     console.error("[/api/inquiry] DB insert failed:", err);
