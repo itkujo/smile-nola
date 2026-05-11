@@ -38,3 +38,4 @@ pnpm-debug.log*
 # Fonts (if licensed personally — may be removed if added)
 # apps/intake/public/fonts/*.ttf
 # apps/intake/public/fonts/*.otf
+.superpowers/
