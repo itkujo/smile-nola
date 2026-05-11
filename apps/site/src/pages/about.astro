@@ -1,0 +1,522 @@
+---
+/**
+ * /about — Smile NOLA's founder story and operating standard.
+ *
+ * Voice rules (brand brief §3):
+ *   • Confident, warm, high-end coaching tone.
+ *   • Translates Daniel's technical-leadership background through the
+ *     luxury-event lens — discipline, reliability, end-to-end production —
+ *     NOT through cybersecurity or cloud detail.
+ *   • Holimount script reserved for one signature accent on this page
+ *     (the founder's name closer).
+ *
+ * Owner: please review and edit before launch — see content responsibilities
+ * in docs/superpowers/specs/2026-05-10-smile-nola-marketing-site-design.md §13.
+ */
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import SiteHeader from "@/components/layout/SiteHeader.astro";
+import SiteFooter from "@/components/layout/SiteFooter.astro";
+import AmbientGlow from "@/components/brand/AmbientGlow.astro";
+import DecoCorner from "@/components/brand/DecoCorner.astro";
+import DecoOrnament from "@/components/brand/DecoOrnament.astro";
+import GoldDivider from "@/components/brand/GoldDivider.astro";
+---
+
+<BaseLayout
+  title="About · Smile NOLA"
+  description="Daniel Velez and the Smile NOLA studio — a luxury event production house in New Orleans designed around the discipline of cinematic production and the warmth of New Orleans hospitality."
+>
+  <SiteHeader />
+
+  <main id="main">
+    <!-- ============ HERO ============ -->
+    <section class="about-hero" aria-labelledby="about-title">
+      <DecoOrnament opacity={0.04} />
+      <AmbientGlow />
+      <DecoCorner position="tl" size="md" animate delay={300} />
+      <DecoCorner position="tr" size="md" animate delay={400} />
+      <DecoCorner position="bl" size="md" animate delay={500} />
+      <DecoCorner position="br" size="md" animate delay={600} />
+
+      <div class="about-hero-inner">
+        <p class="eyebrow">— about smile nola —</p>
+        <h1 id="about-title" class="about-title font-deco">
+          designed in <span class="script">new orleans,</span>
+          delivered with intent.
+        </h1>
+        <p class="about-lede">
+          Smile NOLA is a luxury event production house. Lighting, video walls,
+          concert-grade sound, cinematic videography, event web design, and
+          photo experiences — five collections, engineered as one polished
+          evening.
+        </p>
+        <GoldDivider width="220px" />
+      </div>
+    </section>
+
+    <!-- ============ FOUNDER STORY ============ -->
+    <section class="founder" aria-labelledby="founder-heading">
+      <div class="founder-grid">
+        <aside class="founder-portrait reveal" aria-hidden="true">
+          <div class="portrait-inner">
+            <span class="initial font-deco">DV</span>
+            <span class="caption font-deco">daniel velez</span>
+            <DecoCorner position="tl" size="sm" />
+            <DecoCorner position="br" size="sm" />
+          </div>
+          <p class="portrait-note">
+            Photography goes here. Owner uploads later — see admin.
+          </p>
+        </aside>
+
+        <div class="founder-body">
+          <p class="eyebrow reveal">— meet the founder —</p>
+          <h2 id="founder-heading" class="font-deco reveal">
+            daniel velez, founder.
+          </h2>
+
+          <div class="founder-text reveal-stagger">
+            <p class="reveal">
+              Daniel founded Smile NOLA on a simple conviction: New Orleans
+              clients deserve a production company, not a rental catalog. The
+              difference shows up everywhere — in how the room sounds, how the
+              light falls, how the camera moves, how the inquiry is answered.
+            </p>
+            <p class="reveal">
+              His background is in commercial production at scale: fifteen
+              years architecting audio, video, networking, and control systems
+              for venues, restaurants, hotels, and student-housing campuses
+              across the Gulf Coast. An Army veteran, a multi-time technology
+              founder (RelentNet, FNIT, Animeniacs.shop), and a bilingual
+              native of the New Orleans region — the kind of operator who's
+              been responsible for things that absolutely had to work.
+            </p>
+            <p class="reveal">
+              Smile NOLA brings that same discipline to the part of the
+              evening guests actually remember: the first dance, the toast,
+              the camera's slow push toward the kiss. Every detail engineered.
+              Nothing left to chance.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ THE LINEAGE — Ed Masters / Legend + Luxe Films ============ -->
+    <section class="lineage" aria-labelledby="lineage-heading">
+      <div class="lineage-inner reveal">
+        <p class="eyebrow">— the lineage —</p>
+        <h2 id="lineage-heading" class="font-deco">learned from a master.</h2>
+        <p>
+          Smile NOLA's videography craft was shaped under the mentorship of
+          <strong>Ed Masters</strong> of
+          <a href="https://www.legendluxefilms.com/" target="_blank" rel="noopener noreferrer">Legend + Luxe Films</a>
+          — one of the Greater New Orleans region's most respected wedding
+          filmmakers. Ed's approach to cinematic storytelling — the discipline
+          of capturing not just the events but the quiet, in-between moments
+          — is the standard Smile NOLA's Visionary Suite is built around.
+        </p>
+        <p class="muted">
+          Ed runs his own studio; he is a mentor and an inspiration, not a
+          business partner. Our gratitude here is editorial, not commercial.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============ THE STANDARD ============ -->
+    <section class="standard" aria-labelledby="standard-heading">
+      <header class="reveal">
+        <p class="eyebrow">— the smile nola standard —</p>
+        <h2 id="standard-heading" class="font-deco">how working with us actually feels.</h2>
+      </header>
+
+      <ol class="steps reveal-stagger">
+        <li class="step reveal">
+          <span class="step-num font-deco">01</span>
+          <div class="step-body">
+            <h3 class="font-deco">a real conversation, first.</h3>
+            <p>
+              Inquiry forms route to a real reply within 24 hours — never a
+              generic quote, never a sales pipeline. We start by understanding
+              what you're trying to create.
+            </p>
+          </div>
+        </li>
+
+        <li class="step reveal">
+          <span class="step-num font-deco">02</span>
+          <div class="step-body">
+            <h3 class="font-deco">a proposal, not a price sheet.</h3>
+            <p>
+              The proposal lays out exactly what we're delivering, why those
+              choices matter for your event, and what the production day looks
+              like end to end. Pricing is transparent; the conversation is
+              consultative.
+            </p>
+          </div>
+        </li>
+
+        <li class="step reveal">
+          <span class="step-num font-deco">03</span>
+          <div class="step-body">
+            <h3 class="font-deco">a venue walkthrough.</h3>
+            <p>
+              Before the event we walk your venue. Lighting plans get checked
+              against the actual space. Power, load-in, sightlines, room
+              acoustics — addressed in person, not assumed.
+            </p>
+          </div>
+        </li>
+
+        <li class="step reveal">
+          <span class="step-num font-deco">04</span>
+          <div class="step-body">
+            <h3 class="font-deco">a polished evening.</h3>
+            <p>
+              On the day, an on-site operator runs each system. Lighting cues
+              hit on time, sound is tuned to the room, cameras move
+              cinematically, the booth feels like part of the décor — and you
+              get to be present at your own event.
+            </p>
+          </div>
+        </li>
+
+        <li class="step reveal">
+          <span class="step-num font-deco">05</span>
+          <div class="step-body">
+            <h3 class="font-deco">the lasting record.</h3>
+            <p>
+              Films, photos, and digital deliverables are color-corrected,
+              branded, and delivered on a timeline you can rely on. Your event
+              gets told back to you the way it actually felt.
+            </p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ============ CLOSING ============ -->
+    <section class="about-close" aria-labelledby="close-heading">
+      <DecoCorner position="tl" size="md" />
+      <DecoCorner position="tr" size="md" />
+      <DecoCorner position="bl" size="md" />
+      <DecoCorner position="br" size="md" />
+
+      <div class="close-inner reveal">
+        <p class="eyebrow">— ready when you are —</p>
+        <h2 id="close-heading" class="close-headline font-deco">
+          let's design something <span class="script">your guests</span> won't forget.
+        </h2>
+        <a href="/contact" class="btn-gold">Begin your inquiry</a>
+
+        <div class="signature">
+          <p class="sig-line">— with intention,</p>
+          <p class="sig-name font-signature">Daniel Velez</p>
+          <p class="sig-role">founder · smile nola</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  /* ============ HERO ============ */
+  .about-hero {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--sn-black);
+    padding: clamp(140px, 18vh, 200px) clamp(28px, 6vw, 96px) clamp(72px, 10vh, 120px);
+    text-align: center;
+    border-bottom: 1px solid var(--sn-gold-24);
+  }
+  .about-hero-inner {
+    position: relative;
+    z-index: 10;
+    max-width: 1000px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+  }
+  .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.72rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .about-title {
+    font-weight: 400;
+    font-size: clamp(34px, 5vw, 72px);
+    line-height: 1.05;
+    color: var(--sn-gold);
+    margin: 0;
+    max-width: 20ch;
+    text-shadow: 0 0 36px var(--sn-amber-20);
+  }
+  .about-title .script {
+    font-family: var(--font-italic-serif);
+    font-style: italic;
+    font-weight: 500;
+    color: var(--sn-champagne);
+    text-transform: none;
+    font-size: 1.15em;
+  }
+  .about-lede {
+    color: var(--sn-champagne);
+    font-size: clamp(0.96rem, 1.2vw, 1.1rem);
+    line-height: 1.7;
+    max-width: 56ch;
+    margin: 0;
+  }
+
+  /* ============ FOUNDER STORY ============ */
+  .founder {
+    background-color: var(--sn-soft-black);
+    padding: clamp(72px, 12vh, 140px) clamp(28px, 6vw, 96px);
+  }
+  .founder-grid {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: clamp(36px, 5vw, 72px);
+    align-items: start;
+  }
+  @media (min-width: 900px) {
+    .founder-grid { grid-template-columns: 1fr 1.4fr; }
+  }
+
+  .founder-portrait {
+    position: sticky;
+    top: 100px;
+  }
+  @media (max-width: 900px) {
+    .founder-portrait { position: relative; top: 0; }
+  }
+  .portrait-inner {
+    position: relative;
+    aspect-ratio: 4 / 5;
+    width: 100%;
+    max-width: 360px;
+    background:
+      radial-gradient(50% 60% at 50% 45%, var(--sn-gold-12), transparent 65%),
+      linear-gradient(135deg, var(--sn-black) 0%, var(--sn-soft-black) 100%);
+    border: 1px solid var(--sn-gold-24);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+  }
+  .portrait-inner .initial {
+    font-size: clamp(120px, 18vw, 200px);
+    line-height: 0.78;
+    color: var(--sn-gold);
+    opacity: 0.18;
+    text-shadow: 0 0 40px var(--sn-amber-20);
+    user-select: none;
+  }
+  .portrait-inner .caption {
+    position: absolute;
+    bottom: 22px;
+    left: 22px;
+    color: var(--sn-gold);
+    font-size: 0.75rem;
+    letter-spacing: 0.3em;
+    opacity: 0.65;
+  }
+  .portrait-note {
+    color: var(--sn-muted-stone);
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-top: 14px;
+    opacity: 0.7;
+  }
+
+  .founder-body { min-width: 0; }
+  .founder-body h2 {
+    font-weight: 400;
+    font-size: clamp(32px, 4vw, 56px);
+    color: var(--sn-ivory);
+    margin: 14px 0 28px;
+    line-height: 1.05;
+  }
+  .founder-text { display: flex; flex-direction: column; gap: 22px; }
+  .founder-text p {
+    color: var(--sn-champagne);
+    font-size: clamp(0.96rem, 1.15vw, 1.08rem);
+    line-height: 1.8;
+    margin: 0;
+    max-width: 62ch;
+  }
+
+  /* ============ LINEAGE (Ed Masters) ============ */
+  .lineage {
+    background-color: var(--sn-black);
+    padding: clamp(64px, 10vh, 120px) clamp(28px, 6vw, 96px);
+    text-align: center;
+    border-top: 1px solid var(--sn-gold-12);
+    border-bottom: 1px solid var(--sn-gold-12);
+  }
+  .lineage-inner {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  .lineage h2 {
+    font-weight: 400;
+    font-size: clamp(26px, 3.4vw, 42px);
+    color: var(--sn-ivory);
+    margin: 12px 0 24px;
+    line-height: 1.05;
+  }
+  .lineage p {
+    color: var(--sn-champagne);
+    font-size: clamp(0.95rem, 1.1vw, 1.05rem);
+    line-height: 1.8;
+    margin: 0 0 18px;
+  }
+  .lineage p.muted {
+    color: var(--sn-muted-stone);
+    font-size: 0.85rem;
+    margin-top: 24px;
+    opacity: 0.7;
+  }
+  .lineage a {
+    color: var(--sn-gold);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    text-decoration-color: var(--sn-gold-40);
+    transition: text-decoration-color 200ms ease;
+  }
+  .lineage a:hover {
+    text-decoration-color: var(--sn-gold);
+  }
+  .lineage strong {
+    color: var(--sn-ivory);
+    font-weight: 500;
+  }
+
+  /* ============ THE STANDARD ============ */
+  .standard {
+    background-color: var(--sn-soft-black);
+    padding: clamp(72px, 12vh, 140px) clamp(28px, 6vw, 96px);
+  }
+  .standard header {
+    text-align: center;
+    margin-bottom: clamp(48px, 6vw, 72px);
+  }
+  .standard h2 {
+    font-weight: 400;
+    font-size: clamp(28px, 3.6vw, 48px);
+    color: var(--sn-ivory);
+    margin: 14px 0 0;
+    line-height: 1.05;
+  }
+  .steps {
+    list-style: none;
+    margin: 0 auto;
+    padding: 0;
+    max-width: 900px;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+  .step {
+    display: grid;
+    grid-template-columns: 86px 1fr;
+    gap: 22px;
+    align-items: start;
+    padding: 24px 0 32px;
+    border-bottom: 1px solid var(--sn-gold-12);
+  }
+  .step:last-of-type { border-bottom: 0; }
+  .step-num {
+    font-weight: 400;
+    font-size: clamp(38px, 5vw, 64px);
+    color: var(--sn-gold);
+    opacity: 0.6;
+    line-height: 1;
+    text-shadow: 0 0 24px var(--sn-amber-20);
+  }
+  .step-body h3 {
+    margin: 0 0 10px;
+    color: var(--sn-ivory);
+    font-weight: 400;
+    font-size: clamp(20px, 2.4vw, 30px);
+    line-height: 1.1;
+  }
+  .step-body p {
+    color: var(--sn-champagne);
+    font-size: 0.98rem;
+    line-height: 1.7;
+    margin: 0;
+    max-width: 60ch;
+  }
+
+  /* ============ CLOSING ============ */
+  .about-close {
+    position: relative;
+    background-color: var(--sn-black);
+    padding: clamp(96px, 14vh, 160px) clamp(28px, 6vw, 96px);
+    text-align: center;
+    border-top: 1px solid var(--sn-gold-24);
+    overflow: hidden;
+  }
+  .close-inner {
+    position: relative;
+    z-index: 10;
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+  }
+  .close-headline {
+    font-weight: 400;
+    font-size: clamp(30px, 4.5vw, 64px);
+    line-height: 1.05;
+    color: var(--sn-gold);
+    margin: 0;
+    max-width: 20ch;
+    text-shadow: 0 0 36px var(--sn-amber-20);
+  }
+  .close-headline .script {
+    font-family: var(--font-italic-serif);
+    font-style: italic;
+    font-weight: 500;
+    color: var(--sn-champagne);
+    text-transform: none;
+    font-size: 1.15em;
+  }
+  .signature {
+    margin-top: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .sig-line {
+    margin: 0;
+    color: var(--sn-muted-stone);
+    font-size: 0.85rem;
+    letter-spacing: 0.04em;
+  }
+  .sig-name {
+    margin: 0;
+    color: var(--sn-gold);
+    font-size: clamp(38px, 5vw, 56px);
+    line-height: 1;
+    text-shadow: 0 0 20px var(--sn-amber-20);
+  }
+  .sig-role {
+    margin: 8px 0 0;
+    color: var(--sn-muted-stone);
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+  }
+</style>
