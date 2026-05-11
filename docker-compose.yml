@@ -1,0 +1,72 @@
+# =============================================================================
+# Smile NOLA — Coolify deploy compose file
+#
+# Lives at the repo root so Coolify can build apps/site/Dockerfile while
+# mounting the shared ./data directory (also used by apps/intake/ in
+# production) as a persistent volume. SQLite WAL files survive container
+# restarts and redeploys.
+#
+# Required env vars (set via Coolify UI, NOT committed):
+#   ADMIN_PASSWORD          — admin login password
+#   ADMIN_SESSION_SECRET    — 32+ random bytes, signs admin cookies
+#   NOTIFY_EMAIL            — where inquiry notifications go
+#   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS  — optional, email is best-effort
+# =============================================================================
+
+services:
+  site:
+    build:
+      context: ./apps/site
+      dockerfile: Dockerfile
+    image: smile-nola/site:latest
+    container_name: smile-nola-site
+    restart: unless-stopped
+
+    environment:
+      # Astro server
+      NODE_ENV: production
+      HOST: "0.0.0.0"
+      PORT: "3000"
+      # Where the shared SQLite DB lives inside the container
+      SMILE_NOLA_DB_DIR: "/data"
+      # Admin
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET}
+      # Inquiry notifications (all optional)
+      NOTIFY_EMAIL: ${NOTIFY_EMAIL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+
+    volumes:
+      # Persistent SQLite store, shared with the booth intake.
+      - ./data:/data
+
+    expose:
+      - "3000"
+
+    # ---- Coolify / Traefik routing labels ---------------------------------
+    # Coolify reads these to attach the public domain + automatic Let's Encrypt
+    # cert. Adjust the network name and entrypoint to match your Coolify config
+    # if it differs.
+    labels:
+      traefik.enable: "true"
+      # HTTPS router
+      traefik.http.routers.smile-nola-site.rule: "Host(`smile-nola.com`) || Host(`www.smile-nola.com`)"
+      traefik.http.routers.smile-nola-site.entrypoints: "https"
+      traefik.http.routers.smile-nola-site.tls: "true"
+      traefik.http.routers.smile-nola-site.tls.certresolver: "letsencrypt"
+      traefik.http.services.smile-nola-site.loadbalancer.server.port: "3000"
+      # Redirect HTTP → HTTPS
+      traefik.http.routers.smile-nola-site-http.rule: "Host(`smile-nola.com`) || Host(`www.smile-nola.com`)"
+      traefik.http.routers.smile-nola-site-http.entrypoints: "http"
+      traefik.http.routers.smile-nola-site-http.middlewares: "redirect-to-https"
+      traefik.http.middlewares.redirect-to-https.redirectscheme.scheme: "https"
+
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

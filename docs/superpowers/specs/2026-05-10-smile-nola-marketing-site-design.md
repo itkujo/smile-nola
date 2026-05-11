@@ -75,7 +75,7 @@ smile-nola/
 │           │   │   ├── aurora.astro
 │           │   │   ├── resonance.astro
 │           │   │   ├── visionary.astro
-│           │   │   ├── atelier.astro
+│           │   │   ├── digital-atelier.astro
 │           │   │   └── smile.astro
 │           │   ├── admin/
 │           │   │   ├── index.astro            ← dashboard
@@ -184,7 +184,7 @@ Same template, content varies per collection (driven by `src/content/collections
 
 ### 4.4 Portfolio (`/portfolio`)
 
-Grid view, 2-up desktop / 1-up mobile, sorted by `featured DESC, created_at DESC`. Filter chips at top: All / Aurora / Resonance / Visionary / Atelier / Smile. Each card: video thumbnail (from oEmbed), title, collection tag, optional 1-line description. Click → full embedded player (in-page expand, not modal — better mobile UX).
+Grid view, 2-up desktop / 1-up mobile, sorted by `featured DESC, created_at DESC`. Filter chips at top: All / Aurora / Resonance / Visionary / Digital Atelier / Smile. Each card: video thumbnail (from oEmbed), title, collection tag, optional 1-line description. Click → full embedded player (in-page expand, not modal — better mobile UX).
 
 ### 4.5 About (`/about`)
 
@@ -299,7 +299,7 @@ On submit, the server attempts to send an email to the owner at the address stor
 CREATE TABLE portfolio_items (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  collection      TEXT NOT NULL,   -- 'aurora' | 'resonance' | 'visionary' | 'atelier' | 'smile'
+  collection      TEXT NOT NULL,   -- 'aurora' | 'resonance' | 'visionary' | 'digital-atelier' | 'smile'
   title           TEXT NOT NULL,
   url             TEXT NOT NULL,   -- YouTube or Vimeo URL
   thumbnail_url   TEXT,            -- oEmbed-fetched on save
@@ -328,7 +328,7 @@ CREATE TABLE testimonials (
 
 ```ts
 export interface Collection {
-  slug: 'aurora' | 'resonance' | 'visionary' | 'atelier' | 'smile';
+  slug: 'aurora' | 'resonance' | 'visionary' | 'digital-atelier' | 'smile';
   displayName: string;      // 'The Aurora Collection'
   shortName: string;        // 'Aurora'
   tagline: string;          // 'lighting, video walls, luminous environments'
