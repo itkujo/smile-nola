@@ -176,7 +176,7 @@ The slugs match the booth intake's collection IDs at
 - **Slug:** `smile`
 - **Display name:** The Smile Collection
 - **Short name:** Smile
-- **Tagline:** photo booth experiences · mirror booth · social stem
+- **Tagline:** photo booth experiences · mirror booth · memory booth
 - **CTA:** Start Your Smile Inquiry
 - **Hero image:** `/images/collections/smile-landscape.png`
 - **Portrait image:** `/images/collections/smile-portrait.png`
@@ -192,7 +192,7 @@ The slugs match the booth intake's collection IDs at
 **Philosophy long (collection page):**
 
 > Photo experiences that don't feel like a county fair. The Smile Collection
-> brings the Mirror Me Booth and the Social Stem Booth — premium, branded
+> brings the Mirror Me Booth and the Memory Booth — premium, branded
 > photo activations that look like part of your décor, not an afterthought
 > rolled in on a luggage cart.
 >
@@ -205,7 +205,7 @@ The slugs match the booth intake's collection IDs at
 **What's included:**
 
 - Mirror Me Booth (premium mirror-style touchscreen activation)
-- Social Stem Booth (compact open-air social-first booth)
+- Memory Booth (compact open-air social-first booth)
 - Custom overlay template designed to match your event
 - Unlimited prints + digital sharing (text, email, QR, gallery)
 - On-site attendant for the full activation window
@@ -233,7 +233,7 @@ The slugs match the booth intake's collection IDs at
 **Per-collection inquiry questions** (rendered inside the deep form's
 service-specific section when the Smile chip is checked):
 
-- `booth_preference` (Booth preference) — select: Mirror Me Booth · Social Stem Booth · Not sure — open to recommendation
+- `booth_preference` (Booth preference) — select: Mirror Me Booth · Memory Booth · Not sure — open to recommendation
 - `backdrop_placement` (Desired backdrop or booth placement) — textarea
 - `prints_needed` (Prints needed?) — select: Yes — unlimited · Yes — limited · Digital only
 - `needs_custom_overlay` (Custom overlay / template needed?) — select: Yes · No · Not sure

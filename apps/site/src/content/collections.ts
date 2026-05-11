@@ -108,14 +108,14 @@ export const COLLECTIONS: readonly Collection[] = [
     slug: "smile",
     displayName: "The Smile Collection",
     shortName: "Smile",
-    tagline: "photo booth experiences · mirror booth · social stem",
+    tagline: "photo booth experiences · mirror booth · memory booth",
     philosophy:
       "The standout moment of your event — whether it's the Mirror Me activation as part of a larger production, or the single photo booth your guests can't stop talking about. Every booking includes custom overlay design and a live attendant. Nothing rented; everything produced.",
     philosophyLong:
-      "Photo experiences that don't feel like a county fair. The Smile Collection brings the Mirror Me Booth and the Social Stem Booth — premium, branded photo activations that look like part of your décor, not an afterthought rolled in on a luggage cart.\n\nWhether you're booking the photo booth as part of a full Smile NOLA production or as the single signature activation for the night, every Smile booking is designed end to end: custom overlay templates, brand-matched prints, guest sharing via text, email, QR, and a gallery your guests can keep returning to weeks after the night ends.",
+      "Photo experiences that don't feel like a county fair. The Smile Collection brings the Mirror Me Booth and the Memory Booth — premium, branded photo activations that look like part of your décor, not an afterthought rolled in on a luggage cart.\n\nWhether you're booking the photo booth as part of a full Smile NOLA production or as the single signature activation for the night, every Smile booking is designed end to end: custom overlay templates, brand-matched prints, guest sharing via text, email, QR, and a gallery your guests can keep returning to weeks after the night ends.",
     whatsIncluded: [
       "Mirror Me Booth (premium mirror-style touchscreen activation)",
-      "Social Stem Booth (compact open-air social-first booth)",
+      "Memory Booth (compact open-air social-first booth)",
       "Custom overlay template designed to match your event",
       "Unlimited prints + digital sharing (text, email, QR, gallery)",
       "On-site attendant for the full activation window",
@@ -125,7 +125,7 @@ export const COLLECTIONS: readonly Collection[] = [
         name: "booth_preference",
         label: "Booth preference",
         type: "select",
-        options: ["Mirror Me Booth", "Social Stem Booth", "Not sure — open to recommendation"],
+        options: ["Mirror Me Booth", "Memory Booth", "Not sure — open to recommendation"],
       },
       {
         name: "backdrop_placement",
