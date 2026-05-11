@@ -1,30 +1,275 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import LogoMark from "@/components/brand/LogoMark.astro";
-import GoldDivider from "@/components/brand/GoldDivider.astro";
-import DecoCorner from "@/components/brand/DecoCorner.astro";
+import SiteHeader from "@/components/layout/SiteHeader.astro";
 import AmbientGlow from "@/components/brand/AmbientGlow.astro";
 import DecoOrnament from "@/components/brand/DecoOrnament.astro";
+import DecoCorner from "@/components/brand/DecoCorner.astro";
+import ParticleField from "@/components/brand/ParticleField.astro";
+import HeroCycler from "@/components/brand/HeroCycler.astro";
+
+const HERO_WORDS = [
+  "moment",
+  "wedding",
+  "celebration",
+  "gala",
+  "milestone",
+  "reception",
+] as const;
+
+const COLLECTION_TICKER = ["Aurora", "Resonance", "Visionary", "Digital Atelier", "Smile"];
 ---
 
-<BaseLayout title="Smile NOLA · cinematic event production">
-  <main id="main" style="position: relative; min-height: 100vh; overflow: hidden; padding: 6rem 2rem; display: grid; place-items: center;">
-    <DecoOrnament />
-    <AmbientGlow />
-    <DecoCorner position="tl" size="lg" animate delay={200} />
-    <DecoCorner position="tr" size="lg" animate delay={400} />
-    <DecoCorner position="bl" size="lg" animate delay={600} />
-    <DecoCorner position="br" size="lg" animate delay={800} />
+<BaseLayout
+  title="Smile NOLA · cinematic event production"
+  description="Smile NOLA designs cinematic event experiences — lighting, video walls, concert-grade sound, videography, and event web design — for celebrations in New Orleans."
+>
+  <SiteHeader />
 
-    <div style="position: relative; z-index: 10; text-align: center;">
-      <LogoMark variant="full-gold" width={220} />
-      <h1 class="font-deco" style="font-size: clamp(2rem, 6vw, 4rem); color: var(--sn-gold); margin: 2rem 0 1rem;">
-        scaffold is alive.
-      </h1>
-      <GoldDivider />
-      <p style="color: var(--sn-champagne); margin-top: 1.5rem; max-width: 36ch; margin-left: auto; margin-right: auto;">
-        Brand primitives wired. Hero, collections, forms, and admin land next.
+  <main id="main">
+    <!-- ============ HERO ============ -->
+    <section class="hero" aria-label="Smile NOLA">
+      <DecoOrnament />
+      <AmbientGlow />
+      <ParticleField count={70} zIndex={1} />
+      <div class="grain"></div>
+      <div class="light-sweep"></div>
+
+      <DecoCorner position="tl" size="lg" animate delay={1600} />
+      <DecoCorner position="tr" size="lg" animate delay={1700} />
+      <DecoCorner position="bl" size="lg" animate delay={1800} />
+      <DecoCorner position="br" size="lg" animate delay={1900} />
+
+      <div class="hero-stage">
+        <p class="hero-eyebrow"><span class="rule"></span>cinematic event production · new orleans</p>
+
+        <h1 class="hero-headline font-deco">
+          let's design <span class="script">your</span>
+          <HeroCycler words={[...HERO_WORDS]} />
+        </h1>
+
+        <p class="hero-sub">
+          Lighting and video walls. Concert-grade sound. Cinematic videography.
+          Event web design. Photo experiences. Five collections, engineered as
+          one polished evening — designed, not rented.
+        </p>
+
+        <div class="hero-actions">
+          <a href="/contact" class="btn-gold">Begin your inquiry</a>
+          <a href="/collections" class="btn-ghost">Explore collections</a>
+        </div>
+      </div>
+
+      <div class="hero-bottom">
+        <ul class="collection-ticker" aria-label="Collections">
+          {COLLECTION_TICKER.map((name, i) => (
+            <li>
+              <span>{name}</span>
+              {i < COLLECTION_TICKER.length - 1 && <span class="dot" aria-hidden="true"></span>}
+            </li>
+          ))}
+        </ul>
+        <div class="scroll-cue" aria-hidden="true">
+          <span>scroll</span>
+          <span class="line"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Placeholder body region — Phases 3-5 fill this in. -->
+    <section class="hero-handoff">
+      <p class="eyebrow">— the five collections —</p>
+      <h2 class="font-deco">each collection is its own world. choose where to begin.</h2>
+      <p class="hero-handoff-note">
+        Full collection cards land in Phase 3. The homepage continues below in
+        production.
       </p>
-    </div>
+    </section>
   </main>
 </BaseLayout>
+
+<style>
+  /* ============ HERO ============ */
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    color: var(--sn-ivory);
+  }
+
+  .hero-stage {
+    flex: 1;
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 0 clamp(28px, 6vw, 96px);
+    gap: clamp(20px, 3vw, 32px);
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .hero-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    color: var(--sn-gold);
+    font-size: 0.72rem;
+    letter-spacing: 0.5em;
+    text-transform: uppercase;
+    margin: 0;
+    opacity: 0;
+    animation: rise-in 1s 0.6s var(--ease-cinematic) forwards;
+  }
+  .hero-eyebrow .rule {
+    width: 40px;
+    height: 1px;
+    background: var(--sn-gold);
+  }
+
+  .hero-headline {
+    /* `.font-deco` already sets the family + lowercase. */
+    font-weight: 400;
+    font-size: clamp(56px, 9vw, 132px);
+    line-height: 0.96;
+    letter-spacing: 0.02em;
+    color: var(--sn-gold);
+    margin: 0;
+    max-width: 14ch;
+    text-shadow: 0 0 48px var(--sn-amber-20);
+    opacity: 0;
+    animation: rise-in 1.4s 1.0s var(--ease-cinematic) forwards;
+  }
+  .hero-headline .script {
+    font-family: var(--font-signature);
+    color: var(--sn-champagne);
+    letter-spacing: 0.01em;
+    text-shadow: 0 0 24px rgba(246, 231, 200, 0.3);
+    font-size: 1.05em;
+    /* Holimount needs to stay capital-cased per its own decorative design,
+       so disable the parent's lowercase. */
+    text-transform: none;
+  }
+
+  .hero-sub {
+    color: var(--sn-muted-stone);
+    font-size: clamp(0.92rem, 1.1vw, 1.05rem);
+    line-height: 1.7;
+    max-width: 56ch;
+    margin: 0;
+    opacity: 0;
+    animation: rise-in 1s 1.5s var(--ease-cinematic) forwards;
+  }
+
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    align-items: center;
+    opacity: 0;
+    animation: rise-in 1s 1.9s var(--ease-cinematic) forwards;
+  }
+
+  @keyframes rise-in {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ============ HERO BOTTOM STRIP ============ */
+  .hero-bottom {
+    position: relative;
+    z-index: 10;
+    padding: 0 clamp(28px, 6vw, 96px) clamp(28px, 4vw, 56px);
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    opacity: 0;
+    animation: rise-in 1s 2.3s var(--ease-cinematic) forwards;
+  }
+  .collection-ticker {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    color: var(--sn-muted-stone);
+    font-size: 0.65rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    flex-wrap: wrap;
+  }
+  .collection-ticker li {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .collection-ticker .dot {
+    width: 3px;
+    height: 3px;
+    background: var(--sn-gold);
+    border-radius: 50%;
+    opacity: 0.5;
+  }
+  .scroll-cue {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--sn-muted-stone);
+    font-size: 0.6rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+  }
+  .scroll-cue .line {
+    width: 28px;
+    height: 1px;
+    background: var(--sn-gold);
+    transform-origin: left center;
+    animation: scroll-tick 2.4s ease-in-out infinite;
+  }
+  @keyframes scroll-tick {
+    0%, 100% { transform: scaleX(1);   opacity: 0.5; }
+    50%      { transform: scaleX(0.4); opacity: 1; }
+  }
+
+  /* ============ HERO HANDOFF (placeholder until Phase 3) ============ */
+  .hero-handoff {
+    background-color: var(--sn-soft-black);
+    border-top: 1px solid var(--sn-gold-24);
+    padding: clamp(64px, 10vh, 120px) clamp(28px, 6vw, 96px);
+    text-align: center;
+  }
+  .hero-handoff h2 {
+    font-weight: 400;
+    font-size: clamp(28px, 4.2vw, 56px);
+    line-height: 1.1;
+    color: var(--sn-ivory);
+    margin: 14px auto 0;
+    max-width: 22ch;
+  }
+  .hero-handoff-note {
+    color: var(--sn-muted-stone);
+    font-size: 0.85rem;
+    margin: 22px auto 0;
+    max-width: 56ch;
+    line-height: 1.7;
+  }
+
+  /* ============ MOBILE ADJUSTMENTS ============ */
+  @media (max-width: 700px) {
+    .hero-bottom { flex-direction: column; align-items: flex-start; }
+    .hero-actions { gap: 12px; }
+    .hero-actions .btn-gold,
+    .hero-actions .btn-ghost { padding: 0.9rem 1.6rem; }
+  }
+</style>

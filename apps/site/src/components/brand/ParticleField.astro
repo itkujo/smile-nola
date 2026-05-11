@@ -1,0 +1,150 @@
+---
+/**
+ * ParticleField — fine gold motes drifting upward across a hero, like
+ * embers from a sparkler. Canvas-rendered for GPU-accelerated motion.
+ * Drop into any container with `position: relative`.
+ *
+ * Skips entirely when prefers-reduced-motion is set.
+ */
+interface Props {
+  /** Number of particles. Default 70. */
+  count?: number;
+  /** z-index inside the parent. Default 1. */
+  zIndex?: number;
+}
+
+const { count = 70, zIndex = 1 } = Astro.props;
+---
+
+<canvas
+  class="sn-particles"
+  aria-hidden="true"
+  data-count={count}
+  style={`z-index: ${zIndex};`}
+></canvas>
+
+<style>
+  .sn-particles {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    display: block;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sn-particles { display: none; }
+  }
+</style>
+
+<script>
+  // Champagne particle field. Lives entirely in the parent container's
+  // bounding box; falls back gracefully if the parent isn't laid out yet.
+  const canvases = document.querySelectorAll<HTMLCanvasElement>(".sn-particles");
+  for (const canvas of canvases) {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) continue;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) continue;
+
+    const parent = canvas.parentElement;
+    if (!parent) continue;
+
+    const count = Number(canvas.dataset.count ?? "70");
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let width = 0;
+    let height = 0;
+
+    const resize = () => {
+      const rect = parent.getBoundingClientRect();
+      width = rect.width || window.innerWidth;
+      height = Math.max(rect.height || 0, window.innerHeight);
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      canvas.style.width = width + "px";
+      canvas.style.height = height + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+
+    const rand = (min: number, max: number) =>
+      Math.random() * (max - min) + min;
+
+    interface P {
+      x: number; y: number;
+      vx: number; vy: number;
+      r: number;
+      life: number; lifeSpeed: number;
+      swayAmp: number; swayFreq: number; swayPhase: number;
+    }
+
+    const spawn = (initial: boolean): P => ({
+      x: rand(0, width),
+      y: initial ? rand(-40, height) : height + rand(0, 60),
+      vx: rand(-0.10, 0.10),
+      vy: rand(-0.70, -0.25),
+      r: rand(0.4, 1.7),
+      life: rand(0, 1),
+      lifeSpeed: rand(0.0006, 0.0018),
+      swayAmp: rand(0.05, 0.22),
+      swayFreq: rand(0.004, 0.014),
+      swayPhase: rand(0, Math.PI * 2),
+    });
+
+    let particles: P[] = [];
+    const reset = () => {
+      particles = Array.from({ length: count }, () => spawn(true));
+    };
+
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = Math.min(now - last, 50);
+      last = now;
+      ctx.clearRect(0, 0, width, height);
+
+      for (const p of particles) {
+        p.x += p.vx + Math.sin(now * p.swayFreq + p.swayPhase) * p.swayAmp * 0.04;
+        p.y += p.vy * (dt / 16.67);
+        p.life += p.lifeSpeed;
+
+        if (p.y < -20 || p.life > 1.6) {
+          Object.assign(p, spawn(false));
+          continue;
+        }
+
+        const a = Math.sin(Math.min(p.life, 1) * Math.PI) * 0.55;
+        const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 4);
+        grad.addColorStop(0, `rgba(255, 213, 121, ${a})`);
+        grad.addColorStop(0.4, `rgba(212, 175, 55, ${a * 0.6})`);
+        grad.addColorStop(1, "rgba(212, 175, 55, 0)");
+
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = `rgba(246, 231, 200, ${a})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      requestAnimationFrame(tick);
+    };
+
+    // Defer init until layout has settled so the parent reports its true height.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        resize();
+        reset();
+        last = performance.now();
+        requestAnimationFrame(tick);
+      });
+    });
+
+    let resizeT: number;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeT);
+      resizeT = window.setTimeout(() => { resize(); reset(); }, 150);
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) last = performance.now();
+    });
+  }
+</script>

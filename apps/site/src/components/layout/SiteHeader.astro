@@ -1,0 +1,158 @@
+---
+/**
+ * SiteHeader — the global top navigation. Renders absolute-positioned over
+ * the first section so dark hero atmospheres can show through. Includes a
+ * skip-link target, the gold logo, primary nav, and the persistent
+ * "Inquire" CTA.
+ *
+ * On scroll past the hero threshold, the bar acquires a frosted background
+ * via the `is-scrolled` class (toggled by an inline script island).
+ */
+import LogoMark from "@/components/brand/LogoMark.astro";
+
+interface Props {
+  /** Path of the currently active page, for nav highlighting. */
+  pathname?: string;
+}
+
+const { pathname = Astro.url.pathname } = Astro.props;
+
+const NAV = [
+  { href: "/collections",     label: "Collections" },
+  { href: "/portfolio",       label: "Portfolio" },
+  { href: "/about",           label: "About" },
+  { href: "/contact",         label: "Contact" },
+] as const;
+
+const isActive = (href: string) =>
+  href === "/" ? pathname === "/" : pathname.startsWith(href);
+---
+
+<header class="site-header" data-site-header>
+  <a href="/" class="brand" aria-label="Smile NOLA — home">
+    <LogoMark variant="full-gold" width={148} label="" />
+  </a>
+
+  <nav class="site-nav" aria-label="Primary">
+    <ul>
+      {NAV.map((item) => (
+        <li>
+          <a
+            href={item.href}
+            class:list={["nav-link", { "is-active": isActive(item.href) }]}
+          >{item.label}</a>
+        </li>
+      ))}
+    </ul>
+  </nav>
+
+  <a href="/contact" class="inquire-btn">Inquire</a>
+</header>
+
+<style>
+  .site-header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 50;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 28px clamp(20px, 4vw, 56px);
+    transition:
+      background-color 280ms ease,
+      backdrop-filter 280ms ease,
+      border-color 280ms ease,
+      padding 280ms ease;
+    border-bottom: 1px solid transparent;
+  }
+  .site-header.is-scrolled {
+    background-color: rgba(5, 5, 5, 0.7);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom-color: var(--sn-gold-24);
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+  .brand {
+    display: inline-flex;
+    line-height: 0;
+  }
+
+  .site-nav {
+    display: none;
+  }
+  @media (min-width: 900px) {
+    .site-nav { display: block; }
+  }
+  .site-nav ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    gap: 32px;
+  }
+  .nav-link {
+    color: rgba(248, 244, 234, 0.78);
+    font-size: 0.72rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    transition: color 200ms ease;
+    position: relative;
+    padding: 6px 2px;
+  }
+  .nav-link:hover,
+  .nav-link:focus-visible {
+    color: var(--sn-gold);
+    outline: none;
+  }
+  .nav-link.is-active {
+    color: var(--sn-gold);
+  }
+  .nav-link.is-active::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: -6px;
+    height: 1px;
+    background: var(--sn-gold);
+  }
+
+  .inquire-btn {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--sn-gold-40);
+    color: var(--sn-ivory);
+    padding: 10px 22px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    font-weight: 500;
+    transition:
+      border-color 200ms ease,
+      color 200ms ease,
+      box-shadow 200ms ease,
+      background-color 200ms ease;
+  }
+  .inquire-btn:hover,
+  .inquire-btn:focus-visible {
+    border-color: var(--sn-gold);
+    color: var(--sn-gold);
+    box-shadow: 0 0 24px var(--sn-amber-40);
+    outline: none;
+  }
+</style>
+
+<script>
+  // Toggle the scrolled treatment after the user has moved past 80vh.
+  const header = document.querySelector<HTMLElement>("[data-site-header]");
+  if (header) {
+    const threshold = () => window.innerHeight * 0.5;
+    const update = () => {
+      header.classList.toggle("is-scrolled", window.scrollY > threshold());
+    };
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update, { passive: true });
+  }
+</script>
