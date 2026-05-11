@@ -12,11 +12,29 @@
  * lightweight form writes to.
  */
 import { COLLECTIONS } from "@/content/collections";
+import type { CollectionId } from "@/content/collection-id";
 
 interface Props {
   title?: string;
   intro?: string;
 }
+
+/**
+ * Plain-English service names for the contact-form chips. First-time
+ * visitors recognise the service ("Lighting") before they know the brand
+ * collection name ("Aurora"). Renders BIG on top, brand name underneath.
+ *
+ * Kept inline (rather than in the collections data layer) because every
+ * other surface on the site uses `shortName` directly — only the contact
+ * chip needs this dual-label framing.
+ */
+const SERVICE_NAMES: Record<CollectionId, string> = {
+  smile: "Photo Booth",
+  visionary: "Videography",
+  "digital-atelier": "Web & Digital",
+  aurora: "Lighting",
+  resonance: "Sound",
+};
 
 const {
   title = "Begin your inquiry",
@@ -197,8 +215,8 @@ const BUDGET_RANGES = [
         <label class="chip-check">
           <input type="checkbox" name="collections_interested" value={c.slug} data-collection={c.slug} />
           <span class="chip-body">
-            <span class="chip-title font-deco">{c.shortName}</span>
-            <span class="chip-tag">{c.tagline.split("·")[0].trim()}</span>
+            <span class="chip-title font-deco">{SERVICE_NAMES[c.slug]}</span>
+            <span class="chip-tag">{c.shortName} Collection</span>
           </span>
         </label>
       ))}
@@ -410,15 +428,17 @@ const BUDGET_RANGES = [
     color: var(--sn-gold);
   }
   .chip-title {
-    font-size: 1.05rem;
+    font-size: 1.35rem;
     color: var(--sn-ivory);
-    line-height: 1;
+    line-height: 1.1;
     transition: color 200ms ease;
   }
   .chip-tag {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     color: var(--sn-muted-stone);
-    letter-spacing: 0.06em;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-top: 2px;
   }
 
   /* Collection-specific blocks revealed when the chip is checked */
