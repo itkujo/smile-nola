@@ -10,6 +10,14 @@ import HeroCycler from "@/components/brand/HeroCycler.astro";
 import GoldDivider from "@/components/brand/GoldDivider.astro";
 import CollectionCard from "@/components/cards/CollectionCard.astro";
 import { COLLECTIONS } from "@/content/collections";
+import { listTestimonials } from "@/lib/testimonials";
+
+// Pull featured testimonials for the homepage. Hide the section entirely if
+// the table is empty (no placeholders on a luxury site).
+const testimonials = listTestimonials({ onlyFeatured: true, limit: 5 });
+const fallbackTestimonials = testimonials.length === 0
+  ? listTestimonials({ limit: 3 })
+  : testimonials;
 
 const HERO_WORDS = [
   "moment",
@@ -116,6 +124,26 @@ const COLLECTION_TICKER = COLLECTIONS.map((c) => c.shortName);
         ))}
       </div>
     </section>
+
+    <!-- ============ TESTIMONIALS (renders only when admin has any) ============ -->
+    {fallbackTestimonials.length > 0 && (
+      <section class="testimonials" aria-labelledby="testimonials-heading">
+        <header class="reveal">
+          <p class="eyebrow">— in their words —</p>
+          <h2 id="testimonials-heading" class="font-deco">what clients say afterward.</h2>
+        </header>
+
+        <div class="t-grid reveal-stagger">
+          {fallbackTestimonials.map((t) => (
+            <figure class="t-card reveal">
+              <span class="quote-mark font-deco" aria-hidden="true">"</span>
+              <blockquote>{t.quote}</blockquote>
+              <figcaption>— {t.attribution}</figcaption>
+            </figure>
+          ))}
+        </div>
+      </section>
+    )}
 
     <!-- ============ CLOSING CTA ============ -->
     <section class="closing" aria-labelledby="closing-heading">
@@ -387,6 +415,76 @@ const COLLECTION_TICKER = COLLECTIONS.map((c) => c.shortName);
     max-width: 1280px;
     margin: 0 auto;
     padding: 0 clamp(0px, 3vw, 32px);
+  }
+
+  /* ============ TESTIMONIALS ============ */
+  .testimonials {
+    background-color: var(--sn-soft-black);
+    padding: clamp(72px, 12vh, 140px) clamp(28px, 6vw, 96px);
+    border-top: 1px solid var(--sn-gold-12);
+  }
+  .testimonials header {
+    text-align: center;
+    margin-bottom: clamp(48px, 6vw, 72px);
+  }
+  .testimonials .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.72rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0 0 14px;
+  }
+  .testimonials h2 {
+    font-weight: 400;
+    font-size: clamp(28px, 3.6vw, 48px);
+    color: var(--sn-ivory);
+    margin: 0;
+    line-height: 1.05;
+  }
+
+  .t-grid {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+  @media (min-width: 800px) {
+    .t-grid { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  }
+
+  .t-card {
+    position: relative;
+    padding: 36px 28px 28px;
+    background: var(--sn-black);
+    border: 1px solid var(--sn-gold-24);
+    margin: 0;
+  }
+  .t-card .quote-mark {
+    position: absolute;
+    top: -28px;
+    left: 22px;
+    font-size: 90px;
+    line-height: 1;
+    color: var(--sn-gold);
+    opacity: 0.5;
+    text-shadow: 0 0 28px var(--sn-amber-20);
+    user-select: none;
+    /* Don't lowercase a quote character */
+    text-transform: none;
+  }
+  .t-card blockquote {
+    color: var(--sn-champagne);
+    font-size: clamp(0.95rem, 1.1vw, 1.05rem);
+    line-height: 1.75;
+    margin: 0 0 18px;
+    quotes: none;
+  }
+  .t-card figcaption {
+    color: var(--sn-muted-stone);
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
   }
 
   /* ============ CLOSING CTA ============ */

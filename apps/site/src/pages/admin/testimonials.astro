@@ -1,0 +1,317 @@
+---
+/**
+ * /admin/testimonials — list + add/edit form for client testimonials.
+ * Same shape as /admin/portfolio.
+ */
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { listTestimonials } from "@/lib/testimonials";
+
+const items = listTestimonials();
+---
+
+<AdminLayout title="Testimonials" section="testimonials">
+  <header class="head">
+    <p class="eyebrow">— admin · testimonials —</p>
+    <h1 class="font-deco">words that close the next deal.</h1>
+    <p class="head-sub">Add real client quotes. Featured testimonials surface on the homepage.</p>
+  </header>
+
+  <section class="form-block" aria-labelledby="form-heading">
+    <h2 id="form-heading">Add a new testimonial</h2>
+    <form id="ts-form" novalidate>
+      <input type="hidden" name="id" value="" />
+
+      <label class="sn-field-wrap">
+        <span class="sn-field-label">Quote *</span>
+        <textarea name="quote" rows="4" required maxlength="4000" placeholder="“ We told them what we wanted. They delivered the night we'll talk about for years. ”"></textarea>
+        <span class="sn-underline"></span>
+        <span class="sn-underline-glow"></span>
+      </label>
+
+      <label class="sn-field-wrap">
+        <span class="sn-field-label">Attribution *</span>
+        <input type="text" name="attribution" required maxlength="200" placeholder="Sarah & Marcus · Wedding · April 2026" />
+        <span class="sn-underline"></span>
+        <span class="sn-underline-glow"></span>
+      </label>
+
+      <div class="meta-row">
+        <label class="checkbox-wrap">
+          <input type="checkbox" name="featured" />
+          <span>Feature on homepage</span>
+        </label>
+
+        <label class="sn-field-wrap order-wrap">
+          <span class="sn-field-label">Display order</span>
+          <input type="number" name="display_order" value="0" />
+          <span class="sn-underline"></span>
+          <span class="sn-underline-glow"></span>
+        </label>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn-gold submit-btn">Add testimonial</button>
+        <button type="button" class="btn-ghost cancel-btn" hidden>Cancel edit</button>
+        <span class="save-status" aria-live="polite"></span>
+      </div>
+    </form>
+  </section>
+
+  <section class="list-block" aria-labelledby="list-heading">
+    <h2 id="list-heading">All testimonials · {items.length}</h2>
+
+    {items.length === 0 ? (
+      <div class="empty">
+        <p>No testimonials yet. Add your first above — featured ones appear on the homepage immediately.</p>
+      </div>
+    ) : (
+      <ul class="items">
+        {items.map((t) => (
+          <li class="item" data-id={t.id}>
+            <blockquote>
+              <p class="quote">{t.quote}</p>
+              <footer class="attribution">— {t.attribution}</footer>
+            </blockquote>
+            <div class="item-actions">
+              {t.featured === 1 && <span class="badge">★ featured</span>}
+              <button type="button" class="btn-link edit-btn"
+                data-id={t.id} data-quote={t.quote}
+                data-attribution={t.attribution} data-featured={t.featured}
+                data-display-order={t.display_order}>Edit</button>
+              <button type="button" class="btn-link danger delete-btn"
+                data-id={t.id} data-quote={t.quote}>Delete</button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+</AdminLayout>
+
+<script>
+  const form = document.getElementById("ts-form") as HTMLFormElement | null;
+  const saveStatus = form?.querySelector<HTMLElement>(".save-status") ?? null;
+  const submitBtn = form?.querySelector<HTMLButtonElement>(".submit-btn") ?? null;
+  const cancelBtn = form?.querySelector<HTMLButtonElement>(".cancel-btn") ?? null;
+
+  function setStatus(msg: string, ok: boolean) {
+    if (saveStatus) {
+      saveStatus.textContent = msg;
+      saveStatus.style.color = ok ? "var(--sn-gold)" : "var(--sn-amber)";
+    }
+  }
+
+  function resetForm() {
+    if (!form) return;
+    form.reset();
+    (form.elements.namedItem("id") as HTMLInputElement).value = "";
+    if (submitBtn) submitBtn.textContent = "Add testimonial";
+    if (cancelBtn) cancelBtn.hidden = true;
+  }
+
+  form?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    setStatus("", true);
+    const fd = new FormData(form);
+    const idVal = String(fd.get("id") ?? "").trim();
+    const payload: Record<string, unknown> = {
+      quote: fd.get("quote"),
+      attribution: fd.get("attribution"),
+      featured: fd.get("featured") === "on",
+      display_order: Number(fd.get("display_order") ?? 0),
+    };
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = idVal ? "Updating…" : "Adding…";
+    }
+
+    try {
+      let res: Response;
+      if (idVal) {
+        payload.id = Number(idVal);
+        res = await fetch("/api/admin/testimonials", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        res = await fetch("/api/admin/testimonials", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Server responded ${res.status}`);
+      }
+      window.location.reload();
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Save failed", false);
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = idVal ? "Update" : "Add testimonial";
+      }
+    }
+  });
+
+  cancelBtn?.addEventListener("click", () => { resetForm(); setStatus("", true); });
+
+  document.querySelectorAll<HTMLButtonElement>(".edit-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (!form) return;
+      const d = btn.dataset;
+      (form.elements.namedItem("id") as HTMLInputElement).value = d.id ?? "";
+      (form.elements.namedItem("quote") as HTMLTextAreaElement).value = d.quote ?? "";
+      (form.elements.namedItem("attribution") as HTMLInputElement).value = d.attribution ?? "";
+      (form.elements.namedItem("featured") as HTMLInputElement).checked = d.featured === "1";
+      (form.elements.namedItem("display_order") as HTMLInputElement).value = d.displayOrder ?? "0";
+      if (submitBtn) submitBtn.textContent = "Update";
+      if (cancelBtn) cancelBtn.hidden = false;
+      form.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>(".delete-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const quoteSnippet = (btn.dataset.quote ?? "").slice(0, 60) + "…";
+      if (!id) return;
+      if (!confirm(`Delete this testimonial?\n\n"${quoteSnippet}"`)) return;
+      btn.disabled = true;
+      btn.textContent = "Deleting…";
+      try {
+        const res = await fetch("/api/admin/testimonials", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: Number(id) }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Server responded ${res.status}`);
+        }
+        window.location.reload();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "Delete failed");
+        btn.disabled = false;
+        btn.textContent = "Delete";
+      }
+    });
+  });
+</script>
+
+<style>
+  .head { margin-bottom: 32px; }
+  .head .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .head h1 {
+    font-weight: 400;
+    font-size: clamp(28px, 3.8vw, 44px);
+    color: var(--sn-ivory);
+    margin: 8px 0 12px;
+    line-height: 1.05;
+  }
+  .head-sub { color: var(--sn-muted-stone); font-size: 0.95rem; margin: 0; }
+
+  .form-block, .list-block {
+    margin-bottom: 32px;
+    padding: 24px;
+    background: var(--sn-soft-black);
+    border: 1px solid var(--sn-gold-24);
+  }
+  h2 {
+    color: var(--sn-gold);
+    font-family: var(--font-body);
+    font-size: 0.72rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin: 0 0 22px;
+  }
+  .sn-field-wrap { margin-bottom: 18px; }
+  .sn-field-wrap textarea,
+  .sn-field-wrap input {
+    width: 100%;
+    background: transparent;
+    border: 0;
+    padding: 8px 0;
+    color: var(--sn-ivory);
+    font-family: var(--font-body);
+    font-size: 1rem;
+  }
+  .sn-field-wrap textarea { resize: vertical; min-height: 90px; }
+  .sn-field-wrap textarea:focus,
+  .sn-field-wrap input:focus { outline: none; }
+
+  .meta-row { display: flex; gap: 28px; align-items: flex-end; flex-wrap: wrap; }
+  .order-wrap { max-width: 180px; }
+  .checkbox-wrap {
+    display: inline-flex; align-items: center; gap: 10px;
+    color: var(--sn-ivory); font-size: 0.92rem; cursor: pointer;
+  }
+
+  .form-actions {
+    display: flex; align-items: center; gap: 14px; margin-top: 22px; flex-wrap: wrap;
+  }
+  .save-status { font-size: 0.82rem; }
+
+  .empty {
+    border: 1px dashed var(--sn-gold-24);
+    padding: 28px;
+    color: var(--sn-muted-stone);
+    text-align: center;
+  }
+
+  .items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+  .item {
+    background: var(--sn-black);
+    border: 1px solid var(--sn-gold-12);
+    padding: 22px 22px 18px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 18px;
+    align-items: start;
+  }
+  blockquote { margin: 0; }
+  .quote {
+    color: var(--sn-champagne);
+    font-size: 1.02rem;
+    line-height: 1.7;
+    margin: 0;
+  }
+  .attribution {
+    color: var(--sn-muted-stone);
+    font-size: 0.78rem;
+    letter-spacing: 0.12em;
+    margin-top: 10px;
+  }
+
+  .item-actions {
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+  }
+  .badge {
+    background: var(--sn-gold); color: var(--sn-black);
+    padding: 3px 10px; font-size: 0.62rem;
+    letter-spacing: 0.18em; text-transform: uppercase;
+  }
+  .btn-link {
+    background: transparent;
+    border: 1px solid var(--sn-gold-24);
+    color: var(--sn-ivory);
+    font-size: 0.72rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 200ms ease;
+  }
+  .btn-link:hover { border-color: var(--sn-gold); color: var(--sn-gold); }
+  .btn-link.danger:hover { border-color: var(--sn-amber); color: var(--sn-amber); }
+</style>
