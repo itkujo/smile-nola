@@ -1,11 +1,15 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import SiteHeader from "@/components/layout/SiteHeader.astro";
+import SiteFooter from "@/components/layout/SiteFooter.astro";
 import AmbientGlow from "@/components/brand/AmbientGlow.astro";
 import DecoOrnament from "@/components/brand/DecoOrnament.astro";
 import DecoCorner from "@/components/brand/DecoCorner.astro";
 import ParticleField from "@/components/brand/ParticleField.astro";
 import HeroCycler from "@/components/brand/HeroCycler.astro";
+import GoldDivider from "@/components/brand/GoldDivider.astro";
+import CollectionCard from "@/components/cards/CollectionCard.astro";
+import { COLLECTIONS } from "@/content/collections";
 
 const HERO_WORDS = [
   "moment",
@@ -16,7 +20,7 @@ const HERO_WORDS = [
   "reception",
 ] as const;
 
-const COLLECTION_TICKER = ["Aurora", "Resonance", "Visionary", "Digital Atelier", "Smile"];
+const COLLECTION_TICKER = COLLECTIONS.map((c) => c.shortName);
 ---
 
 <BaseLayout
@@ -75,16 +79,74 @@ const COLLECTION_TICKER = ["Aurora", "Resonance", "Visionary", "Digital Atelier"
       </div>
     </section>
 
-    <!-- Placeholder body region — Phases 3-5 fill this in. -->
-    <section class="hero-handoff">
-      <p class="eyebrow">— the five collections —</p>
-      <h2 class="font-deco">each collection is its own world. choose where to begin.</h2>
-      <p class="hero-handoff-note">
-        Full collection cards land in Phase 3. The homepage continues below in
-        production.
+    <!-- ============ BRAND PROMISE ============ -->
+    <section class="promise" aria-labelledby="promise-heading">
+      <p class="eyebrow reveal">— the smile nola standard —</p>
+      <h2 id="promise-heading" class="promise-headline font-deco reveal">
+        we design <span class="script">experiences,</span> not rentals.
+      </h2>
+      <p class="promise-body reveal">
+        Intentional. Cinematic. Premium — from the first inquiry to the final
+        toast. Five collections, engineered as one polished evening, designed
+        in New Orleans and delivered with the rigor of a production company,
+        not the indifference of a rental catalog.
       </p>
+      <div class="reveal" style="display: flex; justify-content: center; margin-top: 28px;">
+        <GoldDivider width="180px" />
+      </div>
+    </section>
+
+    <!-- ============ THE FIVE COLLECTIONS ============ -->
+    <section class="collections" aria-labelledby="collections-heading">
+      <header class="collections-header reveal">
+        <p class="eyebrow">— the five collections —</p>
+        <h2 id="collections-heading" class="font-deco">
+          each collection is its own world.
+        </h2>
+        <p class="lede">choose where to begin.</p>
+      </header>
+
+      <div class="collections-stack reveal-stagger">
+        {COLLECTIONS.map((collection, i) => (
+          <CollectionCard
+            collection={collection}
+            imageSide={i % 2 === 0 ? "left" : "right"}
+            index={i}
+          />
+        ))}
+      </div>
+    </section>
+
+    <!-- ============ CLOSING CTA ============ -->
+    <section class="closing" aria-labelledby="closing-heading">
+      <AmbientGlow />
+      <DecoCorner position="tl" size="md" />
+      <DecoCorner position="tr" size="md" />
+      <DecoCorner position="bl" size="md" />
+      <DecoCorner position="br" size="md" />
+
+      <div class="closing-inner reveal">
+        <p class="eyebrow">— ready when you are —</p>
+        <h2 id="closing-heading" class="closing-headline font-deco">
+          let's design <span class="script">your</span>
+          <HeroCycler
+            words={[...HERO_WORDS]}
+            trailing=""
+            holdMs={3200}
+            startDelayMs={400}
+          />
+        </h2>
+        <p class="closing-body">
+          Share a few details about the moment you want to create. We'll be in
+          touch within 24 hours with a consultative reply — not a generic
+          quote.
+        </p>
+        <a href="/contact" class="btn-gold">Begin your inquiry</a>
+      </div>
     </section>
   </main>
+
+  <SiteFooter />
 </BaseLayout>
 
 <style>
@@ -248,27 +310,138 @@ const COLLECTION_TICKER = ["Aurora", "Resonance", "Visionary", "Digital Atelier"
     50%      { transform: scaleX(0.4); opacity: 1; }
   }
 
-  /* ============ HERO HANDOFF (placeholder until Phase 3) ============ */
-  .hero-handoff {
+  /* ============ BRAND PROMISE ============ */
+  .promise {
+    text-align: center;
     background-color: var(--sn-soft-black);
     border-top: 1px solid var(--sn-gold-24);
-    padding: clamp(64px, 10vh, 120px) clamp(28px, 6vw, 96px);
-    text-align: center;
+    border-bottom: 1px solid var(--sn-gold-12);
+    padding: clamp(72px, 12vh, 140px) clamp(28px, 6vw, 96px);
   }
-  .hero-handoff h2 {
+  .promise .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.72rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0 0 24px;
+  }
+  .promise-headline {
     font-weight: 400;
-    font-size: clamp(28px, 4.2vw, 56px);
+    font-size: clamp(32px, 4.5vw, 64px);
     line-height: 1.1;
     color: var(--sn-ivory);
-    margin: 14px auto 0;
+    margin: 0 auto;
     max-width: 22ch;
   }
-  .hero-handoff-note {
-    color: var(--sn-muted-stone);
-    font-size: 0.85rem;
-    margin: 22px auto 0;
-    max-width: 56ch;
+  .promise-headline .script {
+    font-family: var(--font-italic-serif);
+    font-style: italic;
+    font-weight: 500;
+    color: var(--sn-gold);
+    text-transform: none;
+    font-size: 1.1em;
+  }
+  .promise-body {
+    color: var(--sn-champagne);
+    font-size: clamp(0.95rem, 1.2vw, 1.1rem);
     line-height: 1.7;
+    max-width: 56ch;
+    margin: 28px auto 0;
+  }
+
+  /* ============ COLLECTIONS STACK ============ */
+  .collections {
+    background-color: var(--sn-black);
+    padding: clamp(72px, 12vh, 140px) 0 clamp(72px, 10vh, 120px);
+  }
+  .collections-header {
+    text-align: center;
+    padding: 0 clamp(28px, 6vw, 96px) clamp(48px, 6vw, 72px);
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .collections-header .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.72rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0 0 18px;
+  }
+  .collections-header h2 {
+    font-weight: 400;
+    font-size: clamp(28px, 3.6vw, 48px);
+    line-height: 1.1;
+    color: var(--sn-ivory);
+    margin: 0;
+    max-width: 22ch;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .collections-header .lede {
+    color: var(--sn-muted-stone);
+    font-size: 0.95rem;
+    margin: 18px auto 0;
+    letter-spacing: 0.04em;
+  }
+  .collections-stack {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 clamp(0px, 3vw, 32px);
+  }
+
+  /* ============ CLOSING CTA ============ */
+  .closing {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--sn-black);
+    border-top: 1px solid var(--sn-gold-24);
+    padding: clamp(96px, 16vh, 180px) clamp(28px, 6vw, 96px);
+    text-align: center;
+  }
+  .closing-inner {
+    position: relative;
+    z-index: 10;
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+  }
+  .closing .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.72rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .closing-headline {
+    font-weight: 400;
+    font-size: clamp(34px, 5vw, 72px);
+    line-height: 1.05;
+    color: var(--sn-gold);
+    margin: 0;
+    max-width: 18ch;
+    text-shadow: 0 0 36px var(--sn-amber-20);
+  }
+  .closing-headline .script {
+    font-family: var(--font-italic-serif);
+    font-style: italic;
+    font-weight: 500;
+    color: var(--sn-champagne);
+    text-transform: none;
+    font-size: 1.15em;
+    text-shadow: 0 0 20px rgba(246, 231, 200, 0.3);
+  }
+  .closing-body {
+    color: var(--sn-muted-stone);
+    font-size: 1.02rem;
+    line-height: 1.7;
+    max-width: 52ch;
+    margin: 0;
+  }
+  .closing .btn-gold {
+    margin-top: 8px;
   }
 
   /* ============ MOBILE ADJUSTMENTS ============ */

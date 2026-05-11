@@ -1,0 +1,194 @@
+---
+/**
+ * SiteFooter — global footer used on every page.
+ *
+ * Three regions: brand (logo + tagline), quick-links columns, contact.
+ * Phone and Instagram are placeholders today (owner provides post-launch).
+ * Email defaults to hello@smile-nola.com — owner may override via env later.
+ */
+import LogoMark from "@/components/brand/LogoMark.astro";
+
+const CONTACT = {
+  email: "hello@smile-nola.com",
+  location: "New Orleans · Louisiana",
+  // TODO(owner): set real phone and Instagram before launch
+  phone: null as string | null,
+  instagram: null as { url: string; handle: string } | null,
+};
+
+const DISCOVER = [
+  { href: "/collections",                  label: "All Collections" },
+  { href: "/collections/aurora",           label: "Aurora · Lighting" },
+  { href: "/collections/resonance",        label: "Resonance · Sound" },
+  { href: "/collections/visionary",        label: "Visionary · Film" },
+  { href: "/collections/digital-atelier",  label: "Digital Atelier" },
+  { href: "/collections/smile",            label: "Smile · Booths" },
+];
+
+const STUDIO = [
+  { href: "/about",     label: "About Smile NOLA" },
+  { href: "/portfolio", label: "Portfolio" },
+  { href: "/contact",   label: "Begin Your Inquiry" },
+];
+
+const year = new Date().getFullYear();
+---
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="brand-region">
+      <LogoMark variant="wordmark" width={200} color="var(--sn-gold)" />
+      <p class="tagline">cinematic event production · new orleans</p>
+    </div>
+
+    <nav class="links" aria-label="Footer navigation">
+      <div class="column">
+        <h4>Discover</h4>
+        <ul>
+          {DISCOVER.map((item) => (
+            <li><a href={item.href}>{item.label}</a></li>
+          ))}
+        </ul>
+      </div>
+
+      <div class="column">
+        <h4>Studio</h4>
+        <ul>
+          {STUDIO.map((item) => (
+            <li><a href={item.href}>{item.label}</a></li>
+          ))}
+        </ul>
+      </div>
+
+      <div class="column">
+        <h4>Contact</h4>
+        <ul>
+          <li>
+            <a href={`mailto:${CONTACT.email}`}>{CONTACT.email}</a>
+          </li>
+          {CONTACT.phone && (
+            <li>
+              <a href={`tel:${CONTACT.phone.replace(/[^0-9+]/g, "")}`}>{CONTACT.phone}</a>
+            </li>
+          )}
+          {CONTACT.instagram && (
+            <li>
+              <a href={CONTACT.instagram.url} target="_blank" rel="noopener noreferrer">
+                instagram · {CONTACT.instagram.handle}
+              </a>
+            </li>
+          )}
+          <li class="muted">{CONTACT.location}</li>
+        </ul>
+      </div>
+    </nav>
+  </div>
+
+  <div class="legal">
+    <p>© {year} Smile NOLA · cinematic event production · new orleans</p>
+    <a href="/admin" class="admin-link" aria-label="Administrator login">admin</a>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    background-color: var(--sn-soft-black);
+    border-top: 1px solid var(--sn-gold-24);
+    color: var(--sn-ivory);
+    padding: clamp(56px, 8vh, 96px) clamp(28px, 6vw, 96px) clamp(28px, 4vh, 48px);
+  }
+
+  .footer-inner {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: clamp(32px, 5vw, 64px);
+  }
+  @media (min-width: 800px) {
+    .footer-inner { grid-template-columns: 1fr 2fr; }
+  }
+
+  .brand-region {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .brand-region .tagline {
+    color: var(--sn-muted-stone);
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+
+  .links {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+  @media (min-width: 600px) {
+    .links { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  .column h4 {
+    color: var(--sn-gold);
+    font-family: var(--font-body);
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin: 0 0 16px;
+  }
+  .column ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .column li a {
+    color: var(--sn-ivory);
+    font-size: 0.92rem;
+    transition: color 200ms ease;
+  }
+  .column li a:hover,
+  .column li a:focus-visible {
+    color: var(--sn-gold);
+    outline: none;
+  }
+  .column li.muted {
+    color: var(--sn-muted-stone);
+    font-size: 0.85rem;
+  }
+
+  .legal {
+    max-width: 1400px;
+    margin: clamp(40px, 6vh, 72px) auto 0;
+    padding-top: 28px;
+    border-top: 1px solid var(--sn-gold-12);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    color: var(--sn-muted-stone);
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+  }
+  .legal p { margin: 0; }
+  .admin-link {
+    color: var(--sn-muted-stone);
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    font-size: 0.68rem;
+    opacity: 0.6;
+    transition: color 200ms ease, opacity 200ms ease;
+  }
+  .admin-link:hover, .admin-link:focus-visible {
+    color: var(--sn-gold);
+    opacity: 1;
+    outline: none;
+  }
+</style>

@@ -1,0 +1,210 @@
+---
+/**
+ * CollectionCard — editorial card used on the homepage stack.
+ *
+ * Layout alternates each card image-left / image-right so the eye moves
+ * down the page in a zig-zag. When the collection has no hero image yet,
+ * a typographic poster placeholder renders in the image slot (dark gradient
+ * + decorative collection initial in Broadway).
+ */
+import type { Collection } from "@/content/collections";
+import DecoCorner from "@/components/brand/DecoCorner.astro";
+
+interface Props {
+  collection: Collection;
+  /** "left" or "right" — which side the image lives on. */
+  imageSide?: "left" | "right";
+  /** Sequence index for staggered reveal delay. */
+  index?: number;
+}
+
+const { collection, imageSide = "left", index = 0 } = Astro.props;
+
+const initial = collection.shortName.charAt(0);
+const inquireHref = `/collections/${collection.slug}#inquire`;
+const learnHref = `/collections/${collection.slug}`;
+---
+
+<article
+  class:list={["collection-card", "reveal", `side-${imageSide}`]}
+  style={`transition-delay: ${index * 80}ms;`}
+>
+  <a class="image" href={learnHref} aria-label={`Explore ${collection.displayName}`}>
+    {collection.heroImage ? (
+      <img src={collection.heroImage} alt="" loading="lazy" />
+    ) : (
+      <div class="placeholder" aria-hidden="true">
+        <DecoCorner position="tl" size="sm" />
+        <DecoCorner position="br" size="sm" />
+        <span class="placeholder-initial font-deco">{initial}</span>
+        <span class="placeholder-name font-deco">{collection.shortName}</span>
+      </div>
+    )}
+  </a>
+
+  <div class="body">
+    <p class="eyebrow">— collection {String(index + 1).padStart(2, "0")} —</p>
+    <h3 class="font-deco">{collection.shortName}</h3>
+    <p class="tagline">{collection.tagline}</p>
+    <p class="philosophy">{collection.philosophy}</p>
+    <div class="actions">
+      <a href={learnHref} class="link link--gold">
+        explore the collection <span aria-hidden="true">→</span>
+      </a>
+      <a href={inquireHref} class="link">
+        inquire <span aria-hidden="true">→</span>
+      </a>
+    </div>
+  </div>
+</article>
+
+<style>
+  .collection-card {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: clamp(24px, 4vw, 56px);
+    align-items: center;
+    padding: clamp(40px, 6vw, 72px) clamp(20px, 5vw, 64px);
+    border-top: 1px solid var(--sn-gold-12);
+  }
+  .collection-card:first-of-type {
+    border-top: 0;
+  }
+
+  @media (min-width: 800px) {
+    .collection-card {
+      grid-template-columns: 1.05fr 1fr;
+    }
+    .collection-card.side-right .image { order: 2; }
+    .collection-card.side-right .body  { order: 1; }
+  }
+
+  /* ===== Image / placeholder ===== */
+  .image {
+    position: relative;
+    display: block;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    border: 1px solid var(--sn-gold-24);
+    background-color: var(--sn-soft-black);
+    transition: border-color 280ms ease, transform 400ms var(--ease-cinematic);
+  }
+  .image:hover,
+  .image:focus-visible {
+    border-color: var(--sn-gold);
+    transform: translateY(-2px);
+    outline: none;
+  }
+  .image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 600ms var(--ease-cinematic);
+  }
+  .image:hover img {
+    transform: scale(1.03);
+  }
+
+  .placeholder {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background:
+      radial-gradient(45% 60% at 50% 50%, var(--sn-gold-12), transparent 65%),
+      linear-gradient(135deg, var(--sn-black) 0%, var(--sn-soft-black) 100%);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+  }
+  .placeholder::after {
+    content: "";
+    position: absolute;
+    inset: 16px;
+    border: 1px solid var(--sn-gold-12);
+    pointer-events: none;
+  }
+  .placeholder-initial {
+    font-size: clamp(120px, 18vw, 220px);
+    line-height: 0.85;
+    color: var(--sn-gold);
+    opacity: 0.18;
+    text-shadow: 0 0 40px var(--sn-amber-20);
+    user-select: none;
+  }
+  .placeholder-name {
+    position: absolute;
+    bottom: 28px;
+    left: 28px;
+    color: var(--sn-gold);
+    font-size: 0.85rem;
+    letter-spacing: 0.35em;
+    text-transform: lowercase;
+    opacity: 0.75;
+  }
+
+  /* ===== Body ===== */
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .body .eyebrow {
+    margin: 0;
+    color: var(--sn-gold);
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+  }
+  .body h3 {
+    margin: 0;
+    font-weight: 400;
+    font-size: clamp(28px, 3.4vw, 44px);
+    line-height: 1.05;
+    color: var(--sn-ivory);
+  }
+  .tagline {
+    color: var(--sn-champagne);
+    font-size: 0.92rem;
+    letter-spacing: 0.04em;
+    margin: 0;
+  }
+  .philosophy {
+    color: var(--sn-muted-stone);
+    font-size: 0.98rem;
+    line-height: 1.7;
+    margin: 0;
+    max-width: 52ch;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 22px;
+    margin-top: 10px;
+  }
+  .link {
+    font-family: var(--font-body);
+    font-size: 0.72rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--sn-muted-stone);
+    padding: 6px 0;
+    border-bottom: 1px solid transparent;
+    transition: color 200ms ease, border-color 200ms ease;
+  }
+  .link:hover, .link:focus-visible {
+    color: var(--sn-gold);
+    border-bottom-color: var(--sn-gold);
+    outline: none;
+  }
+  .link--gold {
+    color: var(--sn-gold);
+  }
+  .link span {
+    display: inline-block;
+    transition: transform 200ms ease;
+    margin-left: 4px;
+  }
+  .link:hover span { transform: translateX(4px); }
+</style>
