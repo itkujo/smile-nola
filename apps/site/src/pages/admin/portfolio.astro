@@ -2,58 +2,116 @@
 /**
  * /admin/portfolio — list + add/edit form for portfolio video items.
  *
- * Single page with two regions: the add/edit form (top) and the table of
- * existing items (bottom). On submit the form POSTs (or PATCHes if editing)
- * to /api/admin/portfolio and reloads the table inline.
+ * Two regions: the add/edit form (top) and the table of existing items
+ * (bottom). The form submits as multipart/form-data so it can carry an
+ * optional thumbnail file. Submit POSTs (new) or PATCHes (edit) to
+ * /api/admin/portfolio and reloads the table inline.
+ *
+ * Multi-collection: each item can belong to one OR many collections. The
+ * order chips render in is always the canonical COLLECTIONS order
+ * (smile → visionary → digital-atelier → aurora → resonance) regardless
+ * of which boxes the admin checks first.
+ *
+ * Thumbnails: the form's file input is optional. If provided, it wins over
+ * the auto-fetched YouTube/Vimeo thumbnail. PicTime items have no auto
+ * source so manual upload is the only way to get a real thumbnail.
  */
 import AdminLayout from "@/layouts/AdminLayout.astro";
 import { listPortfolio } from "@/lib/portfolio";
 import { COLLECTIONS } from "@/content/collections";
 
 const items = listPortfolio({ featuredFirst: true });
+
+function shortName(slug: string): string {
+  return COLLECTIONS.find((c) => c.slug === slug)?.shortName ?? slug;
+}
 ---
 
 <AdminLayout title="Video Portfolio" section="portfolio">
   <header class="head">
     <p class="eyebrow">— admin · portfolio —</p>
     <h1 class="font-deco">add the work that closes the deal.</h1>
-    <p class="head-sub">Paste a YouTube, Vimeo, or PicTime gallery video URL. Thumbnails are fetched automatically for YouTube and Vimeo; PicTime videos fall back to a typographic placeholder until you upload a custom thumbnail.</p>
+    <p class="head-sub">
+      Paste a YouTube, Vimeo, or PicTime gallery URL. YouTube and Vimeo
+      thumbnails are fetched automatically; PicTime items need a manual
+      upload (or fall back to a typographic placeholder). Tag every
+      collection the piece belongs to.
+    </p>
   </header>
 
   <section class="form-block" aria-labelledby="form-heading">
     <h2 id="form-heading">Add a new piece</h2>
-    <form id="pf-form" class="pf-form" novalidate>
+    <form id="pf-form" class="pf-form" enctype="multipart/form-data" novalidate>
       <input type="hidden" name="id" value="" />
 
       <div class="grid">
         <label class="sn-field-wrap span-2">
           <span class="sn-field-label">Video URL *</span>
-          <input type="url" name="url" required placeholder="YouTube, Vimeo, or PicTime gallery URL" title="Accepted: youtube.com / youtu.be / vimeo.com / <subdomain>.pic-time.com" />
-          <span class="sn-underline"></span>
-          <span class="sn-underline-glow"></span>
-        </label>
-
-        <label class="sn-field-wrap">
-          <span class="sn-field-label">Title *</span>
-          <input type="text" name="title" required maxlength="200" placeholder="Couple's name · venue · year" />
-          <span class="sn-underline"></span>
-          <span class="sn-underline-glow"></span>
-        </label>
-
-        <label class="sn-field-wrap">
-          <span class="sn-field-label">Collection *</span>
-          <select name="collection" required>
-            {COLLECTIONS.map((c) => (
-              <option value={c.slug}>{c.shortName} · {c.tagline.split("·")[0].trim()}</option>
-            ))}
-          </select>
+          <input
+            type="url"
+            name="url"
+            required
+            placeholder="YouTube, Vimeo, or PicTime gallery URL"
+            title="Accepted: youtube.com / youtu.be / vimeo.com / <subdomain>.pic-time.com"
+          />
           <span class="sn-underline"></span>
           <span class="sn-underline-glow"></span>
         </label>
 
         <label class="sn-field-wrap span-2">
+          <span class="sn-field-label">Title *</span>
+          <input
+            type="text"
+            name="title"
+            required
+            maxlength="200"
+            placeholder="Couple's name · venue · year"
+          />
+          <span class="sn-underline"></span>
+          <span class="sn-underline-glow"></span>
+        </label>
+
+        <fieldset class="collections-fieldset span-2">
+          <legend class="sn-field-label as-legend">
+            Collections * <span class="hint">— check every collection this piece appeared in</span>
+          </legend>
+          <div class="collection-checks" role="group" aria-label="Collections">
+            {COLLECTIONS.map((c) => (
+              <label class="collection-check">
+                <input type="checkbox" name="collections" value={c.slug} />
+                <span class="check-box" aria-hidden="true"></span>
+                <span class="check-label">
+                  <strong>{c.shortName}</strong>
+                  <em>{c.tagline.split("·")[0].trim()}</em>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <label class="sn-field-wrap span-2">
+          <span class="sn-field-label">
+            Custom thumbnail <span class="hint">— optional, JPEG/PNG/WebP, up to 5 MB. Auto-resized to 1280×720.</span>
+          </span>
+          <input
+            type="file"
+            name="thumbnail"
+            accept="image/jpeg,image/png,image/webp"
+            class="file-input"
+          />
+          <div class="thumb-preview" data-empty="true">
+            <img class="thumb-preview-img" alt="" />
+            <span class="thumb-preview-label">No file selected — auto thumbnail will be used (YouTube / Vimeo only).</span>
+          </div>
+        </label>
+
+        <label class="sn-field-wrap span-2">
           <span class="sn-field-label">Description (optional)</span>
-          <textarea name="description" rows="3" maxlength="2000" placeholder="One or two sentences shown under the title on the public portfolio."></textarea>
+          <textarea
+            name="description"
+            rows="3"
+            maxlength="2000"
+            placeholder="One or two sentences shown under the title on the public portfolio."></textarea>
           <span class="sn-underline"></span>
           <span class="sn-underline-glow"></span>
         </label>
@@ -80,11 +138,16 @@ const items = listPortfolio({ featuredFirst: true });
   </section>
 
   <section class="list-block" aria-labelledby="list-heading">
-    <h2 id="list-heading">Current portfolio · {items.length} {items.length === 1 ? "item" : "items"}</h2>
+    <h2 id="list-heading">
+      Current portfolio · {items.length} {items.length === 1 ? "item" : "items"}
+    </h2>
 
     {items.length === 0 ? (
       <div class="empty">
-        <p>Nothing here yet. Add your first video above — it'll appear on /portfolio and on the matching collection page within seconds.</p>
+        <p>
+          Nothing here yet. Add your first video above — it'll appear on
+          /portfolio and on every tagged collection page within seconds.
+        </p>
       </div>
     ) : (
       <div class="items">
@@ -102,20 +165,36 @@ const items = listPortfolio({ featuredFirst: true });
             <div class="meta">
               <div class="row1">
                 <strong>{it.title}</strong>
-                <span class="collection-tag">{it.collection}</span>
+                <div class="collection-tags">
+                  {it.collections.map((slug) => (
+                    <span class="collection-tag">{shortName(slug)}</span>
+                  ))}
+                </div>
               </div>
               {it.description && <p class="desc">{it.description}</p>}
               <p class="url-line"><a href={it.url} target="_blank" rel="noopener noreferrer">{it.url}</a></p>
             </div>
 
             <div class="actions">
-              <button type="button" class="btn-link edit-btn" data-id={it.id}
-                data-url={it.url} data-title={it.title} data-collection={it.collection}
-                data-description={it.description ?? ""} data-featured={it.featured}
+              <button
+                type="button"
+                class="btn-link edit-btn"
+                data-id={it.id}
+                data-url={it.url}
+                data-title={it.title}
+                data-collections={JSON.stringify(it.collections)}
+                data-description={it.description ?? ""}
+                data-featured={it.featured}
                 data-display-order={it.display_order}>
                 Edit
               </button>
-              <button type="button" class="btn-link danger delete-btn" data-id={it.id} data-title={it.title}>Delete</button>
+              <button
+                type="button"
+                class="btn-link danger delete-btn"
+                data-id={it.id}
+                data-title={it.title}>
+                Delete
+              </button>
             </div>
           </article>
         ))}
@@ -129,6 +208,10 @@ const items = listPortfolio({ featuredFirst: true });
   const saveStatus = form?.querySelector<HTMLElement>(".save-status") ?? null;
   const submitBtn = form?.querySelector<HTMLButtonElement>(".submit-btn") ?? null;
   const cancelBtn = form?.querySelector<HTMLButtonElement>(".cancel-btn") ?? null;
+  const thumbInput = form?.querySelector<HTMLInputElement>('input[name="thumbnail"]') ?? null;
+  const thumbPreview = form?.querySelector<HTMLElement>(".thumb-preview") ?? null;
+  const thumbPreviewImg = form?.querySelector<HTMLImageElement>(".thumb-preview-img") ?? null;
+  const thumbPreviewLabel = form?.querySelector<HTMLElement>(".thumb-preview-label") ?? null;
 
   function setStatus(msg: string, ok: boolean) {
     if (saveStatus) {
@@ -144,24 +227,51 @@ const items = listPortfolio({ featuredFirst: true });
     if (!form) return;
     form.reset();
     (form.elements.namedItem("id") as HTMLInputElement).value = "";
+    clearThumbPreview();
     if (submitBtn) submitBtn.textContent = "Add to portfolio";
     if (cancelBtn) cancelBtn.hidden = true;
   }
+
+  function clearThumbPreview() {
+    if (thumbPreview) thumbPreview.dataset.empty = "true";
+    if (thumbPreviewImg) thumbPreviewImg.src = "";
+    if (thumbPreviewLabel) {
+      thumbPreviewLabel.textContent =
+        "No file selected — auto thumbnail will be used (YouTube / Vimeo only).";
+    }
+  }
+
+  // ============ Thumbnail preview ============
+  thumbInput?.addEventListener("change", () => {
+    const file = thumbInput.files?.[0];
+    if (!file) {
+      clearThumbPreview();
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    if (thumbPreviewImg) thumbPreviewImg.src = url;
+    if (thumbPreview) thumbPreview.dataset.empty = "false";
+    if (thumbPreviewLabel) {
+      const kb = Math.round(file.size / 1024);
+      thumbPreviewLabel.textContent = `${file.name} · ${kb} KB · will be resized to 1280×720 JPEG`;
+    }
+  });
 
   // ============ Submit (POST or PATCH) ============
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
     clearStatus();
+
+    // FormData carries multi-value `collections` automatically because each
+    // checked box has the same name. Validate ≥ 1 client-side too.
     const fd = new FormData(form);
+    const checked = fd.getAll("collections");
+    if (checked.length === 0) {
+      setStatus("Pick at least one collection.", false);
+      return;
+    }
+
     const idVal = String(fd.get("id") ?? "").trim();
-    const payload: Record<string, unknown> = {
-      url: fd.get("url"),
-      title: fd.get("title"),
-      collection: fd.get("collection"),
-      description: fd.get("description") || "",
-      featured: fd.get("featured") === "on",
-      display_order: Number(fd.get("display_order") ?? 0),
-    };
 
     if (submitBtn) {
       submitBtn.disabled = true;
@@ -169,27 +279,28 @@ const items = listPortfolio({ featuredFirst: true });
     }
 
     try {
-      let res: Response;
-      if (idVal) {
-        payload.id = Number(idVal);
-        res = await fetch("/api/admin/portfolio", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-      } else {
-        res = await fetch("/api/admin/portfolio", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-      }
+      const res = await fetch("/api/admin/portfolio", {
+        method: idVal ? "PATCH" : "POST",
+        body: fd, // multipart, browser sets the boundary
+      });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `Server responded ${res.status}`);
+        const detail =
+          data.details && Object.keys(data.details).length > 0
+            ? `: ${Object.entries(data.details)
+                .map(([k, v]) => `${k} — ${v}`)
+                .join(", ")}`
+            : "";
+        throw new Error(`${data.error || `Server responded ${res.status}`}${detail}`);
       }
-      setStatus("✓ Saved · reloading…", true);
-      window.location.reload();
+      const data = await res.json().catch(() => ({}));
+      if (data.warning) {
+        setStatus(`✓ Saved with warning: ${data.warning}`, false);
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        setStatus("✓ Saved · reloading…", true);
+        window.location.reload();
+      }
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Save failed", false);
       if (submitBtn) {
@@ -212,10 +323,38 @@ const items = listPortfolio({ featuredFirst: true });
       (form.elements.namedItem("id") as HTMLInputElement).value = data.id ?? "";
       (form.elements.namedItem("url") as HTMLInputElement).value = data.url ?? "";
       (form.elements.namedItem("title") as HTMLInputElement).value = data.title ?? "";
-      (form.elements.namedItem("collection") as HTMLSelectElement).value = data.collection ?? "";
-      (form.elements.namedItem("description") as HTMLTextAreaElement).value = data.description ?? "";
-      (form.elements.namedItem("featured") as HTMLInputElement).checked = data.featured === "1";
-      (form.elements.namedItem("display_order") as HTMLInputElement).value = data.displayOrder ?? "0";
+      (form.elements.namedItem("description") as HTMLTextAreaElement).value =
+        data.description ?? "";
+      (form.elements.namedItem("featured") as HTMLInputElement).checked =
+        data.featured === "1";
+      (form.elements.namedItem("display_order") as HTMLInputElement).value =
+        data.displayOrder ?? "0";
+
+      // Hydrate collection checkboxes from the data-collections JSON.
+      const tagged: string[] = (() => {
+        try {
+          const arr = JSON.parse(data.collections ?? "[]");
+          return Array.isArray(arr) ? arr : [];
+        } catch {
+          return [];
+        }
+      })();
+      form
+        .querySelectorAll<HTMLInputElement>('input[name="collections"]')
+        .forEach((cb) => {
+          cb.checked = tagged.includes(cb.value);
+        });
+
+      // Clear any stale file selection — the admin can re-upload to replace
+      // the existing thumbnail, but the previous thumbnail stays if they
+      // don't pick a new file.
+      if (thumbInput) thumbInput.value = "";
+      clearThumbPreview();
+      if (thumbPreviewLabel) {
+        thumbPreviewLabel.textContent =
+          "Pick a file to replace the current thumbnail, or leave empty to keep it.";
+      }
+
       if (submitBtn) submitBtn.textContent = "Update";
       if (cancelBtn) cancelBtn.hidden = false;
       form.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -303,7 +442,9 @@ const items = listPortfolio({ featuredFirst: true });
     .pf-form .grid { grid-template-columns: 1fr; }
     .pf-form .grid .span-2 { grid-column: auto; }
   }
-  .pf-form input,
+  .pf-form input[type="url"],
+  .pf-form input[type="text"],
+  .pf-form input[type="number"],
   .pf-form select,
   .pf-form textarea {
     width: 100%;
@@ -317,19 +458,146 @@ const items = listPortfolio({ featuredFirst: true });
   .pf-form input:focus,
   .pf-form select:focus,
   .pf-form textarea:focus { outline: none; }
-  .pf-form select {
-    appearance: none;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' stroke='%23D4AF37' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>");
-    background-repeat: no-repeat;
-    background-position: right 4px center;
-    background-size: 12px 8px;
-    padding-right: 24px;
-  }
-  .pf-form select option {
-    background: var(--sn-soft-black);
-    color: var(--sn-ivory);
-  }
   .pf-form textarea { resize: vertical; }
+
+  /* ============ Collections fieldset ============ */
+  .collections-fieldset {
+    margin: 0;
+    padding: 18px 18px 14px;
+    border: 1px dashed var(--sn-gold-24);
+    background: rgba(0, 0, 0, 0.18);
+  }
+  .as-legend {
+    padding: 0 6px;
+    color: var(--sn-gold);
+    font-size: 0.68rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+  .hint {
+    color: var(--sn-muted-stone);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0.04em;
+    font-size: 0.74rem;
+    margin-left: 4px;
+  }
+  .collection-checks {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px 14px;
+    margin-top: 8px;
+  }
+  .collection-check {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px;
+    border: 1px solid var(--sn-gold-12);
+    background: var(--sn-black);
+    cursor: pointer;
+    transition: border-color 180ms ease, background-color 180ms ease;
+  }
+  .collection-check:hover { border-color: var(--sn-gold-24); }
+  .collection-check input[type="checkbox"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .check-box {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    border: 1px solid var(--sn-gold-24);
+    position: relative;
+    transition: border-color 180ms ease, background-color 180ms ease;
+  }
+  .collection-check input:checked + .check-box {
+    background: var(--sn-gold);
+    border-color: var(--sn-gold);
+  }
+  .collection-check input:checked + .check-box::after {
+    content: "";
+    position: absolute;
+    inset: 3px 4px 4px 3px;
+    border-right: 2px solid var(--sn-black);
+    border-bottom: 2px solid var(--sn-black);
+    transform: rotate(45deg);
+    width: 4px;
+    height: 8px;
+  }
+  .collection-check input:focus-visible + .check-box {
+    outline: 2px solid var(--sn-gold);
+    outline-offset: 2px;
+  }
+  .collection-check input:checked ~ .check-label strong { color: var(--sn-gold); }
+  .check-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    line-height: 1.2;
+  }
+  .check-label strong {
+    color: var(--sn-ivory);
+    font-size: 0.86rem;
+    transition: color 180ms ease;
+  }
+  .check-label em {
+    color: var(--sn-muted-stone);
+    font-style: normal;
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+  }
+
+  /* ============ Thumbnail file field ============ */
+  .file-input {
+    display: block;
+    width: 100%;
+    color: var(--sn-ivory);
+    padding: 6px 0;
+  }
+  .file-input::file-selector-button {
+    background: transparent;
+    border: 1px solid var(--sn-gold-24);
+    color: var(--sn-ivory);
+    padding: 6px 12px;
+    font-family: var(--font-body);
+    font-size: 0.78rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    margin-right: 12px;
+    border-radius: 999px;
+    transition: border-color 200ms ease, color 200ms ease;
+  }
+  .file-input::file-selector-button:hover {
+    border-color: var(--sn-gold);
+    color: var(--sn-gold);
+  }
+  .thumb-preview {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 12px;
+    padding: 8px 10px;
+    border: 1px dashed var(--sn-gold-12);
+    background: rgba(0, 0, 0, 0.2);
+    min-height: 56px;
+  }
+  .thumb-preview[data-empty="true"] .thumb-preview-img { display: none; }
+  .thumb-preview-img {
+    width: 96px;
+    height: 54px;
+    object-fit: cover;
+    border: 1px solid var(--sn-gold-24);
+  }
+  .thumb-preview-label {
+    color: var(--sn-muted-stone);
+    font-size: 0.78rem;
+  }
 
   .checkbox-wrap {
     display: inline-flex;
@@ -349,7 +617,7 @@ const items = listPortfolio({ featuredFirst: true });
   }
   .save-status { font-size: 0.82rem; }
 
-  /* List */
+  /* ============ List ============ */
   .empty {
     border: 1px dashed var(--sn-gold-24);
     padding: 28px;
@@ -404,6 +672,11 @@ const items = listPortfolio({ featuredFirst: true });
     flex-wrap: wrap;
   }
   .meta strong { color: var(--sn-ivory); }
+  .collection-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
   .collection-tag {
     padding: 2px 10px;
     border: 1px solid var(--sn-gold-24);

@@ -82,7 +82,9 @@ function getEmbedSrc(
 
         <div class="pf-grid">
           {items.map((it) => (
-            <article class="pf-card reveal" data-collection={it.collection}>
+            <article
+              class="pf-card reveal"
+              data-collections={it.collections.join(",")}>
               <button type="button" class="pf-play" data-embed={getEmbedSrc(it.provider, it.embed_id, it.url)} data-title={it.title}>
                 {it.thumbnail_url ? (
                   <img src={it.thumbnail_url} alt="" loading="lazy" />
@@ -93,7 +95,11 @@ function getEmbedSrc(
                 {it.featured === 1 && <span class="card-featured">★ featured</span>}
               </button>
               <div class="pf-body-info">
-                <span class="pf-collection">{shortName(it.collection)}</span>
+                <div class="pf-collections">
+                  {it.collections.map((slug) => (
+                    <span class="pf-collection">{shortName(slug)}</span>
+                  ))}
+                </div>
                 <h3>{it.title}</h3>
                 {it.description && <p>{it.description}</p>}
               </div>
@@ -140,7 +146,13 @@ function getEmbedSrc(
       });
       const filter = chip.getAttribute("data-filter");
       cards.forEach((card) => {
-        const matches = filter === "all" || card.getAttribute("data-collection") === filter;
+        // data-collections is a CSV like "smile,visionary"; an item matches
+        // the active filter if its array contains the filter slug.
+        const tags = (card.getAttribute("data-collections") ?? "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const matches = filter === "all" || tags.includes(filter ?? "");
         card.hidden = !matches;
       });
     });
@@ -359,11 +371,23 @@ function getEmbedSrc(
   }
 
   .pf-body-info { padding: 18px 18px 20px; }
+  /* Multi-collection chip strip — items with 3+ tags wrap to a second line */
+  .pf-collections {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    margin-bottom: 4px;
+  }
   .pf-collection {
     color: var(--sn-gold);
     font-size: 0.65rem;
     letter-spacing: 0.32em;
     text-transform: uppercase;
+  }
+  .pf-collection + .pf-collection::before {
+    content: "·";
+    margin-right: 10px;
+    color: var(--sn-gold-24);
   }
   .pf-body-info h3 {
     color: var(--sn-ivory);

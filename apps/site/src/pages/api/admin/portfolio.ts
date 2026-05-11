@@ -1,12 +1,22 @@
 /**
  * /api/admin/portfolio — POST (create), PATCH (update), DELETE.
  *
- * Behind the admin middleware. All body parsing is JSON. Save flow:
- *   1. Validate input.
- *   2. parseVideoUrl() — reject early if the URL isn't YouTube or Vimeo.
- *   3. resolveThumbnail() — fetch the thumbnail URL (best-effort; failure
- *      is non-fatal, the card will fall back to a typographic placeholder).
- *   4. Insert / update row.
+ * Behind the admin middleware. Accepts BOTH application/json (legacy clients,
+ * delete) AND multipart/form-data (the admin form, since it can carry a
+ * thumbnail file). The form always sends multipart so it can include a
+ * file even when one isn't selected; we just detect and branch on the
+ * Content-Type.
+ *
+ * Save flow:
+ *   1. Validate input + at-least-one collection.
+ *   2. parseVideoUrl() — reject early if the URL isn't a known provider.
+ *   3. If a manual thumbnail was uploaded, validate it (≤ 5 MB, image/*).
+ *   4. Insert / update row to mint or fetch the item id.
+ *   5. Save the manual thumbnail under that id, then patch the URL back.
+ *      (We do this after step 4 because the filename uses the item id.)
+ *   6. If no manual upload, fall back to resolveThumbnail() (oEmbed) — only
+ *      for YouTube/Vimeo. PicTime returns null; the typographic placeholder
+ *      kicks in on the card.
  */
 
 import type { APIRoute } from "astro";
@@ -19,11 +29,23 @@ import {
   insertPortfolioItem,
   updatePortfolioItem,
 } from "@/lib/portfolio";
+import {
+  savePortfolioThumbnail,
+  validateThumbnailUpload,
+} from "@/lib/uploads";
 
 export const prerender = false;
 
+/* ============================================================================
+ * Schemas
+ * ========================================================================= */
+
+const collectionsField = z
+  .array(z.enum(COLLECTION_IDS))
+  .min(1, "Pick at least one collection");
+
 const CreateSchema = z.object({
-  collection: z.enum(COLLECTION_IDS),
+  collections: collectionsField,
   title: z.string().trim().min(1, "Title is required").max(200),
   url: z.string().trim().min(1, "URL is required").max(500),
   description: z.string().trim().max(2000).optional().or(z.literal("")),
@@ -33,7 +55,7 @@ const CreateSchema = z.object({
 
 const UpdateSchema = z.object({
   id: z.coerce.number().int().positive(),
-  collection: z.enum(COLLECTION_IDS).optional(),
+  collections: collectionsField.optional(),
   title: z.string().trim().min(1).max(200).optional(),
   url: z.string().trim().min(1).max(500).optional(),
   description: z.string().trim().max(2000).optional().or(z.literal("")),
@@ -41,77 +63,160 @@ const UpdateSchema = z.object({
   display_order: z.coerce.number().int().optional(),
 });
 
+/* ============================================================================
+ * POST — create
+ * ========================================================================= */
+
 export const POST: APIRoute = async ({ request }) => {
-  const body = await readJson(request);
-  if (!body) return json(400, { error: "Body must be valid JSON" });
+  const { fields, thumbnailFile, error: parseError } = await readFormOrJson(request);
+  if (parseError) return json(400, { error: parseError });
 
-  const parsed = CreateSchema.safeParse(body);
-  if (!parsed.success) return validationError(parsed.error);
+  const parsedInput = CreateSchema.safeParse(fields);
+  if (!parsedInput.success) return validationError(parsedInput.error);
 
-  const video = parseVideoUrl(parsed.data.url);
+  const video = parseVideoUrl(parsedInput.data.url);
   if (!video) {
-    return json(400, { error: "URL must be a YouTube or Vimeo link" });
+    return json(400, {
+      error: "URL must be a YouTube, Vimeo, or PicTime gallery link",
+    });
   }
 
-  // Best-effort thumbnail fetch.
+  // Validate thumbnail upload up front so we don't insert a row only to
+  // discover the file is bad.
+  if (thumbnailFile) {
+    const err = validateThumbnailUpload(thumbnailFile);
+    if (err) return json(400, { error: err });
+  }
+
+  // Best-effort auto-thumbnail (YouTube/Vimeo only). Manual upload wins if
+  // both are present.
   let thumbnail: string | null = null;
-  try {
-    thumbnail = await resolveThumbnail(video);
-  } catch {
-    /* ignore */
+  if (!thumbnailFile) {
+    try {
+      thumbnail = await resolveThumbnail(video);
+    } catch {
+      /* ignore — placeholder will render */
+    }
   }
 
   const { id } = insertPortfolioItem({
-    collection: parsed.data.collection,
-    title: parsed.data.title,
-    url: parsed.data.url,
-    description: parsed.data.description || null,
-    featured: parsed.data.featured,
-    display_order: parsed.data.display_order,
+    collections: parsedInput.data.collections,
+    title: parsedInput.data.title,
+    url: parsedInput.data.url,
+    description: parsedInput.data.description || null,
+    featured: parsedInput.data.featured,
+    display_order: parsedInput.data.display_order,
     parsed: video,
     thumbnail_url: thumbnail,
   });
 
+  // Save the manual thumbnail (if any) NOW that we have the id, then patch
+  // the URL onto the row.
+  if (thumbnailFile) {
+    try {
+      const buf = Buffer.from(await thumbnailFile.arrayBuffer());
+      const url = await savePortfolioThumbnail(id, buf);
+      updatePortfolioItem(id, { thumbnail_url: url });
+    } catch (e) {
+      // Item was created but thumbnail save failed — surface the partial
+      // success so the admin knows to retry the upload.
+      return json(201, {
+        ok: true,
+        id,
+        item: getPortfolioItem(id),
+        warning: `Item saved but thumbnail upload failed: ${
+          e instanceof Error ? e.message : "unknown error"
+        }`,
+      });
+    }
+  }
+
   return json(201, { ok: true, id, item: getPortfolioItem(id) });
 };
 
+/* ============================================================================
+ * PATCH — update
+ * ========================================================================= */
+
 export const PATCH: APIRoute = async ({ request }) => {
-  const body = await readJson(request);
-  if (!body) return json(400, { error: "Body must be valid JSON" });
+  const { fields, thumbnailFile, error: parseError } = await readFormOrJson(request);
+  if (parseError) return json(400, { error: parseError });
 
-  const parsed = UpdateSchema.safeParse(body);
-  if (!parsed.success) return validationError(parsed.error);
+  const parsedInput = UpdateSchema.safeParse(fields);
+  if (!parsedInput.success) return validationError(parsedInput.error);
 
-  const id = parsed.data.id;
+  const id = parsedInput.data.id;
   if (!getPortfolioItem(id)) return json(404, { error: "Item not found" });
 
-  // If URL changed, re-parse + re-fetch thumbnail.
+  // If URL changed, re-parse + maybe re-fetch the auto thumbnail.
   let parsedVideo = undefined;
-  let thumbnail = undefined;
-  if (parsed.data.url) {
-    const video = parseVideoUrl(parsed.data.url);
+  let autoThumbnail: string | null | undefined = undefined;
+  if (parsedInput.data.url) {
+    const video = parseVideoUrl(parsedInput.data.url);
     if (!video) {
-      return json(400, { error: "URL must be a YouTube or Vimeo link" });
+      return json(400, {
+        error: "URL must be a YouTube, Vimeo, or PicTime gallery link",
+      });
     }
     parsedVideo = video;
-    try { thumbnail = await resolveThumbnail(video); } catch { /* ignore */ }
+    // Only auto-fetch if no manual upload accompanies this PATCH.
+    if (!thumbnailFile) {
+      try {
+        autoThumbnail = await resolveThumbnail(video);
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
+  // Validate manual thumbnail before touching the row.
+  if (thumbnailFile) {
+    const err = validateThumbnailUpload(thumbnailFile);
+    if (err) return json(400, { error: err });
+  }
+
+  // Apply the non-thumbnail updates first.
   const ok = updatePortfolioItem(id, {
-    collection: parsed.data.collection,
-    title: parsed.data.title,
-    url: parsed.data.url,
-    description: parsed.data.description !== undefined ? parsed.data.description || null : undefined,
-    featured: parsed.data.featured,
-    display_order: parsed.data.display_order,
+    collections: parsedInput.data.collections,
+    title: parsedInput.data.title,
+    url: parsedInput.data.url,
+    description:
+      parsedInput.data.description !== undefined
+        ? parsedInput.data.description || null
+        : undefined,
+    featured: parsedInput.data.featured,
+    display_order: parsedInput.data.display_order,
     parsed: parsedVideo,
-    thumbnail_url: thumbnail,
+    thumbnail_url: autoThumbnail,
   });
 
-  if (!ok) return json(400, { error: "Nothing to update" });
+  // Then save the manual thumbnail if provided.
+  if (thumbnailFile) {
+    try {
+      const buf = Buffer.from(await thumbnailFile.arrayBuffer());
+      const url = await savePortfolioThumbnail(id, buf);
+      updatePortfolioItem(id, { thumbnail_url: url });
+    } catch (e) {
+      return json(200, {
+        ok: true,
+        item: getPortfolioItem(id),
+        warning: `Item updated but thumbnail upload failed: ${
+          e instanceof Error ? e.message : "unknown error"
+        }`,
+      });
+    }
+  }
+
+  if (!ok && !thumbnailFile) {
+    return json(400, { error: "Nothing to update" });
+  }
 
   return json(200, { ok: true, item: getPortfolioItem(id) });
 };
+
+/* ============================================================================
+ * DELETE
+ * ========================================================================= */
 
 export const DELETE: APIRoute = async ({ request }) => {
   const body = await readJson(request);
@@ -128,8 +233,53 @@ export const DELETE: APIRoute = async ({ request }) => {
 };
 
 /* ============================================================================
- * Helpers
- * ============================================================================ */
+ * Body parsing
+ *
+ * The admin form posts multipart so it can carry an optional thumbnail file.
+ * Older callers (and the delete handler) post JSON. readFormOrJson detects
+ * the content-type and normalises both into a plain `fields` object plus an
+ * optional File handle.
+ * ========================================================================= */
+
+interface ParsedBody {
+  fields: Record<string, unknown>;
+  thumbnailFile: File | null;
+  error: string | null;
+}
+
+async function readFormOrJson(request: Request): Promise<ParsedBody> {
+  const ct = request.headers.get("content-type") ?? "";
+
+  if (ct.includes("multipart/form-data")) {
+    try {
+      const form = await request.formData();
+      const fields: Record<string, unknown> = {};
+      let thumbnailFile: File | null = null;
+      // Collect `collections` as an array (it appears once per checked box).
+      const collections: string[] = [];
+      for (const [key, value] of form.entries()) {
+        if (key === "thumbnail" && value instanceof File && value.size > 0) {
+          thumbnailFile = value;
+        } else if (key === "collections" && typeof value === "string") {
+          collections.push(value);
+        } else if (typeof value === "string") {
+          fields[key] = value;
+        }
+      }
+      if (collections.length > 0) fields.collections = collections;
+      return { fields, thumbnailFile, error: null };
+    } catch {
+      return { fields: {}, thumbnailFile: null, error: "Could not parse form data" };
+    }
+  }
+
+  // JSON path
+  const body = await readJson(request);
+  if (body === null || typeof body !== "object") {
+    return { fields: {}, thumbnailFile: null, error: "Body must be valid JSON" };
+  }
+  return { fields: body as Record<string, unknown>, thumbnailFile: null, error: null };
+}
 
 async function readJson(request: Request): Promise<unknown> {
   try {

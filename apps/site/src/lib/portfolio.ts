@@ -3,17 +3,28 @@
  *
  * Schema lives in lib/db.ts. This module wraps it with typed CRUD helpers
  * + a few read patterns (per-collection list, featured-list, etc.).
+ *
+ * Collections are stored as a JSON array in the `collections` column. The
+ * array's order is normalised to canonical COLLECTIONS order on every write
+ * so the public chip rendering is deterministic (smile → visionary →
+ * digital-atelier → aurora → resonance), regardless of how the admin
+ * checked the boxes.
  */
 
 import { getDb } from "@/lib/db";
 import type { CollectionId } from "@/content/collection-id";
-import { isCollectionId } from "@/content/collection-id";
+import { COLLECTION_IDS, isCollectionId } from "@/content/collection-id";
 import type { ParsedVideo } from "@/lib/oembed";
 
-export interface PortfolioRow {
+/* ============================================================================
+ * Row types
+ * ========================================================================= */
+
+/** Raw row as it lives in SQLite — `collections` is a JSON string. */
+interface PortfolioRowRaw {
   id: number;
   created_at: string;
-  collection: CollectionId;
+  collections: string;
   title: string;
   url: string;
   thumbnail_url: string | null;
@@ -24,8 +35,23 @@ export interface PortfolioRow {
   display_order: number;
 }
 
+/** Hydrated row consumed by Astro pages — `collections` is a typed array. */
+export interface PortfolioRow {
+  id: number;
+  created_at: string;
+  collections: CollectionId[];
+  title: string;
+  url: string;
+  thumbnail_url: string | null;
+  embed_id: string | null;
+  provider: "youtube" | "vimeo" | "pictime" | null;
+  description: string | null;
+  featured: number;
+  display_order: number;
+}
+
 export interface PortfolioInput {
-  collection: CollectionId;
+  collections: CollectionId[]; // ≥ 1 enforced at the API layer
   title: string;
   url: string;
   description?: string | null;
@@ -35,53 +61,114 @@ export interface PortfolioInput {
   thumbnail_url?: string | null;
 }
 
+/* ============================================================================
+ * Helpers
+ * ========================================================================= */
+
+/**
+ * Normalise the collections array on write:
+ *   - Drop anything that isn't a known slug
+ *   - Drop duplicates
+ *   - Re-sort to canonical COLLECTION_IDS order so chip rendering is stable
+ */
+function normaliseCollections(input: readonly string[]): CollectionId[] {
+  const valid = new Set<CollectionId>();
+  for (const c of input) {
+    if (isCollectionId(c)) valid.add(c);
+  }
+  return COLLECTION_IDS.filter((id) => valid.has(id));
+}
+
+function hydrate(raw: PortfolioRowRaw): PortfolioRow {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw.collections);
+  } catch {
+    parsed = [];
+  }
+  const arr = Array.isArray(parsed) ? parsed.filter(isCollectionId) : [];
+  return { ...raw, collections: arr };
+}
+
+/* ============================================================================
+ * Reads
+ * ========================================================================= */
+
+/**
+ * List portfolio items, optionally filtered to a single collection.
+ *
+ * Filter implementation: SQLite's JSON1 `json_each` lets us test for set
+ * membership without parsing in JS — `WHERE EXISTS (SELECT 1 FROM
+ * json_each(collections) WHERE value = ?)`. Volume is tiny so the cost is
+ * irrelevant.
+ */
 export function listPortfolio(opts?: {
   collection?: CollectionId | "all";
   featuredFirst?: boolean;
 }): PortfolioRow[] {
   const db = getDb();
   const filter = opts?.collection;
+  let rows: PortfolioRowRaw[];
   if (filter && filter !== "all" && isCollectionId(filter)) {
-    return db
+    rows = db
       .prepare(
-        "SELECT * FROM portfolio_items WHERE collection = ? ORDER BY featured DESC, display_order ASC, created_at DESC"
+        `SELECT * FROM portfolio_items
+         WHERE EXISTS (SELECT 1 FROM json_each(collections) WHERE value = ?)
+         ORDER BY featured DESC, display_order ASC, created_at DESC`,
       )
-      .all(filter) as PortfolioRow[];
+      .all(filter) as PortfolioRowRaw[];
+  } else {
+    rows = db
+      .prepare(
+        `SELECT * FROM portfolio_items
+         ORDER BY featured DESC, display_order ASC, created_at DESC`,
+      )
+      .all() as PortfolioRowRaw[];
   }
-  return db
-    .prepare(
-      "SELECT * FROM portfolio_items ORDER BY featured DESC, display_order ASC, created_at DESC"
-    )
-    .all() as PortfolioRow[];
+  return rows.map(hydrate);
 }
 
 export function getPortfolioItem(id: number): PortfolioRow | undefined {
-  return getDb()
+  const row = getDb()
     .prepare("SELECT * FROM portfolio_items WHERE id = ?")
-    .get(id) as PortfolioRow | undefined;
+    .get(id) as PortfolioRowRaw | undefined;
+  return row ? hydrate(row) : undefined;
 }
 
 export function getFeaturedPortfolio(limit = 1): PortfolioRow[] {
-  return getDb()
-    .prepare(
-      "SELECT * FROM portfolio_items WHERE featured = 1 ORDER BY display_order ASC, created_at DESC LIMIT ?"
-    )
-    .all(limit) as PortfolioRow[];
+  return (
+    getDb()
+      .prepare(
+        `SELECT * FROM portfolio_items
+         WHERE featured = 1
+         ORDER BY display_order ASC, created_at DESC
+         LIMIT ?`,
+      )
+      .all(limit) as PortfolioRowRaw[]
+  ).map(hydrate);
 }
 
+/* ============================================================================
+ * Writes
+ * ========================================================================= */
+
 export function insertPortfolioItem(input: PortfolioInput): { id: number } {
+  const collections = normaliseCollections(input.collections);
+  if (collections.length === 0) {
+    throw new Error("At least one collection is required");
+  }
   const r = getDb()
     .prepare(
       `INSERT INTO portfolio_items (
-        collection, title, url, thumbnail_url, embed_id, provider,
+        collections, title, url, thumbnail_url, embed_id, provider,
         description, featured, display_order
       ) VALUES (
-        @collection, @title, @url, @thumbnail_url, @embed_id, @provider,
+        @collections, @title, @url, @thumbnail_url, @embed_id, @provider,
         @description, @featured, @display_order
-      )`
+      )`,
     )
     .run({
-      collection: input.collection,
+      collections: JSON.stringify(collections),
       title: input.title,
       url: input.url,
       thumbnail_url: input.thumbnail_url ?? null,
@@ -94,13 +181,28 @@ export function insertPortfolioItem(input: PortfolioInput): { id: number } {
   return { id: Number(r.lastInsertRowid) };
 }
 
-export function updatePortfolioItem(id: number, input: Partial<PortfolioInput>): boolean {
-  // Build the update dynamically so each call only touches what changed.
+export function updatePortfolioItem(
+  id: number,
+  input: Partial<PortfolioInput>,
+): boolean {
   const fields: string[] = [];
   const params: Record<string, unknown> = { id };
-  if (input.collection !== undefined) { fields.push("collection = @collection"); params.collection = input.collection; }
-  if (input.title !== undefined)      { fields.push("title = @title");           params.title = input.title; }
-  if (input.url !== undefined)        { fields.push("url = @url");               params.url = input.url; }
+  if (input.collections !== undefined) {
+    const normalised = normaliseCollections(input.collections);
+    if (normalised.length === 0) {
+      throw new Error("At least one collection is required");
+    }
+    fields.push("collections = @collections");
+    params.collections = JSON.stringify(normalised);
+  }
+  if (input.title !== undefined) {
+    fields.push("title = @title");
+    params.title = input.title;
+  }
+  if (input.url !== undefined) {
+    fields.push("url = @url");
+    params.url = input.url;
+  }
   if (input.thumbnail_url !== undefined) {
     fields.push("thumbnail_url = @thumbnail_url");
     params.thumbnail_url = input.thumbnail_url ?? null;
@@ -111,9 +213,18 @@ export function updatePortfolioItem(id: number, input: Partial<PortfolioInput>):
     params.embed_id = input.parsed?.embedId ?? null;
     params.provider = input.parsed?.provider ?? null;
   }
-  if (input.description !== undefined) { fields.push("description = @description"); params.description = input.description ?? null; }
-  if (input.featured !== undefined)    { fields.push("featured = @featured"); params.featured = input.featured ? 1 : 0; }
-  if (input.display_order !== undefined) { fields.push("display_order = @display_order"); params.display_order = input.display_order; }
+  if (input.description !== undefined) {
+    fields.push("description = @description");
+    params.description = input.description ?? null;
+  }
+  if (input.featured !== undefined) {
+    fields.push("featured = @featured");
+    params.featured = input.featured ? 1 : 0;
+  }
+  if (input.display_order !== undefined) {
+    fields.push("display_order = @display_order");
+    params.display_order = input.display_order;
+  }
 
   if (fields.length === 0) return false;
 
@@ -124,6 +235,8 @@ export function updatePortfolioItem(id: number, input: Partial<PortfolioInput>):
 }
 
 export function deletePortfolioItem(id: number): boolean {
-  const r = getDb().prepare("DELETE FROM portfolio_items WHERE id = ?").run(id);
+  const r = getDb()
+    .prepare("DELETE FROM portfolio_items WHERE id = ?")
+    .run(id);
   return r.changes > 0;
 }

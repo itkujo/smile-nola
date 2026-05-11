@@ -87,7 +87,7 @@ function bootstrapSchema(db: Database.Database): void {
     CREATE TABLE IF NOT EXISTS portfolio_items (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
       created_at     TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      collection     TEXT    NOT NULL,
+      collections    TEXT    NOT NULL DEFAULT '[]', -- JSON array of slugs, e.g. '["smile","visionary"]'
       title          TEXT    NOT NULL,
       url            TEXT    NOT NULL,
       thumbnail_url  TEXT,
@@ -98,8 +98,7 @@ function bootstrapSchema(db: Database.Database): void {
       display_order  INTEGER NOT NULL DEFAULT 0
     );
 
-    CREATE INDEX IF NOT EXISTS idx_pf_collection ON portfolio_items(collection);
-    CREATE INDEX IF NOT EXISTS idx_pf_featured   ON portfolio_items(featured);
+    CREATE INDEX IF NOT EXISTS idx_pf_featured ON portfolio_items(featured);
 
     CREATE TABLE IF NOT EXISTS testimonials (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,6 +111,53 @@ function bootstrapSchema(db: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_ts_featured ON testimonials(featured);
   `);
+
+  migratePortfolioToMultiCollection(db);
+}
+
+/**
+ * One-shot migration for existing databases that still have the old single
+ * `collection TEXT` column on portfolio_items.
+ *
+ *   1. Detect: query PRAGMA table_info, look for the legacy `collection` column.
+ *   2. If present and the new `collections` column is empty for that row,
+ *      backfill `collections = JSON_ARRAY(collection)`.
+ *   3. Drop the legacy column (SQLite 3.35+; better-sqlite3 ships with 3.42+).
+ *
+ * Idempotent — running it on a fresh DB or an already-migrated DB is a no-op.
+ */
+function migratePortfolioToMultiCollection(db: Database.Database): void {
+  type ColInfo = { name: string; notnull: number; dflt_value: string | null };
+  const cols = db
+    .prepare<[], ColInfo>("PRAGMA table_info(portfolio_items)")
+    .all() as ColInfo[];
+  const hasLegacy = cols.some((c) => c.name === "collection");
+  const hasNew = cols.some((c) => c.name === "collections");
+
+  // Defensive: if the new column is missing for any reason (e.g. a DB that
+  // pre-dates this code revision), add it before backfilling.
+  if (!hasNew) {
+    db.exec(
+      `ALTER TABLE portfolio_items ADD COLUMN collections TEXT NOT NULL DEFAULT '[]'`,
+    );
+  }
+
+  if (hasLegacy) {
+    // Backfill rows where collections is still the empty default.
+    db.exec(
+      `UPDATE portfolio_items
+       SET collections = JSON_ARRAY(collection)
+       WHERE (collections IS NULL OR collections = '[]')
+         AND collection IS NOT NULL
+         AND collection != ''`,
+    );
+    // The legacy index on `collection` must go BEFORE we drop the column —
+    // SQLite refuses an ALTER DROP COLUMN that would invalidate an existing
+    // index (error: "after drop column: no such column: collection").
+    db.exec(`DROP INDEX IF EXISTS idx_pf_collection`);
+    // Drop the legacy column. Requires SQLite >= 3.35 (better-sqlite3 ships 3.42+).
+    db.exec(`ALTER TABLE portfolio_items DROP COLUMN collection`);
+  }
 }
 
 /* ============================================================================
