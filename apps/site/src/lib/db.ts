@@ -16,6 +16,7 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
+import { getEnv } from "@/lib/env";
 
 /**
  * Resolve where the SQLite file lives. In production (Docker) the volume
@@ -23,7 +24,7 @@ import path from "node:path";
  * driven by SMILE_NOLA_DB_DIR with a sensible fallback.
  */
 const DB_DIR =
-  process.env.SMILE_NOLA_DB_DIR ??
+  getEnv("SMILE_NOLA_DB_DIR") ||
   path.resolve(process.cwd(), "..", "..", "data");
 
 const DB_PATH = path.join(DB_DIR, "leads.db");

@@ -12,6 +12,7 @@
 
 import nodemailer from "nodemailer";
 import type { InquiryRow } from "@/lib/db";
+import { getEnv } from "@/lib/env";
 
 interface SmtpEnv {
   host: string;
@@ -22,11 +23,11 @@ interface SmtpEnv {
 }
 
 function readEnv(): SmtpEnv | null {
-  const host = process.env.SMTP_HOST?.trim();
-  const portStr = process.env.SMTP_PORT?.trim();
-  const user = process.env.SMTP_USER?.trim();
-  const pass = process.env.SMTP_PASS?.trim();
-  const to = process.env.NOTIFY_EMAIL?.trim();
+  const host = getEnv("SMTP_HOST").trim();
+  const portStr = getEnv("SMTP_PORT").trim();
+  const user = getEnv("SMTP_USER").trim();
+  const pass = getEnv("SMTP_PASS").trim();
+  const to = getEnv("NOTIFY_EMAIL").trim();
   if (!host || !portStr || !user || !pass || !to) return null;
   const port = Number(portStr);
   if (!Number.isFinite(port) || port <= 0) return null;

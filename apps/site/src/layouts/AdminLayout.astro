@@ -1,0 +1,170 @@
+---
+/**
+ * AdminLayout — chrome shared by every authenticated /admin/* page.
+ *
+ * Different feel from the public site: still dark luxury, but quieter
+ * (no particles, no rotating ornament). A simple top bar with logo,
+ * section nav, and a logout link. Designed to be readable and
+ * unsentimental — operator UX, not marketing UX.
+ */
+import "@/styles/globals.css";
+import LogoMark from "@/components/brand/LogoMark.astro";
+
+interface Props {
+  title: string;
+  /** Section name highlighted in the admin nav. */
+  section?: "dashboard" | "inquiries" | "portfolio" | "testimonials";
+}
+const { title, section } = Astro.props;
+
+const NAV = [
+  { href: "/admin",               label: "Dashboard",    key: "dashboard"    },
+  { href: "/admin/inquiries",     label: "Inquiries",    key: "inquiries"    },
+  { href: "/admin/portfolio",     label: "Portfolio",    key: "portfolio"    },
+  { href: "/admin/testimonials",  label: "Testimonials", key: "testimonials" },
+] as const;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#050505" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>{title} · Smile NOLA Admin</title>
+    <link rel="icon" type="image/svg+xml" href="/logos/icon.svg" />
+  </head>
+  <body class="admin-body">
+    <a class="skip-link" href="#admin-main">Skip to content</a>
+
+    <header class="admin-bar">
+      <a href="/admin" class="brand" aria-label="Admin home">
+        <LogoMark variant="full-gold" width={120} label="Smile NOLA Admin" />
+      </a>
+
+      <nav class="admin-nav" aria-label="Admin sections">
+        <ul>
+          {NAV.map((item) => (
+            <li>
+              <a
+                href={item.href}
+                class:list={["nav-link", { "is-active": section === item.key }]}
+              >{item.label}</a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
+      <button class="logout-btn" data-logout aria-label="Log out">Log out</button>
+    </header>
+
+    <main id="admin-main" class="admin-main">
+      <slot />
+    </main>
+
+    <script>
+      // Logout: POST to /api/admin/logout, then redirect to /admin/login.
+      document.querySelectorAll<HTMLButtonElement>("[data-logout]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          try {
+            await fetch("/api/admin/logout", { method: "POST" });
+          } catch { /* ignore */ }
+          window.location.href = "/admin/login";
+        });
+      });
+    </script>
+
+    <style>
+      .admin-body {
+        background-color: var(--sn-black);
+        color: var(--sn-ivory);
+        min-height: 100vh;
+        font-family: var(--font-body);
+      }
+
+      .admin-bar {
+        position: sticky;
+        top: 0;
+        z-index: 30;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 24px;
+        padding: 14px clamp(20px, 4vw, 40px);
+        background: rgba(5, 5, 5, 0.85);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-bottom: 1px solid var(--sn-gold-24);
+      }
+
+      .admin-bar .brand {
+        display: inline-flex;
+        line-height: 0;
+      }
+
+      .admin-nav ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        gap: 28px;
+      }
+      .admin-nav .nav-link {
+        color: rgba(248, 244, 234, 0.75);
+        font-size: 0.7rem;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        padding: 6px 2px;
+        border-bottom: 1px solid transparent;
+        transition: color 200ms ease, border-color 200ms ease;
+      }
+      .admin-nav .nav-link:hover,
+      .admin-nav .nav-link:focus-visible {
+        color: var(--sn-gold);
+        outline: none;
+      }
+      .admin-nav .nav-link.is-active {
+        color: var(--sn-gold);
+        border-bottom-color: var(--sn-gold);
+      }
+
+      .logout-btn {
+        background: transparent;
+        color: var(--sn-muted-stone);
+        border: 1px solid var(--sn-gold-24);
+        font-family: var(--font-body);
+        font-size: 0.7rem;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        padding: 8px 16px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: all 200ms ease;
+      }
+      .logout-btn:hover,
+      .logout-btn:focus-visible {
+        color: var(--sn-gold);
+        border-color: var(--sn-gold);
+        outline: none;
+      }
+
+      .admin-main {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: clamp(32px, 6vh, 64px) clamp(20px, 4vw, 40px) clamp(64px, 10vh, 120px);
+      }
+
+      /* Mobile */
+      @media (max-width: 720px) {
+        .admin-bar {
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+        .admin-nav { order: 3; flex-basis: 100%; }
+        .admin-nav ul { gap: 14px; flex-wrap: wrap; }
+      }
+    </style>
+  </body>
+</html>

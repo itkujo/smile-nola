@@ -1,0 +1,145 @@
+---
+/**
+ * /admin — dashboard. Quick counts + section links.
+ * Behind the middleware guard; only authed visitors see it.
+ */
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { inquiryCounts } from "@/lib/db";
+
+const counts = inquiryCounts();
+---
+
+<AdminLayout title="Dashboard" section="dashboard">
+  <header class="head">
+    <p class="eyebrow">— smile nola admin —</p>
+    <h1 class="font-deco">good to have you back.</h1>
+  </header>
+
+  <div class="stat-grid">
+    <a href="/admin/inquiries?status=new" class="stat-card">
+      <span class="num font-deco">{counts.new}</span>
+      <span class="label">New inquiries</span>
+    </a>
+    <a href="/admin/inquiries?status=contacted" class="stat-card">
+      <span class="num font-deco">{counts.contacted}</span>
+      <span class="label">In conversation</span>
+    </a>
+    <a href="/admin/inquiries?status=closed" class="stat-card">
+      <span class="num font-deco">{counts.closed}</span>
+      <span class="label">Closed</span>
+    </a>
+    <a href="/admin/inquiries" class="stat-card">
+      <span class="num font-deco">{counts.total}</span>
+      <span class="label">Total · all time</span>
+    </a>
+  </div>
+
+  <section class="quick">
+    <h2 class="font-deco">quick actions</h2>
+    <div class="links">
+      <a href="/admin/inquiries" class="quick-link">
+        <span class="qk-title">All inquiries</span>
+        <span class="qk-sub">View, filter, update status, export CSV</span>
+      </a>
+      <a href="/admin/portfolio" class="quick-link">
+        <span class="qk-title">Portfolio</span>
+        <span class="qk-sub">Add or remove video embeds</span>
+      </a>
+      <a href="/admin/testimonials" class="quick-link">
+        <span class="qk-title">Testimonials</span>
+        <span class="qk-sub">Add or feature client quotes</span>
+      </a>
+    </div>
+  </section>
+</AdminLayout>
+
+<style>
+  .head {
+    margin-bottom: 36px;
+  }
+  .head .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .head h1 {
+    font-weight: 400;
+    font-size: clamp(28px, 3.8vw, 48px);
+    color: var(--sn-ivory);
+    margin: 8px 0 0;
+    line-height: 1.05;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+    margin-bottom: 56px;
+  }
+  .stat-card {
+    background: var(--sn-soft-black);
+    border: 1px solid var(--sn-gold-24);
+    padding: 24px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: border-color 200ms ease, transform 200ms ease, box-shadow 200ms ease;
+  }
+  .stat-card:hover {
+    border-color: var(--sn-gold);
+    transform: translateY(-2px);
+    box-shadow: 0 0 18px var(--sn-amber-20);
+  }
+  .stat-card .num {
+    font-size: clamp(36px, 4.5vw, 56px);
+    line-height: 1;
+    color: var(--sn-gold);
+    text-shadow: 0 0 18px var(--sn-amber-20);
+  }
+  .stat-card .label {
+    color: var(--sn-muted-stone);
+    font-size: 0.7rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+
+  .quick {
+    margin-top: 16px;
+  }
+  .quick h2 {
+    font-weight: 400;
+    font-size: 1.2rem;
+    color: var(--sn-ivory);
+    margin: 0 0 16px;
+  }
+  .links {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  @media (min-width: 700px) {
+    .links { grid-template-columns: repeat(3, 1fr); }
+  }
+  .quick-link {
+    background: var(--sn-soft-black);
+    border: 1px solid var(--sn-gold-12);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: border-color 200ms ease;
+  }
+  .quick-link:hover {
+    border-color: var(--sn-gold);
+  }
+  .qk-title {
+    color: var(--sn-ivory);
+    font-size: 1rem;
+  }
+  .qk-sub {
+    color: var(--sn-muted-stone);
+    font-size: 0.82rem;
+  }
+</style>
