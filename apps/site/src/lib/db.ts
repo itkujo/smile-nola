@@ -89,11 +89,12 @@ function bootstrapSchema(db: Database.Database): void {
       created_at     TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
       collections    TEXT    NOT NULL DEFAULT '[]', -- JSON array of slugs, e.g. '["smile","visionary"]'
       title          TEXT    NOT NULL,
-      url            TEXT    NOT NULL,
+      url            TEXT,                          -- nullable: photo-only items have no video
       thumbnail_url  TEXT,
       embed_id       TEXT,
       provider       TEXT,
       description    TEXT,
+      gallery_url    TEXT,                          -- optional link to the full client gallery
       featured       INTEGER NOT NULL DEFAULT 0,
       display_order  INTEGER NOT NULL DEFAULT 0
     );
@@ -113,6 +114,7 @@ function bootstrapSchema(db: Database.Database): void {
   `);
 
   migratePortfolioToMultiCollection(db);
+  migratePortfolioAddGalleryUrlAndNullableUrl(db);
 }
 
 /**
@@ -157,6 +159,68 @@ function migratePortfolioToMultiCollection(db: Database.Database): void {
     db.exec(`DROP INDEX IF EXISTS idx_pf_collection`);
     // Drop the legacy column. Requires SQLite >= 3.35 (better-sqlite3 ships 3.42+).
     db.exec(`ALTER TABLE portfolio_items DROP COLUMN collection`);
+  }
+}
+
+/**
+ * Migration for the gallery-URL + video-optional feature:
+ *
+ *   1. ADD COLUMN gallery_url TEXT — straightforward, just a new nullable col.
+ *   2. Relax url's NOT NULL constraint so photo-only items can omit the
+ *      video. SQLite cannot alter a column's NOT NULL status in place; the
+ *      idiomatic fix is a table rebuild: create a new table with the right
+ *      schema, copy rows over, drop the old one, rename.
+ *
+ * Both steps are guarded so a DB that already has the new shape is a no-op.
+ */
+function migratePortfolioAddGalleryUrlAndNullableUrl(
+  db: Database.Database,
+): void {
+  type ColInfo = { name: string; notnull: number; dflt_value: string | null };
+  const cols = db
+    .prepare<[], ColInfo>("PRAGMA table_info(portfolio_items)")
+    .all() as ColInfo[];
+
+  // Step 1 — add gallery_url if missing.
+  if (!cols.some((c) => c.name === "gallery_url")) {
+    db.exec(`ALTER TABLE portfolio_items ADD COLUMN gallery_url TEXT`);
+  }
+
+  // Step 2 — relax url NOT NULL via table rebuild, only if currently NOT NULL.
+  const urlCol = cols.find((c) => c.name === "url");
+  if (urlCol && urlCol.notnull === 1) {
+    db.exec(`
+      BEGIN;
+
+      CREATE TABLE portfolio_items_new (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at     TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        collections    TEXT    NOT NULL DEFAULT '[]',
+        title          TEXT    NOT NULL,
+        url            TEXT,
+        thumbnail_url  TEXT,
+        embed_id       TEXT,
+        provider       TEXT,
+        description    TEXT,
+        gallery_url    TEXT,
+        featured       INTEGER NOT NULL DEFAULT 0,
+        display_order  INTEGER NOT NULL DEFAULT 0
+      );
+
+      INSERT INTO portfolio_items_new
+        (id, created_at, collections, title, url, thumbnail_url,
+         embed_id, provider, description, gallery_url, featured, display_order)
+      SELECT
+         id, created_at, collections, title, url, thumbnail_url,
+         embed_id, provider, description, gallery_url, featured, display_order
+      FROM portfolio_items;
+
+      DROP TABLE portfolio_items;
+      ALTER TABLE portfolio_items_new RENAME TO portfolio_items;
+      CREATE INDEX IF NOT EXISTS idx_pf_featured ON portfolio_items(featured);
+
+      COMMIT;
+    `);
   }
 }
 

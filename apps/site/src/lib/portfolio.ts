@@ -26,11 +26,12 @@ interface PortfolioRowRaw {
   created_at: string;
   collections: string;
   title: string;
-  url: string;
+  url: string | null;          // null for photo-only items (no video)
   thumbnail_url: string | null;
   embed_id: string | null;
   provider: "youtube" | "vimeo" | "pictime" | null;
   description: string | null;
+  gallery_url: string | null;  // optional deep-link to the full client gallery
   featured: number; // 0 | 1
   display_order: number;
 }
@@ -41,11 +42,12 @@ export interface PortfolioRow {
   created_at: string;
   collections: CollectionId[];
   title: string;
-  url: string;
+  url: string | null;
   thumbnail_url: string | null;
   embed_id: string | null;
   provider: "youtube" | "vimeo" | "pictime" | null;
   description: string | null;
+  gallery_url: string | null;
   featured: number;
   display_order: number;
 }
@@ -53,8 +55,11 @@ export interface PortfolioRow {
 export interface PortfolioInput {
   collections: CollectionId[]; // ≥ 1 enforced at the API layer
   title: string;
-  url: string;
+  /** null/undefined for photo-only items; the API layer enforces that at
+   *  least one of (url, thumbnail) is present. */
+  url?: string | null;
   description?: string | null;
+  gallery_url?: string | null;
   featured?: boolean;
   display_order?: number;
   parsed?: ParsedVideo | null;
@@ -161,20 +166,21 @@ export function insertPortfolioItem(input: PortfolioInput): { id: number } {
     .prepare(
       `INSERT INTO portfolio_items (
         collections, title, url, thumbnail_url, embed_id, provider,
-        description, featured, display_order
+        description, gallery_url, featured, display_order
       ) VALUES (
         @collections, @title, @url, @thumbnail_url, @embed_id, @provider,
-        @description, @featured, @display_order
+        @description, @gallery_url, @featured, @display_order
       )`,
     )
     .run({
       collections: JSON.stringify(collections),
       title: input.title,
-      url: input.url,
+      url: input.url ?? null,
       thumbnail_url: input.thumbnail_url ?? null,
       embed_id: input.parsed?.embedId ?? null,
       provider: input.parsed?.provider ?? null,
       description: input.description ?? null,
+      gallery_url: input.gallery_url ?? null,
       featured: input.featured ? 1 : 0,
       display_order: input.display_order ?? 0,
     });
@@ -201,7 +207,7 @@ export function updatePortfolioItem(
   }
   if (input.url !== undefined) {
     fields.push("url = @url");
-    params.url = input.url;
+    params.url = input.url ?? null;
   }
   if (input.thumbnail_url !== undefined) {
     fields.push("thumbnail_url = @thumbnail_url");
@@ -216,6 +222,10 @@ export function updatePortfolioItem(
   if (input.description !== undefined) {
     fields.push("description = @description");
     params.description = input.description ?? null;
+  }
+  if (input.gallery_url !== undefined) {
+    fields.push("gallery_url = @gallery_url");
+    params.gallery_url = input.gallery_url ?? null;
   }
   if (input.featured !== undefined) {
     fields.push("featured = @featured");

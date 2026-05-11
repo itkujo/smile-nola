@@ -32,10 +32,11 @@ function shortName(slug: string): string {
     <p class="eyebrow">— admin · portfolio —</p>
     <h1 class="font-deco">add the work that closes the deal.</h1>
     <p class="head-sub">
-      Paste a YouTube, Vimeo, or PicTime gallery URL. YouTube and Vimeo
-      thumbnails are fetched automatically; PicTime items need a manual
-      upload (or fall back to a typographic placeholder). Tag every
-      collection the piece belongs to.
+      Most pieces have a video — paste a YouTube, Vimeo, or PicTime gallery
+      URL and the thumbnail is fetched automatically (PicTime needs a manual
+      upload). Photo-only entries (booth-only events) can skip the video URL
+      entirely; just upload a thumbnail. Tag every collection the piece
+      belongs to, and add a Gallery URL if the client gallery lives elsewhere.
     </p>
   </header>
 
@@ -46,12 +47,13 @@ function shortName(slug: string): string {
 
       <div class="grid">
         <label class="sn-field-wrap span-2">
-          <span class="sn-field-label">Video URL *</span>
+          <span class="sn-field-label">
+            Video URL <span class="hint">— optional for photo-only events. Accepted: YouTube, Vimeo, PicTime.</span>
+          </span>
           <input
             type="url"
             name="url"
-            required
-            placeholder="YouTube, Vimeo, or PicTime gallery URL"
+            placeholder="https://… (leave blank for photo-only)"
             title="Accepted: youtube.com / youtu.be / vimeo.com / <subdomain>.pic-time.com"
           />
           <span class="sn-underline"></span>
@@ -116,6 +118,19 @@ function shortName(slug: string): string {
           <span class="sn-underline-glow"></span>
         </label>
 
+        <label class="sn-field-wrap span-2">
+          <span class="sn-field-label">
+            Gallery URL <span class="hint">— optional. Direct link to the full client gallery (PicTime, Pixieset, etc.). Renders as a small "Gallery →" link on the public card.</span>
+          </span>
+          <input
+            type="url"
+            name="gallery_url"
+            placeholder="https://… (leave blank if there's no public gallery)"
+          />
+          <span class="sn-underline"></span>
+          <span class="sn-underline-glow"></span>
+        </label>
+
         <label class="checkbox-wrap">
           <input type="checkbox" name="featured" />
           <span>Feature on homepage</span>
@@ -172,7 +187,14 @@ function shortName(slug: string): string {
                 </div>
               </div>
               {it.description && <p class="desc">{it.description}</p>}
-              <p class="url-line"><a href={it.url} target="_blank" rel="noopener noreferrer">{it.url}</a></p>
+              {it.url ? (
+                <p class="url-line"><span class="url-label">Video:</span> <a href={it.url} target="_blank" rel="noopener noreferrer">{it.url}</a></p>
+              ) : (
+                <p class="url-line photo-only"><em>Photo-only item — no video URL</em></p>
+              )}
+              {it.gallery_url && (
+                <p class="url-line"><span class="url-label">Gallery:</span> <a href={it.gallery_url} target="_blank" rel="noopener noreferrer">{it.gallery_url}</a></p>
+              )}
             </div>
 
             <div class="actions">
@@ -180,10 +202,11 @@ function shortName(slug: string): string {
                 type="button"
                 class="btn-link edit-btn"
                 data-id={it.id}
-                data-url={it.url}
+                data-url={it.url ?? ""}
                 data-title={it.title}
                 data-collections={JSON.stringify(it.collections)}
                 data-description={it.description ?? ""}
+                data-gallery-url={it.gallery_url ?? ""}
                 data-featured={it.featured}
                 data-display-order={it.display_order}>
                 Edit
@@ -270,6 +293,19 @@ function shortName(slug: string): string {
       setStatus("Pick at least one collection.", false);
       return;
     }
+    // Client-side mirror of the server's "url OR thumbnail" rule. Catches
+    // the common case before a round-trip; server is still the source of
+    // truth (will also enforce on the PATCH side for clear-the-url flow).
+    const urlVal = String(fd.get("url") ?? "").trim();
+    const thumbFile = thumbInput?.files?.[0];
+    const idValForCheck = String(fd.get("id") ?? "").trim();
+    if (!idValForCheck && !urlVal && !thumbFile) {
+      setStatus(
+        "Provide a video URL or upload a thumbnail (photo-only items still need a thumbnail).",
+        false,
+      );
+      return;
+    }
 
     const idVal = String(fd.get("id") ?? "").trim();
 
@@ -325,6 +361,8 @@ function shortName(slug: string): string {
       (form.elements.namedItem("title") as HTMLInputElement).value = data.title ?? "";
       (form.elements.namedItem("description") as HTMLTextAreaElement).value =
         data.description ?? "";
+      (form.elements.namedItem("gallery_url") as HTMLInputElement).value =
+        data.galleryUrl ?? "";
       (form.elements.namedItem("featured") as HTMLInputElement).checked =
         data.featured === "1";
       (form.elements.namedItem("display_order") as HTMLInputElement).value =
@@ -695,6 +733,13 @@ function shortName(slug: string): string {
     margin: 6px 0 0;
     font-size: 0.78rem;
   }
+  .url-label {
+    color: var(--sn-gold);
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin-right: 6px;
+  }
   .url-line a {
     color: var(--sn-muted-stone);
     text-decoration: underline;
@@ -703,6 +748,11 @@ function shortName(slug: string): string {
     word-break: break-all;
   }
   .url-line a:hover { color: var(--sn-gold); }
+  .url-line.photo-only em {
+    color: var(--sn-champagne);
+    font-style: italic;
+    opacity: 0.7;
+  }
 
   .actions {
     display: flex;

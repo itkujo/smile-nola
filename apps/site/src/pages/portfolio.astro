@@ -81,30 +81,73 @@ function getEmbedSrc(
         </div>
 
         <div class="pf-grid">
-          {items.map((it) => (
-            <article
-              class="pf-card reveal"
-              data-collections={it.collections.join(",")}>
-              <button type="button" class="pf-play" data-embed={getEmbedSrc(it.provider, it.embed_id, it.url)} data-title={it.title}>
-                {it.thumbnail_url ? (
-                  <img src={it.thumbnail_url} alt="" loading="lazy" />
+          {items.map((it) => {
+            // A card is one of three shapes:
+            //   1. Video item: clickable thumb opens the modal player. Gallery
+            //      link (if present) renders below as a secondary action.
+            //   2. Still item with gallery URL: clickable thumb opens the
+            //      gallery in a new tab. No play button.
+            //   3. Still item without gallery URL: decorative thumb only.
+            //      (Rare; the API rejects items with neither url nor thumb.)
+            const isVideo = Boolean(it.url) && Boolean(it.embed_id || it.provider === "pictime");
+            const embedSrc = isVideo ? getEmbedSrc(it.provider, it.embed_id, it.url ?? "") : "";
+            const stillHref = !isVideo && it.gallery_url ? it.gallery_url : null;
+            return (
+              <article
+                class={`pf-card reveal ${isVideo ? "is-video" : "is-still"}`}
+                data-collections={it.collections.join(",")}>
+                {isVideo ? (
+                  <button
+                    type="button"
+                    class="pf-play"
+                    data-embed={embedSrc}
+                    data-title={it.title}
+                    data-gallery={it.gallery_url ?? ""}>
+                    {it.thumbnail_url ? (
+                      <img src={it.thumbnail_url} alt="" loading="lazy" />
+                    ) : (
+                      <span class="card-placeholder font-deco">{it.title.charAt(0)}</span>
+                    )}
+                    <span class="play-icon" aria-hidden="true">▶</span>
+                    {it.featured === 1 && <span class="card-featured">★ featured</span>}
+                  </button>
+                ) : stillHref ? (
+                  <a class="pf-still" href={stillHref} target="_blank" rel="noopener noreferrer" aria-label={`View ${it.title} gallery`}>
+                    {it.thumbnail_url ? (
+                      <img src={it.thumbnail_url} alt="" loading="lazy" />
+                    ) : (
+                      <span class="card-placeholder font-deco">{it.title.charAt(0)}</span>
+                    )}
+                    <span class="gallery-icon" aria-hidden="true">↗</span>
+                    {it.featured === 1 && <span class="card-featured">★ featured</span>}
+                  </a>
                 ) : (
-                  <span class="card-placeholder font-deco">{it.title.charAt(0)}</span>
+                  <div class="pf-still pf-still--inert" aria-hidden="false">
+                    {it.thumbnail_url ? (
+                      <img src={it.thumbnail_url} alt={it.title} loading="lazy" />
+                    ) : (
+                      <span class="card-placeholder font-deco">{it.title.charAt(0)}</span>
+                    )}
+                    {it.featured === 1 && <span class="card-featured">★ featured</span>}
+                  </div>
                 )}
-                <span class="play-icon" aria-hidden="true">▶</span>
-                {it.featured === 1 && <span class="card-featured">★ featured</span>}
-              </button>
-              <div class="pf-body-info">
-                <div class="pf-collections">
-                  {it.collections.map((slug) => (
-                    <span class="pf-collection">{shortName(slug)}</span>
-                  ))}
+                <div class="pf-body-info">
+                  <div class="pf-collections">
+                    {it.collections.map((slug) => (
+                      <span class="pf-collection">{shortName(slug)}</span>
+                    ))}
+                  </div>
+                  <h3>{it.title}</h3>
+                  {it.description && <p>{it.description}</p>}
+                  {it.gallery_url && (
+                    <a class="pf-gallery-link" href={it.gallery_url} target="_blank" rel="noopener noreferrer">
+                      Gallery <span aria-hidden="true">→</span>
+                    </a>
+                  )}
                 </div>
-                <h3>{it.title}</h3>
-                {it.description && <p>{it.description}</p>}
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       </section>
     )}
@@ -120,16 +163,21 @@ function getEmbedSrc(
       <h3 class="pf-modal-title font-deco"></h3>
       <div class="pf-modal-iframe-wrap">
         {/* allowtransparency is non-standard but harmless; helps PicTime's
-          transparentbg=true URL parameter sit on our dark background. */}
-      <iframe
-        class="pf-modal-iframe"
-        src=""
-        title=""
-        allow="autoplay; fullscreen; picture-in-picture"
-        allowfullscreen
-        allowtransparency="true"
-      ></iframe>
+            transparentbg=true URL parameter sit on our dark background. */}
+        <iframe
+          class="pf-modal-iframe"
+          src=""
+          title=""
+          allow="autoplay; fullscreen; picture-in-picture"
+          allowfullscreen
+          allowtransparency="true"
+        ></iframe>
       </div>
+      {/* Gallery link inside the modal — visible only when the active video
+          has a gallery_url. JS toggles `hidden` + sets href on open. */}
+      <a class="pf-modal-gallery" href="#" target="_blank" rel="noopener noreferrer" hidden>
+        View the full gallery <span aria-hidden="true">→</span>
+      </a>
     </div>
   </div>
 </BaseLayout>
@@ -164,25 +212,41 @@ function getEmbedSrc(
   const titleEl = modal?.querySelector(".pf-modal-title");
   const closeBtn = modal?.querySelector(".pf-modal-close");
   const backdrop = modal?.querySelector(".pf-modal-backdrop");
+  const modalGallery = modal?.querySelector(".pf-modal-gallery");
 
-  function openModal(embedSrc, title) {
+  function openModal(embedSrc, title, galleryUrl) {
     if (!modal || !iframe) return;
     modal.hidden = false;
     document.body.style.overflow = "hidden";
     iframe.src = embedSrc + (embedSrc.includes("?") ? "&" : "?") + "autoplay=1";
     if (titleEl) titleEl.textContent = title || "";
+    // Per-video gallery link inside the modal.
+    if (modalGallery) {
+      if (galleryUrl) {
+        modalGallery.setAttribute("href", galleryUrl);
+        modalGallery.hidden = false;
+      } else {
+        modalGallery.removeAttribute("href");
+        modalGallery.hidden = true;
+      }
+    }
   }
   function closeModal() {
     if (!modal || !iframe) return;
     modal.hidden = true;
     document.body.style.overflow = "";
     iframe.src = "about:blank";
+    if (modalGallery) {
+      modalGallery.hidden = true;
+      modalGallery.removeAttribute("href");
+    }
   }
   document.querySelectorAll(".pf-play").forEach((btn) => {
     btn.addEventListener("click", () => {
       const embedSrc = btn.getAttribute("data-embed");
       const title = btn.getAttribute("data-title") || "";
-      if (embedSrc) openModal(embedSrc, title);
+      const galleryUrl = btn.getAttribute("data-gallery") || "";
+      if (embedSrc) openModal(embedSrc, title, galleryUrl);
     });
   });
   closeBtn?.addEventListener("click", closeModal);
@@ -313,7 +377,8 @@ function getEmbedSrc(
   }
   .pf-card:hover { border-color: var(--sn-gold); transform: translateY(-2px); }
 
-  .pf-play {
+  .pf-play,
+  .pf-still {
     position: relative;
     display: block;
     width: 100%;
@@ -323,14 +388,42 @@ function getEmbedSrc(
     aspect-ratio: 16 / 9;
     overflow: hidden;
     cursor: pointer;
+    text-decoration: none; /* .pf-still is an <a>, kill default underline */
+    color: inherit;
   }
-  .pf-play img {
+  .pf-still--inert { cursor: default; }
+  .pf-play img,
+  .pf-still img {
     width: 100%; height: 100%;
     object-fit: cover;
     display: block;
     transition: transform 600ms var(--ease-cinematic);
   }
-  .pf-card:hover .pf-play img { transform: scale(1.04); }
+  .pf-card:hover .pf-play img,
+  .pf-card.is-still:hover .pf-still:not(.pf-still--inert) img {
+    transform: scale(1.04);
+  }
+  /* Gallery icon for still cards mirrors the play icon's centered overlay */
+  .gallery-icon {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 64px; height: 64px;
+    display: grid;
+    place-items: center;
+    background: rgba(5, 5, 5, 0.7);
+    color: var(--sn-gold);
+    border: 1px solid var(--sn-gold);
+    border-radius: 50%;
+    font-size: 1.5rem;
+    line-height: 1;
+    box-shadow: 0 0 24px var(--sn-amber-40);
+    transition: transform 200ms ease;
+  }
+  .pf-still:hover .gallery-icon,
+  .pf-still:focus-visible .gallery-icon {
+    transform: translate(-50%, -50%) scale(1.08);
+  }
   .card-placeholder {
     display: grid;
     place-items: center;
@@ -389,6 +482,29 @@ function getEmbedSrc(
     margin-right: 10px;
     color: var(--sn-gold-24);
   }
+  /* Small gold "Gallery →" deep link beneath the description. Renders only
+     when the item has gallery_url set. */
+  .pf-gallery-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    color: var(--sn-gold);
+    font-size: 0.72rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    text-decoration: none;
+    border-bottom: 1px solid var(--sn-gold-24);
+    padding-bottom: 2px;
+    transition: border-color 200ms ease, color 200ms ease;
+  }
+  .pf-gallery-link:hover {
+    color: var(--sn-amber);
+    border-bottom-color: var(--sn-gold);
+  }
+  .pf-gallery-link span { transition: transform 200ms ease; }
+  .pf-gallery-link:hover span { transform: translateX(3px); }
+
   .pf-body-info h3 {
     color: var(--sn-ivory);
     font-size: 1.05rem;
@@ -464,4 +580,26 @@ function getEmbedSrc(
     height: 100%;
     border: 0;
   }
+  /* Modal-internal gallery link — appears below the iframe when the active
+     video has a gallery_url. Mirrors .pf-gallery-link but a touch larger. */
+  .pf-modal-gallery {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 18px;
+    color: var(--sn-gold);
+    font-size: 0.82rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    text-decoration: none;
+    border-bottom: 1px solid var(--sn-gold-24);
+    padding-bottom: 3px;
+    transition: border-color 200ms ease, color 200ms ease;
+  }
+  .pf-modal-gallery:hover {
+    color: var(--sn-amber);
+    border-bottom-color: var(--sn-gold);
+  }
+  .pf-modal-gallery span { transition: transform 200ms ease; }
+  .pf-modal-gallery:hover span { transform: translateX(4px); }
 </style>

@@ -44,10 +44,21 @@ const collectionsField = z
   .array(z.enum(COLLECTION_IDS))
   .min(1, "Pick at least one collection");
 
+/** Empty strings from the form normalise to undefined so Zod treats them
+ *  as "not provided" (rather than "the empty string"). */
+const optionalUrl = z
+  .string()
+  .trim()
+  .max(500)
+  .optional()
+  .or(z.literal(""))
+  .transform((v) => (v ? v : undefined));
+
 const CreateSchema = z.object({
   collections: collectionsField,
   title: z.string().trim().min(1, "Title is required").max(200),
-  url: z.string().trim().min(1, "URL is required").max(500),
+  url: optionalUrl,
+  gallery_url: optionalUrl,
   description: z.string().trim().max(2000).optional().or(z.literal("")),
   featured: z.coerce.boolean().optional().default(false),
   display_order: z.coerce.number().int().optional().default(0),
@@ -57,7 +68,8 @@ const UpdateSchema = z.object({
   id: z.coerce.number().int().positive(),
   collections: collectionsField.optional(),
   title: z.string().trim().min(1).max(200).optional(),
-  url: z.string().trim().min(1).max(500).optional(),
+  url: optionalUrl,
+  gallery_url: optionalUrl,
   description: z.string().trim().max(2000).optional().or(z.literal("")),
   featured: z.coerce.boolean().optional(),
   display_order: z.coerce.number().int().optional(),
@@ -74,11 +86,26 @@ export const POST: APIRoute = async ({ request }) => {
   const parsedInput = CreateSchema.safeParse(fields);
   if (!parsedInput.success) return validationError(parsedInput.error);
 
-  const video = parseVideoUrl(parsedInput.data.url);
-  if (!video) {
+  // A card must carry SOMETHING visual. Reject silently-empty items
+  // upfront so we never insert a row that has neither a playable URL nor
+  // a thumbnail.
+  if (!parsedInput.data.url && !thumbnailFile) {
     return json(400, {
-      error: "URL must be a YouTube, Vimeo, or PicTime gallery link",
+      error:
+        "Provide a video URL OR upload a custom thumbnail — photo-only items still need a thumbnail.",
     });
+  }
+
+  // Parse the video URL only if one was provided. Photo-only items skip
+  // this entirely.
+  let video: ReturnType<typeof parseVideoUrl> = null;
+  if (parsedInput.data.url) {
+    video = parseVideoUrl(parsedInput.data.url);
+    if (!video) {
+      return json(400, {
+        error: "URL must be a YouTube, Vimeo, or PicTime gallery link",
+      });
+    }
   }
 
   // Validate thumbnail upload up front so we don't insert a row only to
@@ -88,10 +115,10 @@ export const POST: APIRoute = async ({ request }) => {
     if (err) return json(400, { error: err });
   }
 
-  // Best-effort auto-thumbnail (YouTube/Vimeo only). Manual upload wins if
-  // both are present.
+  // Best-effort auto-thumbnail (YouTube/Vimeo only) — only attempted if
+  // we parsed a video URL AND no manual upload accompanies it.
   let thumbnail: string | null = null;
-  if (!thumbnailFile) {
+  if (video && !thumbnailFile) {
     try {
       thumbnail = await resolveThumbnail(video);
     } catch {
@@ -102,8 +129,9 @@ export const POST: APIRoute = async ({ request }) => {
   const { id } = insertPortfolioItem({
     collections: parsedInput.data.collections,
     title: parsedInput.data.title,
-    url: parsedInput.data.url,
+    url: parsedInput.data.url ?? null,
     description: parsedInput.data.description || null,
+    gallery_url: parsedInput.data.gallery_url ?? null,
     featured: parsedInput.data.featured,
     display_order: parsedInput.data.display_order,
     parsed: video,
@@ -146,11 +174,19 @@ export const PATCH: APIRoute = async ({ request }) => {
   if (!parsedInput.success) return validationError(parsedInput.error);
 
   const id = parsedInput.data.id;
-  if (!getPortfolioItem(id)) return json(404, { error: "Item not found" });
+  const existing = getPortfolioItem(id);
+  if (!existing) return json(404, { error: "Item not found" });
 
   // If URL changed, re-parse + maybe re-fetch the auto thumbnail.
-  let parsedVideo = undefined;
+  // PATCH semantics here: if `url` was sent and is empty (the field came
+  // through but the admin cleared it), the item is being converted to a
+  // photo-only entry — clear provider/embed_id but keep the row.
+  let parsedVideo: ReturnType<typeof parseVideoUrl> | undefined = undefined;
   let autoThumbnail: string | null | undefined = undefined;
+  const urlProvided = Object.prototype.hasOwnProperty.call(
+    fields as Record<string, unknown>,
+    "url",
+  );
   if (parsedInput.data.url) {
     const video = parseVideoUrl(parsedInput.data.url);
     if (!video) {
@@ -167,6 +203,9 @@ export const PATCH: APIRoute = async ({ request }) => {
         /* ignore */
       }
     }
+  } else if (urlProvided) {
+    // url field WAS submitted but empty — caller wants to remove the video.
+    parsedVideo = null;
   }
 
   // Validate manual thumbnail before touching the row.
@@ -175,14 +214,33 @@ export const PATCH: APIRoute = async ({ request }) => {
     if (err) return json(400, { error: err });
   }
 
+  // Cross-field rule: after this update, the item must still have either
+  // a URL or a usable thumbnail. Compute the post-update state to check.
+  const willHaveUrl = urlProvided ? Boolean(parsedInput.data.url) : Boolean(existing.url);
+  const willHaveThumbnail =
+    Boolean(thumbnailFile) ||
+    (autoThumbnail !== undefined ? Boolean(autoThumbnail) : Boolean(existing.thumbnail_url));
+  if (!willHaveUrl && !willHaveThumbnail) {
+    return json(400, {
+      error:
+        "Item must keep either a video URL or a thumbnail. Upload a thumbnail before clearing the URL.",
+    });
+  }
+
   // Apply the non-thumbnail updates first.
   const ok = updatePortfolioItem(id, {
     collections: parsedInput.data.collections,
     title: parsedInput.data.title,
-    url: parsedInput.data.url,
+    // Only include url in the update if the field came through — that way
+    // a PATCH that doesn't mention url leaves it untouched.
+    url: urlProvided ? parsedInput.data.url ?? null : undefined,
     description:
       parsedInput.data.description !== undefined
         ? parsedInput.data.description || null
+        : undefined,
+    gallery_url:
+      parsedInput.data.gallery_url !== undefined
+        ? parsedInput.data.gallery_url
         : undefined,
     featured: parsedInput.data.featured,
     display_order: parsedInput.data.display_order,
