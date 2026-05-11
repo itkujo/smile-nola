@@ -1,0 +1,154 @@
+---
+/**
+ * /contact — the deep inquiry destination.
+ *
+ * Hero band → InquiryFormDeep → quiet closing detail. The form auto-pre-selects
+ * a collection if the URL has ?collection=<slug>, so collection-page CTAs can
+ * deep-link prospects in with their interest already toggled on.
+ */
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import SiteHeader from "@/components/layout/SiteHeader.astro";
+import SiteFooter from "@/components/layout/SiteFooter.astro";
+import AmbientGlow from "@/components/brand/AmbientGlow.astro";
+import DecoOrnament from "@/components/brand/DecoOrnament.astro";
+import GoldDivider from "@/components/brand/GoldDivider.astro";
+import InquiryFormDeep from "@/components/forms/InquiryFormDeep.astro";
+
+// Optional ?collection=<slug> deep-link pre-selects that chip on load.
+const preselect = Astro.url.searchParams.get("collection") ?? "";
+---
+
+<BaseLayout
+  title="Contact · Smile NOLA"
+  description="Begin your inquiry with Smile NOLA — luxury event production in New Orleans. Photo booth, videography, web design, lighting, video walls, and concert-grade sound."
+>
+  <SiteHeader />
+
+  <main id="main">
+    <!-- ============ HERO ============ -->
+    <section class="c-hero" aria-labelledby="contact-title">
+      <DecoOrnament opacity={0.04} />
+      <AmbientGlow />
+
+      <div class="c-hero-inner">
+        <p class="eyebrow">— let's design your moment —</p>
+        <h1 id="contact-title" class="c-title font-deco">
+          tell us about the <span class="script">event</span> you're imagining.
+        </h1>
+        <p class="c-lede">
+          Five collections, one production house. The more you share below, the
+          more tailored our reply will be. Daniel responds to every inquiry
+          personally — typically within 24 hours.
+        </p>
+        <GoldDivider width="200px" />
+      </div>
+    </section>
+
+    <!-- ============ DEEP FORM ============ -->
+    <section class="c-body" aria-labelledby="form-heading">
+      <InquiryFormDeep />
+    </section>
+
+    <!-- ============ QUIET CLOSING ============ -->
+    <section class="c-closing">
+      <p class="closing-line">
+        Prefer to start with a direct email or call? You can reach Daniel at
+        <a href="mailto:hello@smile-nola.com">hello@smile-nola.com</a> — or
+        send the form above and we'll route the conversation.
+      </p>
+    </section>
+  </main>
+
+  <SiteFooter />
+</BaseLayout>
+
+{preselect && (
+  <script set:html={`
+    document.addEventListener('DOMContentLoaded', function () {
+      var slug = ${JSON.stringify(preselect)};
+      var cb = document.querySelector('.deep-form input[name="collections_interested"][value="' + slug + '"]');
+      if (cb && !cb.checked) {
+        cb.checked = true;
+        cb.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+  `} />
+)}
+
+<style>
+  .c-hero {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--sn-black);
+    padding: clamp(140px, 18vh, 200px) clamp(28px, 6vw, 96px) clamp(72px, 10vh, 120px);
+    text-align: center;
+    border-bottom: 1px solid var(--sn-gold-24);
+  }
+  .c-hero-inner {
+    position: relative;
+    z-index: 10;
+    max-width: 880px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+  }
+  .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.72rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .c-title {
+    font-weight: 400;
+    font-size: clamp(34px, 5vw, 72px);
+    line-height: 1.05;
+    color: var(--sn-gold);
+    margin: 0;
+    max-width: 22ch;
+    text-shadow: 0 0 36px var(--sn-amber-20);
+  }
+  .c-title .script {
+    font-family: var(--font-italic-serif);
+    font-style: italic;
+    font-weight: 500;
+    color: var(--sn-champagne);
+    text-transform: none;
+    font-size: 1.15em;
+  }
+  .c-lede {
+    color: var(--sn-champagne);
+    font-size: clamp(0.96rem, 1.2vw, 1.1rem);
+    line-height: 1.7;
+    max-width: 56ch;
+    margin: 0;
+  }
+
+  .c-body {
+    background-color: var(--sn-soft-black);
+    padding: clamp(72px, 12vh, 140px) clamp(20px, 5vw, 96px);
+  }
+
+  .c-closing {
+    background-color: var(--sn-black);
+    padding: 48px clamp(28px, 6vw, 96px);
+    text-align: center;
+    border-top: 1px solid var(--sn-gold-12);
+  }
+  .closing-line {
+    color: var(--sn-muted-stone);
+    font-size: 0.95rem;
+    line-height: 1.7;
+    max-width: 56ch;
+    margin: 0 auto;
+  }
+  .closing-line a {
+    color: var(--sn-gold);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    text-decoration-color: var(--sn-gold-40);
+  }
+  .closing-line a:hover { text-decoration-color: var(--sn-gold); }
+</style>

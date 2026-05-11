@@ -1,0 +1,582 @@
+---
+/**
+ * InquiryFormDeep — the full contact form at /contact.
+ *
+ * Renders all common fields from Brand Brief §10.1, plus a "which
+ * collections interest you?" multi-select. When a collection is checked,
+ * its per-collection question block reveals via progressive enhancement.
+ * "Other" reveals a free-text additional-services field.
+ *
+ * Submits to /api/contact (POST, JSON), which validates against
+ * InquiryDeepSchema and inserts a row into the same `inquiries` table the
+ * lightweight form writes to.
+ */
+import { COLLECTIONS } from "@/content/collections";
+
+interface Props {
+  title?: string;
+  intro?: string;
+}
+
+const {
+  title = "Begin your inquiry",
+  intro = "The more you can share, the more tailored our reply will be. Every field below is optional except your name, email, and phone — we'll follow up within 24 hours.",
+} = Astro.props;
+
+const PREFERRED_CONTACTS = ["Email", "Phone", "Text"] as const;
+const EVENT_TYPES = [
+  "Wedding",
+  "Reception",
+  "Engagement / Rehearsal",
+  "Corporate event",
+  "Gala / Fundraiser",
+  "Milestone celebration",
+  "Other",
+] as const;
+const BUDGET_RANGES = [
+  "Under $5,000",
+  "$5,000 – $10,000",
+  "$10,000 – $20,000",
+  "$20,000 – $40,000",
+  "$40,000+",
+  "Tell us what's possible",
+] as const;
+---
+
+<form
+  class="deep-form"
+  action="/api/contact"
+  method="post"
+  id="contact-form"
+  novalidate
+>
+  <header class="head">
+    <p class="eyebrow">— begin your inquiry —</p>
+    <h2 class="font-deco">{title}</h2>
+    <p class="intro">{intro}</p>
+  </header>
+
+  <input type="hidden" name="source" value="contact" />
+
+  {/* Honeypot */}
+  <div class="sn-honeypot" aria-hidden="true">
+    <label>
+      Company (leave blank)
+      <input type="text" name="company" tabindex="-1" autocomplete="off" />
+    </label>
+  </div>
+
+  <!-- ============ CONTACT BLOCK ============ -->
+  <fieldset class="block">
+    <legend class="section-label">— how to reach you —</legend>
+    <div class="grid">
+      <label class="sn-field-wrap">
+        <span class="sn-field-label">First name *</span>
+        <input type="text" name="first_name" required autocomplete="given-name" />
+        <span class="sn-underline"></span>
+        <span class="sn-underline-glow"></span>
+      </label>
+
+      <label class="sn-field-wrap">
+        <span class="sn-field-label">Last name *</span>
+        <input type="text" name="last_name" required autocomplete="family-name" />
+        <span class="sn-underline"></span>
+        <span class="sn-underline-glow"></span>
+      </label>
+
+      <label class="sn-field-wrap">
+        <span class="sn-field-label">Email *</span>
+        <input type="email" name="email" required autocomplete="email" inputmode="email" />
+        <span class="sn-underline"></span>
+        <span class="sn-underline-glow"></span>
+      </label>
+
+      <label class="sn-field-wrap">
+        <span class="sn-field-label">Phone *</span>
+        <input type="tel" name="phone" required autocomplete="tel" inputmode="tel" />
+        <span class="sn-underline"></span>
+        <span class="sn-underline-glow"></span>
+      </label>
+
+      <label class="sn-field-wrap span-2">
+        <span class="sn-field-label">Preferred contact method</span>
+        <select name="preferred_contact">
+          <option value="">— choose —</option>
+          {PREFERRED_CONTACTS.map((c) => (
+            <option value={c}>{c}</option>
+          ))}
+        </select>
+        <span class="sn-underline"></span>
+        <span class="sn-underline-glow"></span>
+      </label>
+    </div>
+  </fieldset>
+
+  <!-- ============ EVENT BLOCK ============ -->
+  <fieldset class="block">
+    <legend class="section-label">— about the event —</legend>
+    <div class="grid">
+      <label class="sn-field-wrap">
+        <span class="sn-field-label">Event date</span>
+        <input type="date" name="event_date" />
+        <span class="sn-underline"></span>
+        <span class="sn-underline-glow"></span>
+      </label>
+
+      <label class="sn-field-wrap">
+        <span class="sn-field-label">Event type</span>
+        <select name="event_type">
+          <option value="">— choose —</option>
+          {EVENT_TYPES.map((t) => (
+            <option value={t}>{t}</option>
+          ))}
+        </select>
+        <span class="sn-underline"></span>
+        <span class="sn-underline-glow"></span>
+      </label>
+
+      <label class="sn-field-wrap span-2">
+        <span class="sn-field-label">Venue (name or location)</span>
+        <input type="text" name="venue" placeholder="e.g. The Sugar Mill · New Orleans, LA" />
+        <span class="sn-underline"></span>
+        <span class="sn-underline-glow"></span>
+      </label>
+
+      <label class="sn-field-wrap">
+        <span class="sn-field-label">Estimated guest count</span>
+        <input type="number" name="guest_count" inputmode="numeric" min="0" max="100000" />
+        <span class="sn-underline"></span>
+        <span class="sn-underline-glow"></span>
+      </label>
+
+      <label class="sn-field-wrap">
+        <span class="sn-field-label">Planner / coordinator</span>
+        <input type="text" name="planner" placeholder="name (if applicable)" />
+        <span class="sn-underline"></span>
+        <span class="sn-underline-glow"></span>
+      </label>
+
+      <label class="sn-field-wrap">
+        <span class="sn-field-label">Event start time</span>
+        <input type="text" name="event_start" placeholder="e.g. 5:00pm" />
+        <span class="sn-underline"></span>
+        <span class="sn-underline-glow"></span>
+      </label>
+
+      <label class="sn-field-wrap">
+        <span class="sn-field-label">Event end time</span>
+        <input type="text" name="event_end" placeholder="e.g. 11:00pm" />
+        <span class="sn-underline"></span>
+        <span class="sn-underline-glow"></span>
+      </label>
+
+      <label class="sn-field-wrap span-2">
+        <span class="sn-field-label">Budget range</span>
+        <select name="budget_range">
+          <option value="">— choose —</option>
+          {BUDGET_RANGES.map((b) => (
+            <option value={b}>{b}</option>
+          ))}
+        </select>
+        <span class="sn-underline"></span>
+        <span class="sn-underline-glow"></span>
+      </label>
+    </div>
+  </fieldset>
+
+  <!-- ============ COLLECTIONS BLOCK ============ -->
+  <fieldset class="block">
+    <legend class="section-label">— which collections interest you? —</legend>
+    <p class="block-help">Check any that apply. Selecting a collection reveals a few extra questions specific to it. You can also pick "Other" for something custom.</p>
+
+    <div class="chip-grid">
+      {COLLECTIONS.map((c) => (
+        <label class="chip-check">
+          <input type="checkbox" name="collections_interested" value={c.slug} data-collection={c.slug} />
+          <span class="chip-body">
+            <span class="chip-title font-deco">{c.shortName}</span>
+            <span class="chip-tag">{c.tagline.split("·")[0].trim()}</span>
+          </span>
+        </label>
+      ))}
+      <label class="chip-check">
+        <input type="checkbox" name="collections_interested" value="other" data-collection="other" id="chip-other" />
+        <span class="chip-body">
+          <span class="chip-title font-deco">Other</span>
+          <span class="chip-tag">custom inquiry</span>
+        </span>
+      </label>
+    </div>
+
+    {/* Per-collection question blocks — hidden by default; revealed when the
+        matching chip is checked. */}
+    {COLLECTIONS.map((c) => (
+      <div class="collection-block" data-collection-block={c.slug} hidden>
+        <h3 class="font-deco">{c.shortName} · a few details</h3>
+        <div class="grid">
+          {c.inquiryFormFields.map((field) => (
+            <label class={`sn-field-wrap ${field.type === "textarea" ? "span-2" : ""}`}>
+              <span class="sn-field-label">{field.label}</span>
+              {field.type === "textarea" ? (
+                <textarea
+                  name={`cf_${c.slug}_${field.name}`}
+                  rows="3"
+                  placeholder={field.placeholder}
+                ></textarea>
+              ) : field.type === "select" ? (
+                <select name={`cf_${c.slug}_${field.name}`}>
+                  <option value="">— choose —</option>
+                  {field.options?.map((opt) => <option value={opt}>{opt}</option>)}
+                </select>
+              ) : (
+                <input
+                  type={field.type === "number" ? "number" : "text"}
+                  name={`cf_${c.slug}_${field.name}`}
+                  placeholder={field.placeholder}
+                />
+              )}
+              <span class="sn-underline"></span>
+              <span class="sn-underline-glow"></span>
+            </label>
+          ))}
+        </div>
+      </div>
+    ))}
+
+    <div class="collection-block" data-collection-block="other" hidden>
+      <h3 class="font-deco">Custom · tell us what you're building</h3>
+      <label class="sn-field-wrap">
+        <span class="sn-field-label">Additional services or custom needs</span>
+        <textarea name="other_services" rows="4" placeholder="The event you're imagining, the services that aren't on our collections list, the moment you want to create…"></textarea>
+        <span class="sn-underline"></span>
+        <span class="sn-underline-glow"></span>
+      </label>
+    </div>
+  </fieldset>
+
+  <!-- ============ VISION + REFERRAL ============ -->
+  <fieldset class="block">
+    <legend class="section-label">— the vision —</legend>
+    <label class="sn-field-wrap">
+      <span class="sn-field-label">Tell us about the moment you want to create</span>
+      <textarea name="message" rows="6" placeholder="Setting, mood, what you want guests to feel walking in, the feeling you want carried through the night…"></textarea>
+      <span class="sn-underline"></span>
+      <span class="sn-underline-glow"></span>
+    </label>
+    <label class="sn-field-wrap">
+      <span class="sn-field-label">How did you hear about Smile NOLA?</span>
+      <input type="text" name="referral" placeholder="Instagram, a friend, a wedding planner, Google…" />
+      <span class="sn-underline"></span>
+      <span class="sn-underline-glow"></span>
+    </label>
+  </fieldset>
+
+  <!-- ============ SUBMIT ============ -->
+  <div class="actions">
+    <button type="submit" class="btn-gold submit-btn">Send inquiry</button>
+    <p class="trust">Replies typically within 24 hours · no spam, ever</p>
+  </div>
+
+  <p class="error-region" role="alert" aria-live="polite" hidden></p>
+</form>
+
+<style>
+  .deep-form {
+    max-width: 920px;
+    margin: 0 auto;
+  }
+  .head {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+  .head .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.72rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0 0 12px;
+  }
+  .head h2 {
+    font-weight: 400;
+    font-size: clamp(34px, 4.4vw, 56px);
+    color: var(--sn-gold);
+    line-height: 1.05;
+    margin: 0;
+  }
+  .head .intro {
+    margin: 18px auto 0;
+    color: var(--sn-champagne);
+    font-size: 1rem;
+    line-height: 1.7;
+    max-width: 56ch;
+  }
+
+  .block {
+    border: none;
+    margin: 0 0 48px;
+    padding: 32px 0 0;
+    border-top: 1px solid var(--sn-gold-12);
+  }
+  .block:first-of-type { border-top: 0; padding-top: 0; }
+
+  .section-label {
+    color: var(--sn-gold);
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    padding: 0;
+    margin: 0 0 24px;
+  }
+  .block-help {
+    color: var(--sn-muted-stone);
+    font-size: 0.9rem;
+    line-height: 1.7;
+    margin: 0 0 22px;
+    max-width: 60ch;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px 18px;
+  }
+  .grid .span-2 { grid-column: 1 / -1; }
+  @media (max-width: 600px) {
+    .grid { grid-template-columns: 1fr; }
+    .grid .span-2 { grid-column: auto; }
+  }
+
+  select,
+  textarea {
+    background: transparent;
+    color: var(--sn-ivory);
+    appearance: none;
+  }
+  select {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' stroke='%23D4AF37' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 4px center;
+    background-size: 12px 8px;
+    padding-right: 24px;
+  }
+  select option {
+    background-color: var(--sn-soft-black);
+    color: var(--sn-ivory);
+  }
+  textarea { resize: vertical; }
+
+  /* ============ CHIP MULTI-SELECT ============ */
+  .chip-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 32px;
+  }
+  .chip-check {
+    position: relative;
+    cursor: pointer;
+    user-select: none;
+  }
+  .chip-check input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .chip-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 16px 18px;
+    border: 1px solid var(--sn-gold-24);
+    background-color: var(--sn-black);
+    transition: all 200ms ease;
+  }
+  .chip-check:hover .chip-body {
+    border-color: var(--sn-gold);
+  }
+  .chip-check input:focus-visible + .chip-body {
+    outline: 2px solid var(--sn-gold);
+    outline-offset: 3px;
+  }
+  .chip-check input:checked + .chip-body {
+    border-color: var(--sn-gold);
+    background-color: var(--sn-soft-black);
+    box-shadow: 0 0 18px var(--sn-amber-20);
+  }
+  .chip-check input:checked + .chip-body .chip-title {
+    color: var(--sn-gold);
+  }
+  .chip-title {
+    font-size: 1.05rem;
+    color: var(--sn-ivory);
+    line-height: 1;
+    transition: color 200ms ease;
+  }
+  .chip-tag {
+    font-size: 0.72rem;
+    color: var(--sn-muted-stone);
+    letter-spacing: 0.06em;
+  }
+
+  /* Collection-specific blocks revealed when the chip is checked */
+  .collection-block {
+    padding: 28px 24px;
+    margin-bottom: 18px;
+    background: var(--sn-soft-black);
+    border: 1px solid var(--sn-gold-24);
+    border-left: 2px solid var(--sn-gold);
+    animation: block-in 360ms var(--ease-cinematic);
+  }
+  .collection-block h3 {
+    font-weight: 400;
+    font-size: 1.15rem;
+    color: var(--sn-gold);
+    margin: 0 0 22px;
+  }
+  @keyframes block-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ============ ACTIONS ============ */
+  .actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    margin-top: 32px;
+  }
+  .trust {
+    color: var(--sn-muted-stone);
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .error-region {
+    margin: 22px 0 0;
+    color: var(--sn-amber);
+    font-size: 0.9rem;
+    text-align: center;
+  }
+
+  .sn-honeypot {
+    position: absolute !important;
+    left: -9999px !important;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+</style>
+
+<script>
+  // ============ Per-collection block reveal ============
+  // When a collection chip is checked, show its specific question block.
+  document.querySelectorAll<HTMLInputElement>(
+    '.deep-form input[name="collections_interested"]'
+  ).forEach((checkbox) => {
+    const slug = checkbox.dataset.collection;
+    if (!slug) return;
+    const block = document.querySelector<HTMLElement>(
+      `.deep-form [data-collection-block="${slug}"]`
+    );
+    if (!block) return;
+
+    const sync = () => {
+      block.hidden = !checkbox.checked;
+    };
+    sync();
+    checkbox.addEventListener("change", sync);
+  });
+
+  // ============ Submit ============
+  const form = document.querySelector<HTMLFormElement>("#contact-form");
+  if (form) {
+    const submitBtn = form.querySelector<HTMLButtonElement>(".submit-btn");
+    const errorRegion = form.querySelector<HTMLElement>(".error-region");
+
+    function showError(msg: string) {
+      if (errorRegion) {
+        errorRegion.textContent = msg;
+        errorRegion.hidden = false;
+      }
+    }
+    function clearError() {
+      if (errorRegion) {
+        errorRegion.textContent = "";
+        errorRegion.hidden = true;
+      }
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearError();
+
+      // Build a normalized payload. Collection-specific fields are collected
+      // into collection_fields[slug][name]; multi-select collections become
+      // an array.
+      const fd = new FormData(form);
+      const payload: Record<string, unknown> = {};
+      const collectionsInterested: string[] = [];
+      const collectionFields: Record<string, Record<string, string>> = {};
+
+      for (const [key, rawValue] of fd.entries()) {
+        const value = typeof rawValue === "string" ? rawValue : "";
+        if (key === "collections_interested") {
+          collectionsInterested.push(value);
+          continue;
+        }
+        if (key.startsWith("cf_")) {
+          // cf_<slug>_<fieldName>
+          const idx = key.indexOf("_", 3);
+          if (idx > 3) {
+            const slug = key.slice(3, idx);
+            const fieldName = key.slice(idx + 1);
+            if (!collectionFields[slug]) collectionFields[slug] = {};
+            collectionFields[slug][fieldName] = value;
+          }
+          continue;
+        }
+        payload[key] = value;
+      }
+
+      payload.collections_interested = collectionsInterested;
+      payload.collection_fields = collectionFields;
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Sending…";
+      }
+
+      try {
+        const res = await fetch(form.action, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Server responded ${res.status}`);
+        }
+
+        const thanks = document.createElement("div");
+        thanks.className = "inquiry-thanks";
+        thanks.innerHTML = `
+          <h3 class="font-deco">thank you.</h3>
+          <p>We received your inquiry. Daniel will reach out personally within 24 hours.</p>
+        `;
+        form.replaceWith(thanks);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } catch (err) {
+        showError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Send inquiry";
+        }
+      }
+    });
+  }
+</script>
