@@ -5,8 +5,12 @@
  * Three regions: brand (logo + tagline), quick-links columns, contact.
  * Phone and Instagram are placeholders today (owner provides post-launch).
  * Email defaults to hello@smile-nola.com — owner may override via env later.
+ *
+ * The Discover column derives its order from COLLECTIONS so the priority
+ * rule in src/content/collections.ts is the single source of truth.
  */
 import LogoMark from "@/components/brand/LogoMark.astro";
+import { COLLECTIONS } from "@/content/collections";
 
 const CONTACT = {
   email: "hello@smile-nola.com",
@@ -17,12 +21,12 @@ const CONTACT = {
 };
 
 const DISCOVER = [
-  { href: "/collections",                  label: "All Collections" },
-  { href: "/collections/aurora",           label: "Aurora · Lighting" },
-  { href: "/collections/resonance",        label: "Resonance · Sound" },
-  { href: "/collections/visionary",        label: "Visionary · Film" },
-  { href: "/collections/digital-atelier",  label: "Digital Atelier" },
-  { href: "/collections/smile",            label: "Smile · Booths" },
+  { href: "/collections", label: "All Collections" },
+  ...COLLECTIONS.map((c) => ({
+    href: `/collections/${c.slug}`,
+    // Compact "Smile · photo booth experiences" style — first segment of the tagline.
+    label: `${c.shortName} · ${c.tagline.split("·")[0].trim()}`,
+  })),
 ];
 
 const STUDIO = [
