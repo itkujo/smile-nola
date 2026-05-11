@@ -33,13 +33,16 @@ const EVENT_TYPES = [
   "Milestone celebration",
   "Other",
 ] as const;
+// Budget scale anchored at the Smile Collection's $695 floor — a real
+// single-photo-booth buyer needs a bucket that doesn't feel out of place.
 const BUDGET_RANGES = [
-  "Under $5,000",
+  "Under $1,000",
+  "$1,000 – $2,500",
+  "$2,500 – $5,000",
   "$5,000 – $10,000",
-  "$10,000 – $20,000",
-  "$20,000 – $40,000",
-  "$40,000+",
-  "Tell us what's possible",
+  "$10,000 – $25,000",
+  "$25,000+",
+  "Let's talk through what's possible",
 ] as const;
 ---
 

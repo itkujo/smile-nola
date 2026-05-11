@@ -37,6 +37,41 @@ export interface InquiryFieldSpec {
   help?: string;
 }
 
+/**
+ * A bookable tier within a collection. Renders as a card on the collection
+ * page when `packages` is non-empty. The CTA pre-fills the inquiry form with
+ * `selected_package=<tier.slug>` via the ?package= URL parameter so the
+ * owner sees the chosen tier on every inquiry that landed via that path.
+ */
+export interface PackageTier {
+  slug: string;             // e.g. "memory", "mirror", "mirror-all-night"
+  name: string;             // "The Memory" — Broadway lowercase render handles styling
+  priceFrom: number;        // numeric, dollars; we format display
+  unit: string;             // "Memory Booth · 3 hours" — appears as card subtitle
+  includes: readonly string[];
+  cta?: string;             // optional override, defaults to `Reserve ${name}`
+}
+
+/**
+ * Optional pricing surface. When `packages` is present, the collection page
+ * renders a tier widget. When only `startsAt` is present, a single "starts
+ * at $X" anchor line appears in the collection page hero. Either, neither,
+ * or both can be set.
+ */
+export interface PricingSurface {
+  /** Floor price displayed as a small anchor line on the collection hero. */
+  startsAt?: number;
+  /** Optional one-line anchor narrative; appears next to the startsAt. */
+  startsAtNote?: string;
+  /** Tiered packages (3 strongly recommended). When empty/undefined, no widget. */
+  packages?: readonly PackageTier[];
+  /** Optional growth-phase / referral block rendered on the collection page. */
+  honestyBlock?: {
+    headline: string;
+    bodyHtml: string;       // small set of inline tags allowed (a, em, strong)
+  };
+}
+
 export interface Collection {
   slug: CollectionId;
   displayName: string;       // "The Aurora Collection"
@@ -52,6 +87,8 @@ export interface Collection {
    */
   heroImage: string | null;
   cta: string;
+  /** Pricing surface. Optional — collections without pricing skip these renders. */
+  pricing?: PricingSurface;
 }
 
 /* ============================================================================
@@ -67,9 +104,9 @@ export const COLLECTIONS: readonly Collection[] = [
     shortName: "Smile",
     tagline: "photo booth experiences · mirror booth · social stem",
     philosophy:
-      "Interactive photo booth experiences designed to give guests a polished, memorable, and shareable moment. The Mirror Me Booth is our premium mirror-style activation.",
+      "The standout moment of your event — whether it's the Mirror Me activation as part of a larger production, or the single photo booth your guests can't stop talking about. Every booking includes custom overlay design and a live attendant. Nothing rented; everything produced.",
     philosophyLong:
-      "Photo experiences that don't feel like a county fair. The Smile Collection brings the Mirror Me Booth and the Social Stem Booth — premium, branded photo activations that look like part of your décor, not an afterthought rolled in on a luggage cart.\n\nCustom overlay templates, brand-matched prints, guest sharing via text, email, QR, and a gallery your guests can keep returning to weeks after the night ends.",
+      "Photo experiences that don't feel like a county fair. The Smile Collection brings the Mirror Me Booth and the Social Stem Booth — premium, branded photo activations that look like part of your décor, not an afterthought rolled in on a luggage cart.\n\nWhether you're booking the photo booth as part of a full Smile NOLA production or as the single signature activation for the night, every Smile booking is designed end to end: custom overlay templates, brand-matched prints, guest sharing via text, email, QR, and a gallery your guests can keep returning to weeks after the night ends.",
     whatsIncluded: [
       "Mirror Me Booth (premium mirror-style touchscreen activation)",
       "Social Stem Booth (compact open-air social-first booth)",
@@ -121,6 +158,47 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     heroImage: null,
     cta: "Start Your Smile Inquiry",
+    pricing: {
+      startsAt: 695,
+      packages: [
+        {
+          slug: "memory",
+          name: "The Memory",
+          priceFrom: 695,
+          unit: "Memory Booth · 3 hours",
+          includes: [
+            "Unlimited digital photos + prints",
+            "Custom overlay designed to match your event",
+            "On-site attendant for the activation window",
+            "Guest sharing via text, email, QR, and a digital gallery",
+          ],
+        },
+        {
+          slug: "mirror",
+          name: "The Mirror",
+          priceFrom: 895,
+          unit: "Mirror Me Booth · 3 hours",
+          includes: [
+            "Premium mirror-style touchscreen activation",
+            "Everything in The Memory",
+            "Branded prints with your custom overlay",
+            "Animated touchscreen interactions",
+          ],
+        },
+        {
+          slug: "mirror-all-night",
+          name: "The Mirror, All Night",
+          priceFrom: 1195,
+          unit: "Mirror Me Booth · full event",
+          includes: [
+            "Mirror Me Booth running the full event",
+            "Everything in The Mirror",
+            "Extended attendant coverage",
+            "Designed to be the activation guests return to all night",
+          ],
+        },
+      ],
+    },
   },
 
   // 2) VISIONARY — second-pushed service.
@@ -173,6 +251,16 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     heroImage: null,
     cta: "Start Your Visionary Inquiry",
+    pricing: {
+      startsAt: 1500,
+      // No tier widget for videography — bespoke pricing benefits more from
+      // a real consultative conversation than from self-service tiers. The
+      // honesty block + L+L referral does the framing instead.
+      honestyBlock: {
+        headline: "Visionary starts at $1,500.",
+        bodyHtml: `<p>Smile NOLA's videography is founder-led. Daniel shoots with cinema-grade gimbals and Sony cameras; our editing team builds the final film with the pacing and emotional weight every event deserves. Every project gets the founder's attention end to end, at a price that reflects the personal scale of the practice.</p><p>For destination weddings, multi-day multi-camera productions, or the kind of luxury cinematic film that calls for the largest team in the region, we'll honestly recommend our mentors at <a href="https://www.legendluxefilms.com/" target="_blank" rel="noopener noreferrer">Legend + Luxe Films →</a>. Otherwise — book us. We'll bring everything we have to your day.</p>`,
+      },
+    },
   },
 
   // 3) DIGITAL ATELIER — top of the "less-pushed" group; early in customer journey.
@@ -234,6 +322,10 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     heroImage: null,
     cta: "Start Your Atelier Inquiry",
+    pricing: {
+      startsAt: 500,
+      startsAtNote: "Custom event websites + branded design.",
+    },
   },
 
   // 4) AURORA — atmospheric upgrade.
@@ -292,6 +384,10 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     heroImage: null,
     cta: "Start Your Aurora Inquiry",
+    pricing: {
+      startsAt: 2000,
+      startsAtNote: "Lighting design + LED video walls.",
+    },
   },
 
   // 5) RESONANCE — finishing layer.
@@ -364,6 +460,10 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     heroImage: null,
     cta: "Start Your Resonance Inquiry",
+    pricing: {
+      startsAt: 2000,
+      startsAtNote: "Concert-grade sound · includes an on-site sound engineer.",
+    },
   },
 ];
 

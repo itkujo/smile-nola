@@ -23,6 +23,7 @@ import DecoOrnament from "@/components/brand/DecoOrnament.astro";
 import GoldDivider from "@/components/brand/GoldDivider.astro";
 import InquiryFormShort from "@/components/forms/InquiryFormShort.astro";
 import OtherCollections from "@/components/cards/OtherCollections.astro";
+import PackagesWidget from "@/components/cards/PackagesWidget.astro";
 import { collectionBySlug } from "@/content/collections";
 import { listPortfolio } from "@/lib/portfolio";
 
@@ -70,6 +71,16 @@ function getEmbedSrc(provider: string | null, embedId: string | null): string {
           </p>
           <p class="c-hero-tagline">{collection.tagline}</p>
 
+          {collection.pricing?.startsAt && (
+            <p class="c-hero-anchor">
+              <span class="anchor-label">starts at</span>
+              <span class="anchor-amount">${new Intl.NumberFormat("en-US").format(collection.pricing.startsAt)}</span>
+              {collection.pricing.startsAtNote && (
+                <span class="anchor-note">· {collection.pricing.startsAtNote}</span>
+              )}
+            </p>
+          )}
+
           <div class="c-hero-actions">
             <a href="#inquire" class="btn-gold">Begin your inquiry</a>
             <a href="#whats-included" class="btn-ghost">What's included</a>
@@ -116,6 +127,22 @@ function getEmbedSrc(provider: string | null, embedId: string | null): string {
         ))}
       </ul>
     </section>
+
+    <!-- ============ PACKAGES (only when the collection defines tiers) ============ -->
+    {collection.pricing?.packages && collection.pricing.packages.length > 0 && (
+      <PackagesWidget collection={collection} />
+    )}
+
+    <!-- ============ HONESTY BLOCK (Visionary-specific today) ============ -->
+    {collection.pricing?.honestyBlock && (
+      <section class="honesty" aria-labelledby="honesty-heading">
+        <div class="honesty-inner reveal">
+          <p class="eyebrow">— the founder-led note —</p>
+          <h2 id="honesty-heading" class="font-deco">{collection.pricing.honestyBlock.headline}</h2>
+          <div class="honesty-body" set:html={collection.pricing.honestyBlock.bodyHtml}></div>
+        </div>
+      </section>
+    )}
 
     <!-- ============ PORTFOLIO ============ -->
     <section class="portfolio-teaser" aria-labelledby="port-heading">
@@ -246,6 +273,36 @@ function getEmbedSrc(provider: string | null, embedId: string | null): string {
     letter-spacing: 0.06em;
     margin: 6px 0 0;
   }
+
+  .c-hero-anchor {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    margin: 14px 0 0;
+    padding: 10px 18px;
+    background: rgba(212, 175, 55, 0.05);
+    border-left: 2px solid var(--sn-gold);
+    align-self: flex-start;
+  }
+  .c-hero-anchor .anchor-label {
+    font-family: var(--font-italic-serif);
+    font-style: italic;
+    color: var(--sn-champagne);
+    font-size: 0.95rem;
+  }
+  .c-hero-anchor .anchor-amount {
+    color: var(--sn-gold);
+    font-size: 1.35rem;
+    font-weight: 500;
+    text-shadow: 0 0 14px var(--sn-amber-20);
+  }
+  .c-hero-anchor .anchor-note {
+    color: var(--sn-muted-stone);
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+  }
+
   .c-hero-actions {
     display: flex;
     flex-wrap: wrap;
@@ -365,6 +422,54 @@ function getEmbedSrc(provider: string | null, embedId: string | null): string {
     color: var(--sn-ivory);
     font-size: 1.02rem;
     line-height: 1.7;
+  }
+
+  /* ============ HONESTY BLOCK (Visionary today) ============ */
+  .honesty {
+    background-color: var(--sn-black);
+    padding: clamp(72px, 12vh, 140px) clamp(28px, 6vw, 96px);
+    border-top: 1px solid var(--sn-gold-24);
+    border-bottom: 1px solid var(--sn-gold-12);
+  }
+  .honesty-inner {
+    max-width: 760px;
+    margin: 0 auto;
+    text-align: center;
+  }
+  .honesty .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.72rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0 0 18px;
+  }
+  .honesty h2 {
+    font-weight: 400;
+    font-size: clamp(28px, 4vw, 44px);
+    color: var(--sn-gold);
+    margin: 0 0 28px;
+    line-height: 1.05;
+    text-shadow: 0 0 28px var(--sn-amber-20);
+  }
+  .honesty-body {
+    color: var(--sn-champagne);
+    font-size: clamp(0.96rem, 1.15vw, 1.05rem);
+    line-height: 1.8;
+    text-align: left;
+  }
+  .honesty-body :global(p) {
+    margin: 0 0 20px;
+  }
+  .honesty-body :global(p:last-child) { margin-bottom: 0; }
+  .honesty-body :global(a) {
+    color: var(--sn-gold);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    text-decoration-color: var(--sn-gold-40);
+    transition: text-decoration-color 200ms ease;
+  }
+  .honesty-body :global(a:hover) {
+    text-decoration-color: var(--sn-gold);
   }
 
   /* ============ PORTFOLIO TEASER ============ */

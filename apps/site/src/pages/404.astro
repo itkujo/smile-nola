@@ -1,0 +1,110 @@
+---
+/**
+ * Custom 404 page. Brand-aligned, doesn't yell at the visitor, routes them
+ * back to something useful.
+ *
+ * Astro automatically uses this for any unmatched route in SSR mode.
+ */
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import SiteHeader from "@/components/layout/SiteHeader.astro";
+import SiteFooter from "@/components/layout/SiteFooter.astro";
+import AmbientGlow from "@/components/brand/AmbientGlow.astro";
+import DecoOrnament from "@/components/brand/DecoOrnament.astro";
+import DecoCorner from "@/components/brand/DecoCorner.astro";
+
+// Make sure the response carries the real 404 status, not a 200.
+Astro.response.status = 404;
+---
+
+<BaseLayout
+  title="Lost · Smile NOLA"
+  description="That page isn't here. Let's get you back somewhere useful."
+>
+  <SiteHeader />
+
+  <main id="main">
+    <section class="nf">
+      <DecoOrnament opacity={0.04} />
+      <AmbientGlow />
+      <DecoCorner position="tl" size="md" animate delay={200} />
+      <DecoCorner position="tr" size="md" animate delay={300} />
+      <DecoCorner position="bl" size="md" animate delay={400} />
+      <DecoCorner position="br" size="md" animate delay={500} />
+
+      <div class="nf-inner">
+        <p class="eyebrow">— 404 —</p>
+        <h1 class="font-deco">that <span class="script">moment</span> isn't here.</h1>
+        <p class="body">
+          The page you're looking for either moved or never existed. Let's get
+          you back somewhere useful.
+        </p>
+        <div class="links">
+          <a href="/" class="btn-gold">Smile NOLA · home</a>
+          <a href="/collections" class="btn-ghost">Explore collections</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  .nf {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--sn-black);
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: clamp(120px, 18vh, 200px) clamp(28px, 6vw, 96px);
+    text-align: center;
+  }
+  .nf-inner {
+    position: relative;
+    z-index: 10;
+    max-width: 720px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+  }
+  .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.72rem;
+    letter-spacing: 0.5em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  h1 {
+    font-weight: 400;
+    font-size: clamp(36px, 5vw, 72px);
+    line-height: 1.05;
+    color: var(--sn-gold);
+    margin: 0;
+    max-width: 18ch;
+    text-shadow: 0 0 36px var(--sn-amber-20);
+  }
+  h1 .script {
+    font-family: var(--font-italic-serif);
+    font-style: italic;
+    font-weight: 500;
+    color: var(--sn-champagne);
+    text-transform: none;
+    font-size: 1.15em;
+  }
+  .body {
+    color: var(--sn-champagne);
+    font-size: clamp(0.96rem, 1.2vw, 1.08rem);
+    line-height: 1.7;
+    margin: 0;
+    max-width: 52ch;
+  }
+  .links {
+    display: flex;
+    gap: 14px;
+    margin-top: 18px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+</style>

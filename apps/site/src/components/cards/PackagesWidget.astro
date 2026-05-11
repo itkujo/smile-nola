@@ -1,0 +1,283 @@
+---
+/**
+ * PackagesWidget — tiered pricing cards for a collection.
+ *
+ * Each card: tier name (Broadway lowercase), starting price (gold), unit
+ * subtitle, what's-included bullets, and a "Reserve [tier name]" CTA that
+ * deep-links to the inquiry form on the same page with ?package=<slug>.
+ *
+ * Brand voice: cards read as a curated tier menu, not a shopping cart.
+ * The Cormorant italic on the price and Deco corners frame each card as
+ * its own small poster.
+ */
+import type { Collection, PackageTier } from "@/content/collections";
+import DecoCorner from "@/components/brand/DecoCorner.astro";
+
+interface Props {
+  collection: Collection;
+}
+
+const { collection } = Astro.props;
+const tiers = collection.pricing?.packages ?? [];
+
+function formatPrice(n: number): string {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n);
+}
+---
+
+{tiers.length > 0 && (
+  <section class="pkg" aria-labelledby="pkg-heading">
+    <header class="pkg-head reveal">
+      <p class="eyebrow">— packages —</p>
+      <h2 id="pkg-heading" class="font-deco">three ways to bring the moment.</h2>
+      <p class="pkg-sub">
+        Designed as starting points. Every booking is still tailored — your
+        venue, your event flow, your overlay design. Want something between
+        tiers or beyond them? Inquire below.
+      </p>
+    </header>
+
+    <div class="pkg-grid reveal-stagger">
+      {tiers.map((tier, i) => (
+        <article class={`pkg-card reveal ${i === 1 ? "is-featured" : ""}`}>
+          <DecoCorner position="tl" size="sm" />
+          <DecoCorner position="br" size="sm" />
+
+          {i === 1 && <span class="badge">most popular</span>}
+
+          <header class="card-head">
+            <h3 class="font-deco">{tier.name}</h3>
+            <p class="unit">{tier.unit}</p>
+          </header>
+
+          <div class="price">
+            <span class="from">from</span>
+            <span class="amount">${formatPrice(tier.priceFrom)}</span>
+          </div>
+
+          <ul class="includes">
+            {tier.includes.map((line) => (
+              <li>
+                <span class="bullet" aria-hidden="true"></span>
+                <span>{line}</span>
+              </li>
+            ))}
+          </ul>
+
+          <a
+            href={`#inquire?package=${tier.slug}`}
+            class="reserve-btn"
+            data-package-slug={tier.slug}
+          >
+            {tier.cta ?? `Reserve ${tier.name}`}
+          </a>
+        </article>
+      ))}
+    </div>
+  </section>
+)}
+
+<style>
+  .pkg {
+    background: var(--sn-soft-black);
+    padding: clamp(72px, 12vh, 140px) clamp(28px, 6vw, 96px);
+    border-top: 1px solid var(--sn-gold-12);
+  }
+  .pkg-head {
+    text-align: center;
+    max-width: 720px;
+    margin: 0 auto clamp(48px, 6vw, 72px);
+  }
+  .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.72rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0 0 14px;
+  }
+  .pkg-head h2 {
+    font-weight: 400;
+    font-size: clamp(28px, 3.8vw, 44px);
+    color: var(--sn-ivory);
+    margin: 0;
+    line-height: 1.05;
+  }
+  .pkg-sub {
+    color: var(--sn-champagne);
+    font-size: 0.96rem;
+    line-height: 1.7;
+    margin: 18px 0 0;
+  }
+
+  .pkg-grid {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+  @media (min-width: 800px) {
+    .pkg-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  .pkg-card {
+    position: relative;
+    background: var(--sn-black);
+    border: 1px solid var(--sn-gold-24);
+    padding: clamp(28px, 3.5vw, 40px);
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    transition:
+      border-color 280ms ease,
+      transform 320ms var(--ease-cinematic),
+      box-shadow 280ms ease;
+  }
+  .pkg-card:hover {
+    border-color: var(--sn-gold);
+    transform: translateY(-3px);
+    box-shadow: 0 0 32px var(--sn-amber-20);
+  }
+  .pkg-card.is-featured {
+    border-color: var(--sn-gold);
+    box-shadow: 0 0 28px var(--sn-amber-20);
+  }
+  .badge {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--sn-gold);
+    color: var(--sn-black);
+    font-size: 0.6rem;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    white-space: nowrap;
+  }
+
+  .card-head h3 {
+    font-weight: 400;
+    font-size: clamp(24px, 2.6vw, 32px);
+    color: var(--sn-gold);
+    line-height: 1.05;
+    margin: 0;
+    text-shadow: 0 0 18px var(--sn-amber-20);
+  }
+  .card-head .unit {
+    color: var(--sn-muted-stone);
+    font-size: 0.78rem;
+    letter-spacing: 0.16em;
+    margin: 8px 0 0;
+  }
+
+  .price {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 14px 0;
+    border-top: 1px solid var(--sn-gold-12);
+    border-bottom: 1px solid var(--sn-gold-12);
+  }
+  .price .from {
+    font-family: var(--font-italic-serif);
+    font-style: italic;
+    color: var(--sn-champagne);
+    font-size: 1rem;
+  }
+  .price .amount {
+    color: var(--sn-ivory);
+    font-size: clamp(28px, 3.2vw, 36px);
+    font-weight: 400;
+    letter-spacing: 0.01em;
+  }
+
+  .includes {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .includes li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    align-items: baseline;
+    color: var(--sn-champagne);
+    font-size: 0.92rem;
+    line-height: 1.5;
+  }
+  .includes .bullet {
+    width: 6px;
+    height: 6px;
+    transform: rotate(45deg);
+    background: var(--sn-gold);
+    margin-top: 6px;
+  }
+
+  .reserve-btn {
+    display: inline-block;
+    background: var(--sn-gold);
+    color: var(--sn-black);
+    text-align: center;
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 0.74rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    padding: 14px 22px;
+    border-radius: 999px;
+    border: 1px solid var(--sn-gold);
+    transition:
+      transform 200ms ease,
+      box-shadow 200ms ease,
+      background-color 200ms ease;
+    margin-top: auto;
+  }
+  .reserve-btn:hover,
+  .reserve-btn:focus-visible {
+    transform: translateY(-1px);
+    box-shadow: 0 0 24px var(--sn-amber-40);
+    outline: none;
+  }
+</style>
+
+<script>
+  // Click handler that scrolls to the inquiry form and pre-fills the
+  // collection-page short form with the chosen package slug via a hidden
+  // field added on the fly.
+  document.querySelectorAll<HTMLAnchorElement>(".reserve-btn[data-package-slug]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const slug = btn.dataset.packageSlug ?? "";
+      const form = document.querySelector<HTMLFormElement>(".inquiry-form");
+      if (form) {
+        // Add or update a hidden `selected_package` field.
+        let hidden = form.querySelector<HTMLInputElement>('input[name="selected_package"]');
+        if (!hidden) {
+          hidden = document.createElement("input");
+          hidden.type = "hidden";
+          hidden.name = "selected_package";
+          form.appendChild(hidden);
+        }
+        hidden.value = slug;
+
+        // Subtle UI signal: highlight the form briefly so the user sees we
+        // captured their choice.
+        form.classList.add("is-package-selected");
+        window.setTimeout(() => form.classList.remove("is-package-selected"), 1800);
+      }
+      const inquire = document.getElementById("inquire");
+      if (inquire) {
+        inquire.scrollIntoView({ behavior: "smooth", block: "start" });
+        // Focus the first input after the scroll settles.
+        window.setTimeout(() => {
+          const firstInput = form?.querySelector<HTMLInputElement>('input[name="first_name"]');
+          firstInput?.focus({ preventScroll: true });
+        }, 600);
+      }
+    });
+  });
+</script>
