@@ -3,8 +3,8 @@
  * SiteFooter — global footer used on every page.
  *
  * Three regions: brand (logo + tagline), quick-links columns, contact.
- * Phone and Instagram are placeholders today (owner provides post-launch).
- * Email defaults to hello@smile-nola.com — owner may override via env later.
+ * Email and phone are owner-confirmed real lines. Instagram is still a
+ * placeholder; owner provides post-launch.
  *
  * The Discover column derives its order from COLLECTIONS so the priority
  * rule in src/content/collections.ts is the single source of truth.
@@ -13,10 +13,10 @@ import LogoMark from "@/components/brand/LogoMark.astro";
 import { COLLECTIONS } from "@/content/collections";
 
 const CONTACT = {
-  email: "hello@smile-nola.com",
+  email: "smilenolainfo@gmail.com",
+  phone: "858-859-1851",
   location: "New Orleans · Louisiana",
-  // TODO(owner): set real phone and Instagram before launch
-  phone: null as string | null,
+  // TODO(owner): set real Instagram handle before launch
   instagram: null as { url: string; handle: string } | null,
 };
 
