@@ -19,11 +19,10 @@ const { pathname = Astro.url.pathname } = Astro.props;
 
 const NAV = [
   { href: "/collections",     label: "Collections" },
-  // Currently this is the video portfolio. As Smile NOLA adds collection-
-  // specific portfolios (photo, lighting, sound, web), the nav may grow into
-  // a "Portfolios" dropdown. For now the label is explicit so visitors know
-  // what medium they're about to see.
-  { href: "/portfolio",       label: "Video Portfolio" },
+  // The page itself is the video portfolio for now, but the nav label
+  // stays short. When additional portfolios (photo, lighting, sound, web)
+  // come online, this slot likely grows into a "Portfolios" dropdown.
+  { href: "/portfolio",       label: "Portfolio" },
   { href: "/about",           label: "About" },
   { href: "/contact",         label: "Contact" },
 ] as const;
