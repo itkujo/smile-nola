@@ -401,6 +401,35 @@ input[type="number"] {
 .sn-field-wrap select:focus {
   outline: none;
 }
+
+/* Multi-line textareas need a real box, not just a bottom line — otherwise
+   the click target is ambiguous on a tall element. The :has() rule below
+   also suppresses the .sn-underline / .sn-underline-glow spans so we don't
+   stack two horizontal rules at the bottom of the wrapper. */
+.sn-field-wrap textarea {
+  border: 1px solid var(--sn-gold-24);
+  background: rgba(0, 0, 0, 0.22);
+  padding: 12px 14px;
+  border-radius: 2px;
+  transition:
+    border-color 200ms ease,
+    background-color 200ms ease,
+    box-shadow 200ms ease;
+}
+.sn-field-wrap textarea:hover {
+  border-color: var(--sn-gold);
+}
+.sn-field-wrap textarea:focus {
+  border-color: var(--sn-gold);
+  background: rgba(0, 0, 0, 0.34);
+  box-shadow:
+    0 0 0 1px var(--sn-gold-12),
+    0 0 24px var(--sn-amber-20);
+}
+.sn-field-wrap:has(textarea) .sn-underline,
+.sn-field-wrap:has(textarea) .sn-underline-glow {
+  display: none;
+}
 .sn-field-label {
   display: block;
   color: var(--sn-muted-stone);
