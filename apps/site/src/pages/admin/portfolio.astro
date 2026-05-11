@@ -1,0 +1,456 @@
+---
+/**
+ * /admin/portfolio — list + add/edit form for portfolio video items.
+ *
+ * Single page with two regions: the add/edit form (top) and the table of
+ * existing items (bottom). On submit the form POSTs (or PATCHes if editing)
+ * to /api/admin/portfolio and reloads the table inline.
+ */
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { listPortfolio } from "@/lib/portfolio";
+import { COLLECTIONS } from "@/content/collections";
+
+const items = listPortfolio({ featuredFirst: true });
+---
+
+<AdminLayout title="Portfolio" section="portfolio">
+  <header class="head">
+    <p class="eyebrow">— admin · portfolio —</p>
+    <h1 class="font-deco">add the work that closes the deal.</h1>
+    <p class="head-sub">Paste a YouTube or Vimeo URL. The thumbnail and embed are fetched automatically.</p>
+  </header>
+
+  <section class="form-block" aria-labelledby="form-heading">
+    <h2 id="form-heading">Add a new piece</h2>
+    <form id="pf-form" class="pf-form" novalidate>
+      <input type="hidden" name="id" value="" />
+
+      <div class="grid">
+        <label class="sn-field-wrap span-2">
+          <span class="sn-field-label">Video URL *</span>
+          <input type="url" name="url" required placeholder="https://www.youtube.com/watch?v=… or https://vimeo.com/…" />
+          <span class="sn-underline"></span>
+          <span class="sn-underline-glow"></span>
+        </label>
+
+        <label class="sn-field-wrap">
+          <span class="sn-field-label">Title *</span>
+          <input type="text" name="title" required maxlength="200" placeholder="Couple's name · venue · year" />
+          <span class="sn-underline"></span>
+          <span class="sn-underline-glow"></span>
+        </label>
+
+        <label class="sn-field-wrap">
+          <span class="sn-field-label">Collection *</span>
+          <select name="collection" required>
+            {COLLECTIONS.map((c) => (
+              <option value={c.slug}>{c.shortName} · {c.tagline.split("·")[0].trim()}</option>
+            ))}
+          </select>
+          <span class="sn-underline"></span>
+          <span class="sn-underline-glow"></span>
+        </label>
+
+        <label class="sn-field-wrap span-2">
+          <span class="sn-field-label">Description (optional)</span>
+          <textarea name="description" rows="3" maxlength="2000" placeholder="One or two sentences shown under the title on the public portfolio."></textarea>
+          <span class="sn-underline"></span>
+          <span class="sn-underline-glow"></span>
+        </label>
+
+        <label class="checkbox-wrap">
+          <input type="checkbox" name="featured" />
+          <span>Feature on homepage</span>
+        </label>
+
+        <label class="sn-field-wrap">
+          <span class="sn-field-label">Display order (lower = first)</span>
+          <input type="number" name="display_order" value="0" />
+          <span class="sn-underline"></span>
+          <span class="sn-underline-glow"></span>
+        </label>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn-gold submit-btn">Add to portfolio</button>
+        <button type="button" class="btn-ghost cancel-btn" hidden>Cancel edit</button>
+        <span class="save-status" aria-live="polite"></span>
+      </div>
+    </form>
+  </section>
+
+  <section class="list-block" aria-labelledby="list-heading">
+    <h2 id="list-heading">Current portfolio · {items.length} {items.length === 1 ? "item" : "items"}</h2>
+
+    {items.length === 0 ? (
+      <div class="empty">
+        <p>Nothing here yet. Add your first video above — it'll appear on /portfolio and on the matching collection page within seconds.</p>
+      </div>
+    ) : (
+      <div class="items">
+        {items.map((it) => (
+          <article class="item" data-id={it.id}>
+            <div class="thumb">
+              {it.thumbnail_url ? (
+                <img src={it.thumbnail_url} alt="" loading="lazy" />
+              ) : (
+                <div class="thumb-placeholder font-deco">{it.title.charAt(0)}</div>
+              )}
+              {it.featured === 1 && <span class="featured-badge">★ featured</span>}
+            </div>
+
+            <div class="meta">
+              <div class="row1">
+                <strong>{it.title}</strong>
+                <span class="collection-tag">{it.collection}</span>
+              </div>
+              {it.description && <p class="desc">{it.description}</p>}
+              <p class="url-line"><a href={it.url} target="_blank" rel="noopener noreferrer">{it.url}</a></p>
+            </div>
+
+            <div class="actions">
+              <button type="button" class="btn-link edit-btn" data-id={it.id}
+                data-url={it.url} data-title={it.title} data-collection={it.collection}
+                data-description={it.description ?? ""} data-featured={it.featured}
+                data-display-order={it.display_order}>
+                Edit
+              </button>
+              <button type="button" class="btn-link danger delete-btn" data-id={it.id} data-title={it.title}>Delete</button>
+            </div>
+          </article>
+        ))}
+      </div>
+    )}
+  </section>
+</AdminLayout>
+
+<script>
+  const form = document.getElementById("pf-form") as HTMLFormElement | null;
+  const saveStatus = form?.querySelector<HTMLElement>(".save-status") ?? null;
+  const submitBtn = form?.querySelector<HTMLButtonElement>(".submit-btn") ?? null;
+  const cancelBtn = form?.querySelector<HTMLButtonElement>(".cancel-btn") ?? null;
+
+  function setStatus(msg: string, ok: boolean) {
+    if (saveStatus) {
+      saveStatus.textContent = msg;
+      saveStatus.style.color = ok ? "var(--sn-gold)" : "var(--sn-amber)";
+    }
+  }
+  function clearStatus() {
+    if (saveStatus) saveStatus.textContent = "";
+  }
+
+  function resetForm() {
+    if (!form) return;
+    form.reset();
+    (form.elements.namedItem("id") as HTMLInputElement).value = "";
+    if (submitBtn) submitBtn.textContent = "Add to portfolio";
+    if (cancelBtn) cancelBtn.hidden = true;
+  }
+
+  // ============ Submit (POST or PATCH) ============
+  form?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearStatus();
+    const fd = new FormData(form);
+    const idVal = String(fd.get("id") ?? "").trim();
+    const payload: Record<string, unknown> = {
+      url: fd.get("url"),
+      title: fd.get("title"),
+      collection: fd.get("collection"),
+      description: fd.get("description") || "",
+      featured: fd.get("featured") === "on",
+      display_order: Number(fd.get("display_order") ?? 0),
+    };
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = idVal ? "Updating…" : "Adding…";
+    }
+
+    try {
+      let res: Response;
+      if (idVal) {
+        payload.id = Number(idVal);
+        res = await fetch("/api/admin/portfolio", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        res = await fetch("/api/admin/portfolio", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Server responded ${res.status}`);
+      }
+      setStatus("✓ Saved · reloading…", true);
+      window.location.reload();
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Save failed", false);
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = idVal ? "Update" : "Add to portfolio";
+      }
+    }
+  });
+
+  cancelBtn?.addEventListener("click", () => {
+    resetForm();
+    clearStatus();
+  });
+
+  // ============ Edit buttons ============
+  document.querySelectorAll<HTMLButtonElement>(".edit-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (!form) return;
+      const data = btn.dataset;
+      (form.elements.namedItem("id") as HTMLInputElement).value = data.id ?? "";
+      (form.elements.namedItem("url") as HTMLInputElement).value = data.url ?? "";
+      (form.elements.namedItem("title") as HTMLInputElement).value = data.title ?? "";
+      (form.elements.namedItem("collection") as HTMLSelectElement).value = data.collection ?? "";
+      (form.elements.namedItem("description") as HTMLTextAreaElement).value = data.description ?? "";
+      (form.elements.namedItem("featured") as HTMLInputElement).checked = data.featured === "1";
+      (form.elements.namedItem("display_order") as HTMLInputElement).value = data.displayOrder ?? "0";
+      if (submitBtn) submitBtn.textContent = "Update";
+      if (cancelBtn) cancelBtn.hidden = false;
+      form.scrollIntoView({ behavior: "smooth", block: "start" });
+      (form.elements.namedItem("url") as HTMLInputElement).focus();
+    });
+  });
+
+  // ============ Delete buttons ============
+  document.querySelectorAll<HTMLButtonElement>(".delete-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const title = btn.dataset.title || "this item";
+      if (!id) return;
+      if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+      btn.disabled = true;
+      btn.textContent = "Deleting…";
+      try {
+        const res = await fetch("/api/admin/portfolio", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: Number(id) }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Server responded ${res.status}`);
+        }
+        window.location.reload();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "Delete failed");
+        btn.disabled = false;
+        btn.textContent = "Delete";
+      }
+    });
+  });
+</script>
+
+<style>
+  .head {
+    margin-bottom: 32px;
+  }
+  .head .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .head h1 {
+    font-weight: 400;
+    font-size: clamp(28px, 3.8vw, 44px);
+    color: var(--sn-ivory);
+    margin: 8px 0 12px;
+    line-height: 1.05;
+  }
+  .head-sub {
+    color: var(--sn-muted-stone);
+    font-size: 0.95rem;
+    margin: 0;
+  }
+
+  .form-block,
+  .list-block {
+    margin-bottom: 32px;
+    padding: 24px;
+    background: var(--sn-soft-black);
+    border: 1px solid var(--sn-gold-24);
+  }
+  h2 {
+    color: var(--sn-gold);
+    font-family: var(--font-body);
+    font-size: 0.72rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin: 0 0 22px;
+  }
+
+  .pf-form .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px 18px;
+  }
+  .pf-form .grid .span-2 { grid-column: 1 / -1; }
+  @media (max-width: 600px) {
+    .pf-form .grid { grid-template-columns: 1fr; }
+    .pf-form .grid .span-2 { grid-column: auto; }
+  }
+  .pf-form input,
+  .pf-form select,
+  .pf-form textarea {
+    width: 100%;
+    background: transparent;
+    border: 0;
+    padding: 8px 0;
+    color: var(--sn-ivory);
+    font-family: var(--font-body);
+    font-size: 1rem;
+  }
+  .pf-form input:focus,
+  .pf-form select:focus,
+  .pf-form textarea:focus { outline: none; }
+  .pf-form select {
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' stroke='%23D4AF37' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 4px center;
+    background-size: 12px 8px;
+    padding-right: 24px;
+  }
+  .pf-form select option {
+    background: var(--sn-soft-black);
+    color: var(--sn-ivory);
+  }
+  .pf-form textarea { resize: vertical; }
+
+  .checkbox-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--sn-ivory);
+    font-size: 0.92rem;
+    cursor: pointer;
+  }
+
+  .form-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 28px;
+    flex-wrap: wrap;
+  }
+  .save-status { font-size: 0.82rem; }
+
+  /* List */
+  .empty {
+    border: 1px dashed var(--sn-gold-24);
+    padding: 28px;
+    color: var(--sn-muted-stone);
+    text-align: center;
+  }
+  .items { display: flex; flex-direction: column; gap: 16px; }
+  .item {
+    display: grid;
+    grid-template-columns: 160px 1fr auto;
+    gap: 18px;
+    align-items: center;
+    padding: 14px;
+    background: var(--sn-black);
+    border: 1px solid var(--sn-gold-12);
+  }
+  @media (max-width: 700px) {
+    .item { grid-template-columns: 100px 1fr; }
+    .item .actions { grid-column: 1 / -1; justify-content: flex-end; }
+  }
+  .thumb {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    background: var(--sn-soft-black);
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb-placeholder {
+    width: 100%; height: 100%;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, var(--sn-black), var(--sn-soft-black));
+    color: var(--sn-gold);
+    font-size: 56px;
+    opacity: 0.35;
+  }
+  .featured-badge {
+    position: absolute;
+    top: 6px; left: 6px;
+    background: var(--sn-gold);
+    color: var(--sn-black);
+    font-size: 0.6rem;
+    letter-spacing: 0.18em;
+    padding: 3px 8px;
+    text-transform: uppercase;
+  }
+
+  .meta .row1 {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .meta strong { color: var(--sn-ivory); }
+  .collection-tag {
+    padding: 2px 10px;
+    border: 1px solid var(--sn-gold-24);
+    border-radius: 999px;
+    color: var(--sn-gold);
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+  }
+  .desc {
+    color: var(--sn-champagne);
+    font-size: 0.88rem;
+    margin: 8px 0 0;
+    line-height: 1.6;
+  }
+  .url-line {
+    margin: 6px 0 0;
+    font-size: 0.78rem;
+  }
+  .url-line a {
+    color: var(--sn-muted-stone);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-color: var(--sn-gold-24);
+    word-break: break-all;
+  }
+  .url-line a:hover { color: var(--sn-gold); }
+
+  .actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .btn-link {
+    background: transparent;
+    border: 1px solid var(--sn-gold-24);
+    color: var(--sn-ivory);
+    font-size: 0.72rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 200ms ease;
+  }
+  .btn-link:hover { border-color: var(--sn-gold); color: var(--sn-gold); }
+  .btn-link.danger:hover {
+    border-color: var(--sn-amber);
+    color: var(--sn-amber);
+  }
+</style>

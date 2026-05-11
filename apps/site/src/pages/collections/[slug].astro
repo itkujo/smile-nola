@@ -24,6 +24,7 @@ import GoldDivider from "@/components/brand/GoldDivider.astro";
 import InquiryFormShort from "@/components/forms/InquiryFormShort.astro";
 import OtherCollections from "@/components/cards/OtherCollections.astro";
 import { collectionBySlug } from "@/content/collections";
+import { listPortfolio } from "@/lib/portfolio";
 
 const { slug } = Astro.params;
 if (!slug) return Astro.redirect("/collections");
@@ -34,6 +35,14 @@ if (!collection) {
 }
 
 const initial = collection.shortName.charAt(0);
+const relatedVideos = listPortfolio({ collection: collection.slug });
+
+function getEmbedSrc(provider: string | null, embedId: string | null): string {
+  if (!provider || !embedId) return "";
+  if (provider === "youtube") return `https://www.youtube.com/embed/${embedId}`;
+  if (provider === "vimeo")   return `https://player.vimeo.com/video/${embedId}`;
+  return "";
+}
 ---
 
 <BaseLayout
@@ -108,15 +117,43 @@ const initial = collection.shortName.charAt(0);
       </ul>
     </section>
 
-    <!-- ============ PORTFOLIO (empty state until admin populates) ============ -->
+    <!-- ============ PORTFOLIO ============ -->
     <section class="portfolio-teaser" aria-labelledby="port-heading">
       <header class="reveal">
         <p class="eyebrow">— portfolio —</p>
         <h2 id="port-heading" class="font-deco">recent {collection.shortName.toLowerCase()} work.</h2>
       </header>
-      <div class="empty reveal" role="status">
-        <p>Films and case studies for this collection will appear here as they're added. In the meantime, inquire below — we'll share recent work that matches your event.</p>
-      </div>
+
+      {relatedVideos.length === 0 ? (
+        <div class="empty reveal" role="status">
+          <p>Films and case studies for this collection will appear here as they're added. In the meantime, inquire below — we'll share recent work that matches your event.</p>
+        </div>
+      ) : (
+        <div class="related-grid reveal-stagger">
+          {relatedVideos.slice(0, 3).map((v) => (
+            <a class="related-card reveal" href={`/portfolio#item-${v.id}`}>
+              <div class="thumb">
+                {v.thumbnail_url ? (
+                  <img src={v.thumbnail_url} alt="" loading="lazy" />
+                ) : (
+                  <span class="placeholder font-deco">{v.title.charAt(0)}</span>
+                )}
+                <span class="play" aria-hidden="true">▶</span>
+              </div>
+              <div class="info">
+                <h3>{v.title}</h3>
+                {v.description && <p>{v.description}</p>}
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
+
+      {relatedVideos.length > 3 && (
+        <div class="related-more reveal">
+          <a href={`/portfolio?collection=${collection.slug}`} class="btn-ghost">View all {relatedVideos.length} films</a>
+        </div>
+      )}
     </section>
 
     <!-- ============ INQUIRY ============ -->
@@ -352,6 +389,76 @@ const initial = collection.shortName.charAt(0);
     line-height: 1.7;
   }
   .empty p { margin: 0; }
+
+  .related-grid {
+    max-width: 1280px;
+    margin: 36px auto 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 18px;
+  }
+  .related-card {
+    display: block;
+    background: var(--sn-black);
+    border: 1px solid var(--sn-gold-12);
+    transition: border-color 200ms ease, transform 320ms var(--ease-cinematic);
+    color: inherit;
+  }
+  .related-card:hover { border-color: var(--sn-gold); transform: translateY(-2px); }
+  .related-card .thumb {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    background: var(--sn-soft-black);
+  }
+  .related-card .thumb img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 600ms var(--ease-cinematic);
+  }
+  .related-card:hover .thumb img { transform: scale(1.04); }
+  .related-card .placeholder {
+    display: grid;
+    place-items: center;
+    width: 100%; height: 100%;
+    background: linear-gradient(135deg, var(--sn-black), var(--sn-soft-black));
+    color: var(--sn-gold);
+    font-size: 72px;
+    opacity: 0.25;
+  }
+  .related-card .play {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 56px; height: 56px;
+    display: grid;
+    place-items: center;
+    background: rgba(5, 5, 5, 0.7);
+    color: var(--sn-gold);
+    border: 1px solid var(--sn-gold);
+    border-radius: 50%;
+    font-size: 1.3rem;
+  }
+  .related-card .info { padding: 16px 18px 18px; text-align: left; }
+  .related-card .info h3 {
+    color: var(--sn-ivory);
+    font-weight: 400;
+    font-size: 1rem;
+    margin: 0;
+    line-height: 1.3;
+  }
+  .related-card .info p {
+    color: var(--sn-muted-stone);
+    font-size: 0.85rem;
+    line-height: 1.6;
+    margin: 6px 0 0;
+  }
+
+  .related-more {
+    text-align: center;
+    margin-top: 32px;
+  }
 
   /* ============ INQUIRY ============ */
   .inquiry {
