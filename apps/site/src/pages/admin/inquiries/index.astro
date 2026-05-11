@@ -1,0 +1,275 @@
+---
+/**
+ * /admin/inquiries — sortable table of every inquiry with filter chips,
+ * a search box, and CSV export.
+ */
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { getAllInquiries } from "@/lib/db";
+
+const status = Astro.url.searchParams.get("status") ?? "all";
+const q = (Astro.url.searchParams.get("q") ?? "").trim().toLowerCase();
+
+const allRows = getAllInquiries();
+const filtered = allRows
+  .filter((r) => (status === "all" ? true : r.status === status))
+  .filter((r) => {
+    if (!q) return true;
+    return (
+      r.first_name.toLowerCase().includes(q) ||
+      r.last_name.toLowerCase().includes(q) ||
+      r.email.toLowerCase().includes(q) ||
+      r.phone.toLowerCase().includes(q) ||
+      (r.venue ?? "").toLowerCase().includes(q)
+    );
+  });
+
+const FILTERS = [
+  { value: "all",       label: "All",            count: allRows.length },
+  { value: "new",       label: "New",            count: allRows.filter((r) => r.status === "new").length },
+  { value: "contacted", label: "In conversation", count: allRows.filter((r) => r.status === "contacted").length },
+  { value: "closed",    label: "Closed",         count: allRows.filter((r) => r.status === "closed").length },
+] as const;
+
+function shortDate(iso: string): string {
+  // "2026-05-11 04:34:15" → "May 11"
+  const d = new Date(iso.replace(" ", "T") + "Z");
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+const exportHref =
+  status === "all"
+    ? "/api/admin/export/inquiries.csv"
+    : `/api/admin/export/inquiries.csv?status=${status}`;
+---
+
+<AdminLayout title="Inquiries" section="inquiries">
+  <header class="head">
+    <div>
+      <p class="eyebrow">— admin · inquiries —</p>
+      <h1 class="font-deco">conversations in progress.</h1>
+    </div>
+    <a href={exportHref} class="btn-gold">Export CSV</a>
+  </header>
+
+  <form class="toolbar" method="get">
+    <div class="chips">
+      {FILTERS.map((f) => (
+        <a
+          href={f.value === "all" ? "/admin/inquiries" : `/admin/inquiries?status=${f.value}`}
+          class:list={["chip", { "is-active": status === f.value }]}
+        >
+          {f.label} <span class="ct">{f.count}</span>
+        </a>
+      ))}
+    </div>
+
+    <div class="search">
+      {status !== "all" && <input type="hidden" name="status" value={status} />}
+      <input
+        type="search"
+        name="q"
+        placeholder="Search name, email, phone, venue…"
+        value={q}
+        autocomplete="off"
+      />
+    </div>
+  </form>
+
+  {filtered.length === 0 ? (
+    <div class="empty">
+      <p>No inquiries match. {q ? "Clear the search?" : "Once outreach lands, they'll show up here."}</p>
+    </div>
+  ) : (
+    <div class="table-wrap">
+      <table class="rows">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Name</th>
+            <th>Contact</th>
+            <th>Event</th>
+            <th>Source</th>
+            <th>Status</th>
+            <th aria-label="Open"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.map((r) => (
+            <tr>
+              <td class="dim">{shortDate(r.created_at)}</td>
+              <td>
+                <a href={`/admin/inquiries/${r.id}`} class="name">{r.first_name} {r.last_name}</a>
+              </td>
+              <td class="contact">
+                <a href={`mailto:${r.email}`}>{r.email}</a>
+                <span class="dim">{r.phone}</span>
+              </td>
+              <td class="event">
+                {r.event_date && <span>{r.event_date}</span>}
+                {r.venue && <span class="dim">{r.venue}</span>}
+              </td>
+              <td class="dim source">{r.source}</td>
+              <td>
+                <span class={`status-pill is-${r.status}`}>{r.status}</span>
+              </td>
+              <td><a href={`/admin/inquiries/${r.id}`} class="open" aria-label="Open">→</a></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</AdminLayout>
+
+<style>
+  .head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 32px;
+  }
+  .head .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .head h1 {
+    font-weight: 400;
+    font-size: clamp(28px, 3.6vw, 44px);
+    color: var(--sn-ivory);
+    margin: 6px 0 0;
+    line-height: 1.05;
+  }
+
+  .toolbar {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-bottom: 28px;
+  }
+  .chips { display: flex; gap: 10px; flex-wrap: wrap; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border: 1px solid var(--sn-gold-24);
+    border-radius: 999px;
+    color: var(--sn-ivory);
+    font-size: 0.78rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    transition: all 200ms ease;
+  }
+  .chip:hover { border-color: var(--sn-gold); }
+  .chip.is-active {
+    background-color: var(--sn-gold);
+    color: var(--sn-black);
+    border-color: var(--sn-gold);
+  }
+  .chip .ct {
+    background: rgba(0, 0, 0, 0.18);
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+  }
+  .chip:not(.is-active) .ct {
+    background: var(--sn-gold-12);
+    color: var(--sn-gold);
+  }
+
+  .search input {
+    background: var(--sn-soft-black);
+    color: var(--sn-ivory);
+    border: 1px solid var(--sn-gold-24);
+    padding: 9px 14px;
+    border-radius: 999px;
+    min-width: 240px;
+    font-family: var(--font-body);
+    transition: border-color 200ms ease;
+  }
+  .search input:focus { border-color: var(--sn-gold); outline: none; }
+
+  .empty {
+    background: var(--sn-soft-black);
+    border: 1px dashed var(--sn-gold-24);
+    color: var(--sn-muted-stone);
+    padding: 32px;
+    text-align: center;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    background: var(--sn-soft-black);
+    border: 1px solid var(--sn-gold-24);
+  }
+  table.rows {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 700px;
+  }
+  table.rows th {
+    text-align: left;
+    padding: 14px 16px;
+    color: var(--sn-gold);
+    font-weight: 400;
+    font-size: 0.68rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--sn-gold-24);
+    background: rgba(212, 175, 55, 0.04);
+  }
+  table.rows td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--sn-gold-12);
+    vertical-align: top;
+    font-size: 0.92rem;
+  }
+  table.rows tr:last-child td { border-bottom: 0; }
+  table.rows tr:hover td { background: rgba(212, 175, 55, 0.04); }
+
+  .dim { color: var(--sn-muted-stone); font-size: 0.85rem; }
+  .name {
+    color: var(--sn-ivory);
+    font-weight: 500;
+    transition: color 200ms ease;
+  }
+  .name:hover { color: var(--sn-gold); }
+  .contact, .event {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .contact a {
+    color: var(--sn-champagne);
+  }
+  .contact a:hover { color: var(--sn-gold); }
+  .source { font-size: 0.78rem; letter-spacing: 0.06em; }
+
+  .status-pill {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.66rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    border: 1px solid;
+  }
+  .status-pill.is-new       { color: var(--sn-amber);     border-color: var(--sn-amber); background: rgba(255, 178, 63, 0.08); }
+  .status-pill.is-contacted { color: var(--sn-gold);      border-color: var(--sn-gold-40); background: rgba(212, 175, 55, 0.08); }
+  .status-pill.is-closed    { color: var(--sn-muted-stone); border-color: var(--sn-muted-stone); background: rgba(184, 178, 165, 0.06); }
+
+  .open {
+    color: var(--sn-gold);
+    font-size: 1rem;
+    transition: transform 200ms ease;
+    display: inline-block;
+  }
+  .open:hover { transform: translateX(3px); }
+</style>

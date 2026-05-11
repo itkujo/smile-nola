@@ -1,0 +1,378 @@
+---
+/**
+ * /admin/inquiries/<id> — full detail view of one inquiry.
+ * Editable: status + admin notes. Everything else is read-only.
+ */
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { getInquiry } from "@/lib/db";
+
+const id = Number(Astro.params.id);
+const inquiry = Number.isFinite(id) ? getInquiry(id) : undefined;
+if (!inquiry) {
+  return new Response("Inquiry not found", { status: 404 });
+}
+
+// Decode JSON fields for the display.
+let collections: string[] = [];
+try {
+  if (inquiry.collections_interested) {
+    const parsed = JSON.parse(inquiry.collections_interested);
+    if (Array.isArray(parsed)) collections = parsed.map(String);
+  }
+} catch { /* ignore */ }
+
+let collectionFields: Record<string, Record<string, string>> = {};
+try {
+  if (inquiry.collection_fields_json) {
+    const parsed = JSON.parse(inquiry.collection_fields_json);
+    if (parsed && typeof parsed === "object") {
+      collectionFields = parsed as Record<string, Record<string, string>>;
+    }
+  }
+} catch { /* ignore */ }
+---
+
+<AdminLayout title={`Inquiry #${inquiry.id}`} section="inquiries">
+  <p class="back-link"><a href="/admin/inquiries">← All inquiries</a></p>
+
+  <header class="head">
+    <div>
+      <p class="eyebrow">— inquiry #{inquiry.id} —</p>
+      <h1 class="font-deco">{inquiry.first_name} {inquiry.last_name}</h1>
+      <p class="head-meta">
+        <a href={`mailto:${inquiry.email}`}>{inquiry.email}</a> ·
+        <a href={`tel:${inquiry.phone.replace(/[^0-9+]/g, "")}`}>{inquiry.phone}</a> ·
+        <span class="muted">received {inquiry.created_at}</span>
+      </p>
+    </div>
+    <span class={`status-pill is-${inquiry.status}`}>{inquiry.status}</span>
+  </header>
+
+  <section class="status-block">
+    <h2>Update</h2>
+    <form id="status-form" novalidate>
+      <input type="hidden" name="id" value={inquiry.id} />
+      <div class="radio-group">
+        {(["new", "contacted", "closed"] as const).map((s) => (
+          <label class={`status-radio is-${s}`}>
+            <input type="radio" name="status" value={s} checked={inquiry.status === s} />
+            <span>{s}</span>
+          </label>
+        ))}
+      </div>
+
+      <label class="notes-wrap sn-field-wrap">
+        <span class="sn-field-label">Admin notes (internal, not shown to client)</span>
+        <textarea name="notes" rows="4" placeholder="Conversation notes, follow-up dates, vendor connections…">{inquiry.notes ?? ""}</textarea>
+        <span class="sn-underline"></span>
+        <span class="sn-underline-glow"></span>
+      </label>
+
+      <div class="form-actions">
+        <button type="submit" class="btn-gold submit-btn">Save</button>
+        <span class="save-status" aria-live="polite"></span>
+      </div>
+    </form>
+  </section>
+
+  <section class="block">
+    <h2>Contact</h2>
+    <dl class="kv">
+      <div><dt>Name</dt><dd>{inquiry.first_name} {inquiry.last_name}</dd></div>
+      <div><dt>Email</dt><dd><a href={`mailto:${inquiry.email}`}>{inquiry.email}</a></dd></div>
+      <div><dt>Phone</dt><dd><a href={`tel:${inquiry.phone.replace(/[^0-9+]/g, "")}`}>{inquiry.phone}</a></dd></div>
+      <div><dt>Preferred contact</dt><dd>{inquiry.preferred_contact || "—"}</dd></div>
+      <div><dt>Source</dt><dd>{inquiry.source}</dd></div>
+      <div><dt>Received</dt><dd>{inquiry.created_at}</dd></div>
+    </dl>
+  </section>
+
+  <section class="block">
+    <h2>Event</h2>
+    <dl class="kv">
+      <div><dt>Date</dt><dd>{inquiry.event_date || "—"}</dd></div>
+      <div><dt>Type</dt><dd>{inquiry.event_type || "—"}</dd></div>
+      <div><dt>Venue</dt><dd>{inquiry.venue || "—"}</dd></div>
+      <div><dt>Guest count</dt><dd>{inquiry.guest_count ?? "—"}</dd></div>
+      <div><dt>Start</dt><dd>{inquiry.event_start || "—"}</dd></div>
+      <div><dt>End</dt><dd>{inquiry.event_end || "—"}</dd></div>
+      <div><dt>Planner</dt><dd>{inquiry.planner || "—"}</dd></div>
+      <div><dt>Budget range</dt><dd>{inquiry.budget_range || "—"}</dd></div>
+      <div><dt>How they heard</dt><dd>{inquiry.referral || "—"}</dd></div>
+    </dl>
+  </section>
+
+  {collections.length > 0 && (
+    <section class="block">
+      <h2>Collections of interest</h2>
+      <ul class="tags">
+        {collections.map((slug) => <li>{slug}</li>)}
+      </ul>
+
+      {Object.keys(collectionFields).length > 0 && (
+        <div class="cf-groups">
+          {Object.entries(collectionFields).map(([slug, fields]) => (
+            <div class="cf-group">
+              <h3>{slug}</h3>
+              <dl class="kv">
+                {Object.entries(fields).filter(([, v]) => v).map(([k, v]) => (
+                  <div>
+                    <dt>{k.replace(/_/g, " ")}</dt>
+                    <dd>{String(v)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )}
+
+  {inquiry.message && (
+    <section class="block">
+      <h2>What they shared</h2>
+      <div class="message">{inquiry.message}</div>
+    </section>
+  )}
+</AdminLayout>
+
+<script define:vars={{ inquiryId: inquiry.id }}>
+  const form = document.getElementById("status-form");
+  const saveStatus = form?.querySelector(".save-status");
+  const submitBtn = form?.querySelector(".submit-btn");
+
+  form?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!saveStatus || !submitBtn) return;
+    saveStatus.textContent = "";
+
+    const fd = new FormData(form);
+    const status = fd.get("status");
+    const notes = fd.get("notes");
+
+    submitBtn.setAttribute("disabled", "true");
+    submitBtn.textContent = "Saving…";
+
+    try {
+      const res = await fetch(`/api/admin/inquiries/${inquiryId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, notes }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Server responded ${res.status}`);
+      }
+      saveStatus.textContent = "✓ Saved";
+      saveStatus.style.color = "var(--sn-gold)";
+    } catch (err) {
+      saveStatus.textContent = err instanceof Error ? err.message : "Save failed";
+      saveStatus.style.color = "var(--sn-amber)";
+    } finally {
+      submitBtn.removeAttribute("disabled");
+      submitBtn.textContent = "Save";
+    }
+  });
+</script>
+
+<style>
+  .back-link {
+    margin: 0 0 18px;
+    font-size: 0.8rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .back-link a {
+    color: var(--sn-muted-stone);
+    transition: color 200ms ease;
+  }
+  .back-link a:hover { color: var(--sn-gold); }
+
+  .head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-bottom: 36px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--sn-gold-12);
+  }
+  .head .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .head h1 {
+    font-weight: 400;
+    font-size: clamp(28px, 3.8vw, 44px);
+    color: var(--sn-ivory);
+    margin: 8px 0 8px;
+    line-height: 1.05;
+  }
+  .head-meta {
+    color: var(--sn-champagne);
+    font-size: 0.92rem;
+    margin: 0;
+  }
+  .head-meta a { color: var(--sn-champagne); transition: color 200ms ease; }
+  .head-meta a:hover { color: var(--sn-gold); }
+  .head-meta .muted { color: var(--sn-muted-stone); font-size: 0.85rem; }
+
+  .status-pill {
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    border: 1px solid;
+    white-space: nowrap;
+  }
+  .status-pill.is-new       { color: var(--sn-amber);     border-color: var(--sn-amber); background: rgba(255, 178, 63, 0.08); }
+  .status-pill.is-contacted { color: var(--sn-gold);      border-color: var(--sn-gold-40); background: rgba(212, 175, 55, 0.08); }
+  .status-pill.is-closed    { color: var(--sn-muted-stone); border-color: var(--sn-muted-stone); background: rgba(184, 178, 165, 0.06); }
+
+  .block,
+  .status-block {
+    margin-bottom: 36px;
+    padding: 24px;
+    background: var(--sn-soft-black);
+    border: 1px solid var(--sn-gold-24);
+  }
+  .status-block { border-left: 2px solid var(--sn-gold); }
+
+  h2 {
+    color: var(--sn-gold);
+    font-family: var(--font-body);
+    font-size: 0.72rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin: 0 0 18px;
+  }
+
+  .radio-group {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+  }
+  .status-radio {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border: 1px solid var(--sn-gold-24);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 200ms ease;
+    color: var(--sn-ivory);
+    font-size: 0.78rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .status-radio input { appearance: none; }
+  .status-radio:has(input:checked) {
+    background: var(--sn-gold);
+    color: var(--sn-black);
+    border-color: var(--sn-gold);
+    box-shadow: 0 0 16px var(--sn-amber-20);
+  }
+  .status-radio:hover:not(:has(input:checked)) {
+    border-color: var(--sn-gold);
+  }
+
+  .notes-wrap textarea {
+    width: 100%;
+    background: transparent;
+    border: 0;
+    color: var(--sn-ivory);
+    font-family: var(--font-body);
+    font-size: 1rem;
+    padding: 10px 0;
+    resize: vertical;
+    min-height: 90px;
+  }
+  .notes-wrap textarea:focus { outline: none; }
+
+  .form-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .save-status {
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+  }
+
+  .kv {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 18px 24px;
+    margin: 0;
+  }
+  .kv > div { min-width: 0; }
+  dt {
+    color: var(--sn-muted-stone);
+    font-size: 0.65rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  dd {
+    color: var(--sn-ivory);
+    margin: 0;
+    font-size: 0.95rem;
+    word-break: break-word;
+  }
+  dd a { color: var(--sn-champagne); }
+  dd a:hover { color: var(--sn-gold); }
+
+  .tags {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .tags li {
+    border: 1px solid var(--sn-gold-24);
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    color: var(--sn-gold);
+    letter-spacing: 0.06em;
+  }
+
+  .cf-groups {
+    margin-top: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .cf-group {
+    padding: 18px;
+    background: var(--sn-black);
+    border-left: 2px solid var(--sn-gold-40);
+  }
+  .cf-group h3 {
+    margin: 0 0 14px;
+    color: var(--sn-gold);
+    font-size: 0.78rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  .message {
+    color: var(--sn-champagne);
+    font-size: 1rem;
+    line-height: 1.7;
+    white-space: pre-wrap;
+  }
+</style>
