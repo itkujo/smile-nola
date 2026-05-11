@@ -38,7 +38,7 @@ const SERVICE_NAMES: Record<CollectionId, string> = {
 
 const {
   title = "Begin your inquiry",
-  intro = "The more you can share, the more tailored our reply will be. Every field below is optional except your name, email, and phone — we'll follow up within 24 hours.",
+  intro = "Just the basics to start the conversation. We'll reply within 24 hours and gather everything we need for a real quote on the call.",
 } = Astro.props;
 
 const PREFERRED_CONTACTS = ["Email", "Phone", "Text"] as const;
@@ -87,7 +87,11 @@ const BUDGET_RANGES = [
     </label>
   </div>
 
-  <!-- ============ CONTACT BLOCK ============ -->
+  {/* ============ FAST PATH — visible by default ============
+      Purpose of this form is LEAD CAPTURE only. The seven fields below
+      are the minimum we need to reply within 24 hours. Quote-stage
+      detail (venue, budget, guest count, per-collection deep-dive
+      questions, etc.) moves into the optional disclosure underneath. */}
   <fieldset class="block">
     <legend class="section-label">— how to reach you —</legend>
     <div class="grid">
@@ -118,98 +122,21 @@ const BUDGET_RANGES = [
         <span class="sn-underline"></span>
         <span class="sn-underline-glow"></span>
       </label>
-
-      <label class="sn-field-wrap span-2">
-        <span class="sn-field-label">Preferred contact method</span>
-        <select name="preferred_contact">
-          <option value="">— choose —</option>
-          {PREFERRED_CONTACTS.map((c) => (
-            <option value={c}>{c}</option>
-          ))}
-        </select>
-        <span class="sn-underline"></span>
-        <span class="sn-underline-glow"></span>
-      </label>
     </div>
   </fieldset>
 
-  <!-- ============ EVENT BLOCK ============ -->
   <fieldset class="block">
     <legend class="section-label">— about the event —</legend>
     <div class="grid">
-      <label class="sn-field-wrap">
+      <label class="sn-field-wrap span-2">
         <span class="sn-field-label">Event date</span>
         <input type="date" name="event_date" />
         <span class="sn-underline"></span>
         <span class="sn-underline-glow"></span>
       </label>
-
-      <label class="sn-field-wrap">
-        <span class="sn-field-label">Event type</span>
-        <select name="event_type">
-          <option value="">— choose —</option>
-          {EVENT_TYPES.map((t) => (
-            <option value={t}>{t}</option>
-          ))}
-        </select>
-        <span class="sn-underline"></span>
-        <span class="sn-underline-glow"></span>
-      </label>
-
-      <label class="sn-field-wrap span-2">
-        <span class="sn-field-label">Venue (name or location)</span>
-        <input type="text" name="venue" placeholder="e.g. The Sugar Mill · New Orleans, LA" />
-        <span class="sn-underline"></span>
-        <span class="sn-underline-glow"></span>
-      </label>
-
-      <label class="sn-field-wrap">
-        <span class="sn-field-label">Estimated guest count</span>
-        <input type="number" name="guest_count" inputmode="numeric" min="0" max="100000" />
-        <span class="sn-underline"></span>
-        <span class="sn-underline-glow"></span>
-      </label>
-
-      <label class="sn-field-wrap">
-        <span class="sn-field-label">Planner / coordinator</span>
-        <input type="text" name="planner" placeholder="name (if applicable)" />
-        <span class="sn-underline"></span>
-        <span class="sn-underline-glow"></span>
-      </label>
-
-      <label class="sn-field-wrap">
-        <span class="sn-field-label">Event start time</span>
-        <input type="text" name="event_start" placeholder="e.g. 5:00pm" />
-        <span class="sn-underline"></span>
-        <span class="sn-underline-glow"></span>
-      </label>
-
-      <label class="sn-field-wrap">
-        <span class="sn-field-label">Event end time</span>
-        <input type="text" name="event_end" placeholder="e.g. 11:00pm" />
-        <span class="sn-underline"></span>
-        <span class="sn-underline-glow"></span>
-      </label>
-
-      <label class="sn-field-wrap span-2">
-        <span class="sn-field-label">Budget range</span>
-        <select name="budget_range">
-          <option value="">— choose —</option>
-          {BUDGET_RANGES.map((b) => (
-            <option value={b}>{b}</option>
-          ))}
-        </select>
-        <span class="sn-underline"></span>
-        <span class="sn-underline-glow"></span>
-      </label>
     </div>
-  </fieldset>
 
-  <!-- ============ COLLECTIONS BLOCK ============ -->
-  <fieldset class="block">
-    <legend class="section-label">— which collections interest you? —</legend>
-    <p class="block-help">Check any that apply. Selecting a collection reveals a few extra questions specific to it. You can also pick "Other" for something custom.</p>
-
+    <p class="block-help" style="margin-top:22px;">What services are you considering?</p>
     <div class="chip-grid">
       {COLLECTIONS.map((c) => (
         <label class="chip-check">
@@ -229,68 +156,182 @@ const BUDGET_RANGES = [
       </label>
     </div>
 
-    {/* Per-collection question blocks — hidden by default; revealed when the
-        matching chip is checked. */}
-    {COLLECTIONS.map((c) => (
-      <div class="collection-block" data-collection-block={c.slug} hidden>
-        <h3 class="font-deco">{c.shortName} · a few details</h3>
+    <label class="sn-field-wrap" style="margin-top:18px;">
+      <span class="sn-field-label">A short note (optional)</span>
+      <textarea
+        name="message"
+        rows="2"
+        placeholder="What you're planning, anything you want us to know up front. Skip if you'd rather chat live."></textarea>
+      <span class="sn-underline"></span>
+      <span class="sn-underline-glow"></span>
+    </label>
+  </fieldset>
+
+  {/* ============ OPTIONAL DISCLOSURE ============
+      Everything below is opt-in. The summary copy makes the optional
+      nature unmissable so a lead-capture-only buyer never feels they
+      have to fill it. Per-collection deep-dive blocks live in here too —
+      they reveal when the matching chip is checked, but only render
+      visibly once the user has opened this disclosure. */}
+  <details class="more-details">
+    <summary>
+      <span class="more-summary-row">
+        <span class="more-summary-title">Want to share more?</span>
+        <span class="more-summary-pill">Optional</span>
+      </span>
+      <span class="more-summary-sub">
+        Skip if you'd rather. We'll catch up on the rest when we reply.
+      </span>
+    </summary>
+
+    <div class="more-details-inner">
+      <fieldset class="block">
+        <legend class="section-label">— more contact info —</legend>
         <div class="grid">
-          {c.inquiryFormFields.map((field) => (
-            <label class={`sn-field-wrap ${field.type === "textarea" ? "span-2" : ""}`}>
-              <span class="sn-field-label">{field.label}</span>
-              {field.type === "textarea" ? (
-                <textarea
-                  name={`cf_${c.slug}_${field.name}`}
-                  rows="3"
-                  placeholder={field.placeholder}
-                ></textarea>
-              ) : field.type === "select" ? (
-                <select name={`cf_${c.slug}_${field.name}`}>
-                  <option value="">— choose —</option>
-                  {field.options?.map((opt) => <option value={opt}>{opt}</option>)}
-                </select>
-              ) : (
-                <input
-                  type={field.type === "number" ? "number" : "text"}
-                  name={`cf_${c.slug}_${field.name}`}
-                  placeholder={field.placeholder}
-                />
-              )}
-              <span class="sn-underline"></span>
-              <span class="sn-underline-glow"></span>
-            </label>
-          ))}
+          <label class="sn-field-wrap span-2">
+            <span class="sn-field-label">Preferred contact method</span>
+            <select name="preferred_contact">
+              <option value="">— choose —</option>
+              {PREFERRED_CONTACTS.map((c) => (
+                <option value={c}>{c}</option>
+              ))}
+            </select>
+            <span class="sn-underline"></span>
+            <span class="sn-underline-glow"></span>
+          </label>
         </div>
-      </div>
-    ))}
+      </fieldset>
 
-    <div class="collection-block" data-collection-block="other" hidden>
-      <h3 class="font-deco">Custom · tell us what you're building</h3>
-      <label class="sn-field-wrap">
-        <span class="sn-field-label">Additional services or custom needs</span>
-        <textarea name="other_services" rows="4" placeholder="The event you're imagining, the services that aren't on our collections list, the moment you want to create…"></textarea>
-        <span class="sn-underline"></span>
-        <span class="sn-underline-glow"></span>
-      </label>
+      <fieldset class="block">
+        <legend class="section-label">— more about the event —</legend>
+        <div class="grid">
+          <label class="sn-field-wrap">
+            <span class="sn-field-label">Event type</span>
+            <select name="event_type">
+              <option value="">— choose —</option>
+              {EVENT_TYPES.map((t) => (
+                <option value={t}>{t}</option>
+              ))}
+            </select>
+            <span class="sn-underline"></span>
+            <span class="sn-underline-glow"></span>
+          </label>
+
+          <label class="sn-field-wrap">
+            <span class="sn-field-label">Estimated guest count</span>
+            <input type="number" name="guest_count" inputmode="numeric" min="0" max="100000" />
+            <span class="sn-underline"></span>
+            <span class="sn-underline-glow"></span>
+          </label>
+
+          <label class="sn-field-wrap span-2">
+            <span class="sn-field-label">Venue (name or location)</span>
+            <input type="text" name="venue" placeholder="e.g. The Sugar Mill · New Orleans, LA" />
+            <span class="sn-underline"></span>
+            <span class="sn-underline-glow"></span>
+          </label>
+
+          <label class="sn-field-wrap">
+            <span class="sn-field-label">Event start time</span>
+            <input type="text" name="event_start" placeholder="e.g. 5:00pm" />
+            <span class="sn-underline"></span>
+            <span class="sn-underline-glow"></span>
+          </label>
+
+          <label class="sn-field-wrap">
+            <span class="sn-field-label">Event end time</span>
+            <input type="text" name="event_end" placeholder="e.g. 11:00pm" />
+            <span class="sn-underline"></span>
+            <span class="sn-underline-glow"></span>
+          </label>
+
+          <label class="sn-field-wrap">
+            <span class="sn-field-label">Planner / coordinator</span>
+            <input type="text" name="planner" placeholder="name (if applicable)" />
+            <span class="sn-underline"></span>
+            <span class="sn-underline-glow"></span>
+          </label>
+
+          <label class="sn-field-wrap">
+            <span class="sn-field-label">Budget range</span>
+            <select name="budget_range">
+              <option value="">— choose —</option>
+              {BUDGET_RANGES.map((b) => (
+                <option value={b}>{b}</option>
+              ))}
+            </select>
+            <span class="sn-underline"></span>
+            <span class="sn-underline-glow"></span>
+          </label>
+        </div>
+      </fieldset>
+
+      {/* Per-collection question blocks — hidden by default; revealed by
+          JS when the matching chip is checked. Since this whole region
+          is collapsed by default, a lead-capture-only buyer never sees
+          them at all. */}
+      <fieldset class="block">
+        <legend class="section-label">— service-specific details —</legend>
+        <p class="block-help">Questions specific to the services you checked above. Fill what you know.</p>
+        {COLLECTIONS.map((c) => (
+          <div class="collection-block" data-collection-block={c.slug} hidden>
+            <h3 class="font-deco">{SERVICE_NAMES[c.slug]} · <span class="collection-block-sub">{c.shortName} Collection</span></h3>
+            <div class="grid">
+              {c.inquiryFormFields.map((field) => (
+                <label class={`sn-field-wrap ${field.type === "textarea" ? "span-2" : ""}`}>
+                  <span class="sn-field-label">{field.label}</span>
+                  {field.type === "textarea" ? (
+                    <textarea
+                      name={`cf_${c.slug}_${field.name}`}
+                      rows="3"
+                      placeholder={field.placeholder}
+                    ></textarea>
+                  ) : field.type === "select" ? (
+                    <select name={`cf_${c.slug}_${field.name}`}>
+                      <option value="">— choose —</option>
+                      {field.options?.map((opt) => <option value={opt}>{opt}</option>)}
+                    </select>
+                  ) : (
+                    <input
+                      type={field.type === "number" ? "number" : "text"}
+                      name={`cf_${c.slug}_${field.name}`}
+                      placeholder={field.placeholder}
+                    />
+                  )}
+                  <span class="sn-underline"></span>
+                  <span class="sn-underline-glow"></span>
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        <div class="collection-block" data-collection-block="other" hidden>
+          <h3 class="font-deco">Custom · tell us what you're building</h3>
+          <label class="sn-field-wrap">
+            <span class="sn-field-label">Additional services or custom needs</span>
+            <textarea name="other_services" rows="4" placeholder="The event you're imagining, the services that aren't on our collections list, the moment you want to create…"></textarea>
+            <span class="sn-underline"></span>
+            <span class="sn-underline-glow"></span>
+          </label>
+        </div>
+
+        <p class="collection-block-empty" data-collection-block-empty>
+          Check a service above and its specific questions will appear here.
+        </p>
+      </fieldset>
+
+      <fieldset class="block">
+        <legend class="section-label">— how did you find us —</legend>
+        <label class="sn-field-wrap">
+          <span class="sn-field-label">Referral source</span>
+          <input type="text" name="referral" placeholder="Instagram, a friend, a wedding planner, Google…" />
+          <span class="sn-underline"></span>
+          <span class="sn-underline-glow"></span>
+        </label>
+      </fieldset>
     </div>
-  </fieldset>
-
-  <!-- ============ VISION + REFERRAL ============ -->
-  <fieldset class="block">
-    <legend class="section-label">— the vision —</legend>
-    <label class="sn-field-wrap">
-      <span class="sn-field-label">Tell us about the moment you want to create</span>
-      <textarea name="message" rows="6" placeholder="Setting, mood, what you want guests to feel walking in, the feeling you want carried through the night…"></textarea>
-      <span class="sn-underline"></span>
-      <span class="sn-underline-glow"></span>
-    </label>
-    <label class="sn-field-wrap">
-      <span class="sn-field-label">How did you hear about Smile NOLA?</span>
-      <input type="text" name="referral" placeholder="Instagram, a friend, a wedding planner, Google…" />
-      <span class="sn-underline"></span>
-      <span class="sn-underline-glow"></span>
-    </label>
-  </fieldset>
+  </details>
 
   <!-- ============ SUBMIT ============ -->
   <div class="actions">
@@ -456,9 +497,113 @@ const BUDGET_RANGES = [
     color: var(--sn-gold);
     margin: 0 0 22px;
   }
+  .collection-block-sub {
+    color: var(--sn-muted-stone);
+    font-size: 0.7rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    margin-left: 4px;
+  }
+  /* Shown when no chip is checked yet — keeps the section from looking
+     empty if the user opens "Want to share more?" before picking services. */
+  .collection-block-empty {
+    color: var(--sn-muted-stone);
+    font-size: 0.85rem;
+    font-style: italic;
+    margin: 0;
+    padding: 14px 0;
+    text-align: center;
+  }
+  .collection-block-empty[hidden] { display: none; }
   @keyframes block-in {
     from { opacity: 0; transform: translateY(8px); }
     to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ============ Optional disclosure ============ */
+  .more-details {
+    margin: 0 0 48px;
+    border-top: 1px solid var(--sn-gold-12);
+    padding-top: 32px;
+  }
+  /* Hide the default UA triangle so we can style our own */
+  .more-details > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 22px 24px;
+    background: var(--sn-soft-black);
+    border: 1px solid var(--sn-gold-24);
+    border-left: 2px solid var(--sn-gold);
+    transition: border-color 200ms ease, background-color 200ms ease;
+    position: relative;
+  }
+  .more-details > summary::-webkit-details-marker { display: none; }
+  .more-details > summary::before {
+    content: "+";
+    position: absolute;
+    right: 22px;
+    top: 22px;
+    color: var(--sn-gold);
+    font-size: 1.4rem;
+    line-height: 1;
+    font-family: var(--font-body);
+    transition: transform 220ms ease;
+  }
+  .more-details[open] > summary::before {
+    content: "\2212"; /* minus */
+    transform: rotate(0deg);
+  }
+  .more-details > summary:hover {
+    border-color: var(--sn-gold);
+    background: var(--sn-black);
+  }
+  .more-details > summary:focus-visible {
+    outline: 2px solid var(--sn-gold);
+    outline-offset: 3px;
+  }
+  .more-summary-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .more-summary-title {
+    color: var(--sn-ivory);
+    font-size: 1.1rem;
+  }
+  /* The 'Optional' pill is loud on purpose. The whole point of this
+     disclosure is that users feel safe skipping it. */
+  .more-summary-pill {
+    color: var(--sn-gold);
+    background: var(--sn-amber-20);
+    border: 1px solid var(--sn-gold);
+    padding: 3px 12px;
+    border-radius: 999px;
+    font-size: 0.62rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .more-summary-sub {
+    display: block;
+    color: var(--sn-muted-stone);
+    font-size: 0.85rem;
+    margin-top: 8px;
+    line-height: 1.55;
+  }
+  .more-details-inner {
+    padding-top: 32px;
+    animation: details-in 320ms var(--ease-cinematic);
+  }
+  @keyframes details-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  /* Inside the disclosure each fieldset already has its own top border;
+     suppress the first one to avoid a double rule against the summary. */
+  .more-details-inner .block:first-child {
+    border-top: 0;
+    padding-top: 0;
   }
 
   /* ============ ACTIONS ============ */
@@ -496,23 +641,36 @@ const BUDGET_RANGES = [
 
 <script>
   // ============ Per-collection block reveal ============
-  // When a collection chip is checked, show its specific question block.
-  document.querySelectorAll<HTMLInputElement>(
-    '.deep-form input[name="collections_interested"]'
-  ).forEach((checkbox) => {
-    const slug = checkbox.dataset.collection;
-    if (!slug) return;
-    const block = document.querySelector<HTMLElement>(
-      `.deep-form [data-collection-block="${slug}"]`
-    );
-    if (!block) return;
+  // When a collection chip is checked, show its specific question block
+  // inside the optional disclosure. We ALSO toggle the empty-state hint
+  // so the disclosure doesn't look broken when the user expands it before
+  // checking any service.
+  const chipInputs = Array.from(
+    document.querySelectorAll<HTMLInputElement>(
+      '.deep-form input[name="collections_interested"]',
+    ),
+  );
+  const emptyHint = document.querySelector<HTMLElement>(
+    '.deep-form [data-collection-block-empty]',
+  );
 
-    const sync = () => {
+  function syncCollectionBlocks() {
+    let anyChecked = false;
+    chipInputs.forEach((checkbox) => {
+      const slug = checkbox.dataset.collection;
+      if (!slug) return;
+      const block = document.querySelector<HTMLElement>(
+        `.deep-form [data-collection-block="${slug}"]`,
+      );
+      if (!block) return;
       block.hidden = !checkbox.checked;
-    };
-    sync();
-    checkbox.addEventListener("change", sync);
-  });
+      if (checkbox.checked) anyChecked = true;
+    });
+    if (emptyHint) emptyHint.hidden = anyChecked;
+  }
+
+  chipInputs.forEach((cb) => cb.addEventListener("change", syncCollectionBlocks));
+  syncCollectionBlocks();
 
   // ============ Submit ============
   const form = document.querySelector<HTMLFormElement>("#contact-form");
