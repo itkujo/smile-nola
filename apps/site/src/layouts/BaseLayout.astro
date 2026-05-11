@@ -50,6 +50,16 @@ const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? "htt
     <link rel="icon" type="image/svg+xml" href="/logos/icon.svg" />
     <link rel="apple-touch-icon" href="/logos/icon.svg" />
 
+    <!-- Editorial italic serif used as the romantic accent in display headlines
+         (e.g. "your" in the hero). Loaded from Google Fonts; subset to Latin
+         + italic 400 only to keep payload tiny. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,400;1,500&display=swap"
+    />
+
     <!-- OpenGraph -->
     <meta property="og:type" content="website" />
     <meta property="og:title" content={fullTitle} />

@@ -44,7 +44,7 @@ const COLLECTION_TICKER = ["Aurora", "Resonance", "Visionary", "Digital Atelier"
 
         <h1 class="hero-headline font-deco">
           let's design <span class="script">your</span>
-          <HeroCycler words={[...HERO_WORDS]} />
+          <HeroCycler words={[...HERO_WORDS]} trailing="" />
         </h1>
 
         <p class="hero-sub">
@@ -136,24 +136,30 @@ const COLLECTION_TICKER = ["Aurora", "Resonance", "Visionary", "Digital Atelier"
   .hero-headline {
     /* `.font-deco` already sets the family + lowercase. */
     font-weight: 400;
-    font-size: clamp(56px, 9vw, 132px);
-    line-height: 0.96;
+    /* Scaled down ~40% from the v5 mockup — at v5 size the headline ate the
+       whole viewport on common laptop widths. */
+    font-size: clamp(36px, 5.5vw, 80px);
+    line-height: 1.0;
     letter-spacing: 0.02em;
     color: var(--sn-gold);
     margin: 0;
-    max-width: 14ch;
-    text-shadow: 0 0 48px var(--sn-amber-20);
+    max-width: 18ch;
+    text-shadow: 0 0 36px var(--sn-amber-20);
     opacity: 0;
     animation: rise-in 1.4s 1.0s var(--ease-cinematic) forwards;
   }
   .hero-headline .script {
-    font-family: var(--font-signature);
+    /* Editorial italic serif accent — paired with Broadway's geometric caps
+       for high-contrast typographic interest. */
+    font-family: var(--font-italic-serif);
+    font-style: italic;
+    font-weight: 500;
     color: var(--sn-champagne);
-    letter-spacing: 0.01em;
-    text-shadow: 0 0 24px rgba(246, 231, 200, 0.3);
-    font-size: 1.05em;
-    /* Holimount needs to stay capital-cased per its own decorative design,
-       so disable the parent's lowercase. */
+    letter-spacing: 0;
+    text-shadow: 0 0 20px rgba(246, 231, 200, 0.3);
+    /* Cormorant has a smaller x-height than Broadway; bump it a touch so the
+       optical sizing matches. */
+    font-size: 1.15em;
     text-transform: none;
   }
 

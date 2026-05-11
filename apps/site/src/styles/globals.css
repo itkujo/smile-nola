@@ -43,8 +43,17 @@
   --sn-amber-20: rgba(255, 178, 63, 0.2);
   --sn-amber-40: rgba(255, 178, 63, 0.4);
 
-  /* Type system */
+  /* Type system
+     - signature: Holimount, brand canon. Reserved for true signature moments
+       (couple names on proposals, closing thank-yous). NOT for the hero.
+     - italic-serif: editorial italic accent paired with Broadway in display
+       headlines. Cormorant Garamond renders soft, romantic, high-contrast.
+     - deco: Broadway. ALWAYS in lowercase source text (the `.font-deco`
+       utility enforces this — see below).
+     - body: Poppins for body, buttons, forms, labels. */
   --font-signature: "Holimount", "Pinyon Script", cursive;
+  --font-italic-serif: "Cormorant Garamond", "Cormorant", "Playfair Display",
+    Georgia, "Times New Roman", serif;
   --font-deco: "Broadway", "Limelight", "Cinzel Decorative", serif;
   --font-body: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
@@ -67,6 +76,7 @@
   --color-sn-muted-stone: var(--sn-muted-stone);
 
   --font-signature: var(--font-signature);
+  --font-italic-serif: var(--font-italic-serif);
   --font-deco: var(--font-deco);
   --font-body: var(--font-body);
 }
