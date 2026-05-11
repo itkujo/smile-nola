@@ -41,6 +41,16 @@ const {
   <input type="hidden" name="collection" value={collection} />
   <input type="hidden" name="source" value={`collection-${collection}`} />
 
+  {/* Honeypot — hidden from humans, irresistible to dumb bots. Server-side
+      check at /api/inquiry rejects (silently) any submission where this is
+      non-empty. */}
+  <div class="sn-honeypot" aria-hidden="true">
+    <label>
+      Company (leave blank)
+      <input type="text" name="company" tabindex="-1" autocomplete="off" />
+    </label>
+  </div>
+
   <div class="grid">
     <label class="sn-field-wrap">
       <span class="sn-field-label">First name *</span>
@@ -185,6 +195,17 @@ const {
     color: var(--sn-amber);
     font-size: 0.85rem;
     text-align: center;
+  }
+
+  /* Honeypot — positioned off-screen but still in the DOM for bots. */
+  .sn-honeypot {
+    position: absolute !important;
+    left: -9999px !important;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
   }
 </style>
 
