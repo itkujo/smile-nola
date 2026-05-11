@@ -1,16 +1,36 @@
 # =============================================================================
-# Smile NOLA — Coolify deploy compose file
+# Smile NOLA — production compose file (Coolify-ready)
 #
-# Lives at the repo root so Coolify can build apps/site/Dockerfile while
-# mounting the shared ./data directory (also used by apps/intake/ in
-# production) as a persistent volume. SQLite WAL files survive container
-# restarts and redeploys.
+# This file is built to be deployed via Coolify's "Docker Compose" app type.
+# Coolify owns ALL public routing — it injects its own Traefik labels based
+# on the Domain you set in the Coolify UI, then routes traffic to whatever
+# port we `expose` here. That means this file is intentionally domain-
+# agnostic so the same compose can ship to prod, staging, or a preview env
+# without edits.
 #
-# Required env vars (set via Coolify UI, NOT committed):
-#   ADMIN_PASSWORD          — admin login password
-#   ADMIN_SESSION_SECRET    — 32+ random bytes, signs admin cookies
-#   NOTIFY_EMAIL            — where inquiry notifications go
-#   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS  — optional, email is best-effort
+# WHAT YOU SET IN COOLIFY UI (NOT here):
+#   • Domain                      (e.g. https://smile-nola.com)
+#   • Environment variables       (see required + optional sets below)
+#   • Persistent volume mappings  (or accept the bind mount we declare)
+#
+# REQUIRED ENV VARS:
+#   ADMIN_PASSWORD          — single password gate for /admin/*
+#   ADMIN_SESSION_SECRET    — 32+ random bytes; signs the admin cookie
+#                             generate with:  openssl rand -hex 32
+#
+# OPTIONAL ENV VARS:
+#   NOTIFY_EMAIL            — where new inquiries get emailed (best-effort)
+#   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS  — SMTP relay; if any is
+#                             blank the server logs inquiries to stdout and
+#                             still writes them to SQLite
+#
+# WHAT PERSISTS ACROSS DEPLOYS:
+#   • data/leads.db                       — SQLite (inquiries, portfolio
+#                                           items, testimonials, booth leads)
+#   • data/uploads/portfolio/<id>.jpg     — admin-uploaded portfolio thumbnails
+#
+# Both live under one host directory (./data) which is bind-mounted at /data
+# inside the container. Coolify keeps this directory between redeploys.
 # =============================================================================
 
 services:
@@ -19,20 +39,25 @@ services:
       context: ./apps/site
       dockerfile: Dockerfile
     image: smile-nola/site:latest
-    container_name: smile-nola-site
     restart: unless-stopped
 
     environment:
-      # Astro server
+      # ---- Astro / Node server -----------------------------------------------
       NODE_ENV: production
       HOST: "0.0.0.0"
       PORT: "3000"
-      # Where the shared SQLite DB lives inside the container
+
+      # ---- Persistent data location ------------------------------------------
+      # SQLite DB + uploaded thumbnails both live under this directory inside
+      # the container, mounted from the host volume below.
       SMILE_NOLA_DB_DIR: "/data"
-      # Admin
+
+      # ---- Admin auth (REQUIRED) ---------------------------------------------
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET}
-      # Inquiry notifications (all optional)
+
+      # ---- Inquiry email notifications (OPTIONAL) ----------------------------
+      # If any are blank, the app skips SMTP and just writes to SQLite.
       NOTIFY_EMAIL: ${NOTIFY_EMAIL:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-}
@@ -40,33 +65,27 @@ services:
       SMTP_PASS: ${SMTP_PASS:-}
 
     volumes:
-      # Persistent SQLite store, shared with the booth intake.
+      # Persistent host directory — survives container rebuilds + redeploys.
+      # Coolify treats this as a managed bind mount; the path on disk is
+      # whatever directory Coolify allocates for the application.
       - ./data:/data
 
     expose:
+      # Coolify reads this and wires Traefik to route the configured Domain
+      # → this internal port. We do NOT publish a host port — Coolify's
+      # reverse proxy is the only public entrypoint.
       - "3000"
 
-    # ---- Coolify / Traefik routing labels ---------------------------------
-    # Coolify reads these to attach the public domain + automatic Let's Encrypt
-    # cert. Adjust the network name and entrypoint to match your Coolify config
-    # if it differs.
-    labels:
-      traefik.enable: "true"
-      # HTTPS router
-      traefik.http.routers.smile-nola-site.rule: "Host(`smile-nola.com`) || Host(`www.smile-nola.com`)"
-      traefik.http.routers.smile-nola-site.entrypoints: "https"
-      traefik.http.routers.smile-nola-site.tls: "true"
-      traefik.http.routers.smile-nola-site.tls.certresolver: "letsencrypt"
-      traefik.http.services.smile-nola-site.loadbalancer.server.port: "3000"
-      # Redirect HTTP → HTTPS
-      traefik.http.routers.smile-nola-site-http.rule: "Host(`smile-nola.com`) || Host(`www.smile-nola.com`)"
-      traefik.http.routers.smile-nola-site-http.entrypoints: "http"
-      traefik.http.routers.smile-nola-site-http.middlewares: "redirect-to-https"
-      traefik.http.middlewares.redirect-to-https.redirectscheme.scheme: "https"
-
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      # Node 22 has native fetch — no extra deps needed for the probe.
+      # A 2xx response from the homepage means the SSR pipeline + DB
+      # bootstrap both succeeded.
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 20s
+      start_period: 25s
