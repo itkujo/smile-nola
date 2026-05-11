@@ -88,12 +88,27 @@ function getEmbedSrc(provider: string | null, embedId: string | null): string {
         </div>
 
         <aside class="c-hero-poster" aria-hidden="true">
-          <div class="poster-inner">
-            <span class="poster-initial font-deco">{initial}</span>
-            <span class="poster-name font-deco">{collection.shortName}</span>
-            <DecoCorner position="tl" size="sm" />
-            <DecoCorner position="br" size="sm" />
-          </div>
+          {collection.portraitImage ? (
+            <div class="poster-inner has-image">
+              <img
+                src={collection.portraitImage}
+                alt=""
+                loading="eager"
+                decoding="async"
+                width="1122"
+                height="1402"
+              />
+              <DecoCorner position="tl" size="sm" />
+              <DecoCorner position="br" size="sm" />
+            </div>
+          ) : (
+            <div class="poster-inner">
+              <span class="poster-initial font-deco">{initial}</span>
+              <span class="poster-name font-deco">{collection.shortName}</span>
+              <DecoCorner position="tl" size="sm" />
+              <DecoCorner position="br" size="sm" />
+            </div>
+          )}
         </aside>
       </div>
     </section>
@@ -331,6 +346,18 @@ function getEmbedSrc(provider: string | null, embedId: string | null): string {
     display: grid;
     place-items: center;
     overflow: hidden;
+  }
+  .poster-inner.has-image {
+    background: var(--sn-black);
+  }
+  .poster-inner.has-image img {
+    width: 100%;
+    height: 100%;
+    /* contain (not cover) so the full portrait \u2014 including the
+       Smile NOLA wordmark + collection name baked into the top of the
+       art \u2014 stays visible end to end. */
+    object-fit: contain;
+    display: block;
   }
   .poster-initial {
     font-size: clamp(150px, 28vw, 300px);

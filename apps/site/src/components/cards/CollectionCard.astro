@@ -83,10 +83,13 @@ const learnHref = `/collections/${collection.slug}`;
   .image {
     position: relative;
     display: block;
-    aspect-ratio: 4 / 3;
+    /* Match the landscape source ratio (1672x941 = ~16:9) so the full
+       artwork shows intact. The background fills any micro-gap when
+       different-aspect art is dropped in later. */
+    aspect-ratio: 16 / 9;
     overflow: hidden;
     border: 1px solid var(--sn-gold-24);
-    background-color: var(--sn-soft-black);
+    background-color: var(--sn-black);
     transition: border-color 280ms ease, transform 400ms var(--ease-cinematic);
   }
   .image:hover,
@@ -98,12 +101,18 @@ const learnHref = `/collections/${collection.slug}`;
   .image img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    /* contain (not cover) guarantees the whole image stays visible \u2014
+       crucial because the source art is composed with text + logo near the
+       edges. Future raw scene photography can be swapped in without code
+       changes \u2014 contain will still behave correctly. */
+    object-fit: contain;
     display: block;
     transition: transform 600ms var(--ease-cinematic);
   }
   .image:hover img {
-    transform: scale(1.03);
+    /* Slight zoom on hover, but transform-origin centered means content
+       stays framed without panning off the edges. */
+    transform: scale(1.02);
   }
 
   .placeholder {

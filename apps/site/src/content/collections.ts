@@ -82,10 +82,16 @@ export interface Collection {
   whatsIncluded: readonly string[];
   inquiryFormFields: readonly InquiryFieldSpec[];
   /**
-   * Path under /images/collections/ — or null if no real photo yet (the card
-   * will render a typographic placeholder).
+   * Landscape image (~16:9). Used for the homepage CollectionCard slot.
+   * Null falls back to the typographic placeholder.
    */
   heroImage: string | null;
+  /**
+   * Portrait image (~4:5). Used for the side-poster on the collection's
+   * own /collections/<slug> page. Null falls back to the typographic
+   * placeholder.
+   */
+  portraitImage?: string | null;
   cta: string;
   /** Pricing surface. Optional — collections without pricing skip these renders. */
   pricing?: PricingSurface;
@@ -156,7 +162,8 @@ export const COLLECTIONS: readonly Collection[] = [
         placeholder: "e.g. 7pm-11pm during reception",
       },
     ],
-    heroImage: null,
+    heroImage: "/images/collections/smile-landscape.png",
+    portraitImage: "/images/collections/smile-portrait.png",
     cta: "Start Your Smile Inquiry",
     pricing: {
       startsAt: 695,
@@ -249,7 +256,8 @@ export const COLLECTIONS: readonly Collection[] = [
         placeholder: "e.g. teaser within 7 days, full film within 8 weeks",
       },
     ],
-    heroImage: null,
+    heroImage: "/images/collections/visionary-landscape.png",
+    portraitImage: "/images/collections/visionary-portrait.png",
     cta: "Start Your Visionary Inquiry",
     pricing: {
       startsAt: 1500,
@@ -320,7 +328,8 @@ export const COLLECTIONS: readonly Collection[] = [
         type: "textarea",
       },
     ],
-    heroImage: null,
+    heroImage: "/images/collections/digital-atelier-landscape.png",
+    portraitImage: "/images/collections/digital-atelier-portrait.png",
     cta: "Start Your Atelier Inquiry",
     pricing: {
       startsAt: 500,
@@ -382,7 +391,8 @@ export const COLLECTIONS: readonly Collection[] = [
         type: "text",
       },
     ],
-    heroImage: null,
+    heroImage: "/images/collections/aurora-landscape.png",
+    portraitImage: "/images/collections/aurora-portrait.png",
     cta: "Start Your Aurora Inquiry",
     pricing: {
       startsAt: 2000,
@@ -458,7 +468,8 @@ export const COLLECTIONS: readonly Collection[] = [
         placeholder: "e.g. wedge monitors for the band, FOH for vocals…",
       },
     ],
-    heroImage: null,
+    heroImage: "/images/collections/resonance-landscape.png",
+    portraitImage: "/images/collections/resonance-portrait.png",
     cta: "Start Your Resonance Inquiry",
     pricing: {
       startsAt: 2000,
