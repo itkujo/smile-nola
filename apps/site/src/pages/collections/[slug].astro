@@ -1,0 +1,371 @@
+---
+/**
+ * Dynamic collection page: /collections/<slug>
+ *
+ * Handles all five collections from a single template. Looks up the collection
+ * by slug; returns a 404 if the slug doesn't match. All content comes from
+ * src/content/collections.ts — no hard-coded copy in this file.
+ *
+ * Page rhythm (per spec §4.3):
+ *   1. Hero (collection name + tagline, lighter than homepage hero)
+ *   2. Philosophy (philosophyLong)
+ *   3. What's Included (bullets)
+ *   4. Portfolio (related videos — empty state until admin populates)
+ *   5. Inquiry form (lightweight, 5 common fields + message)
+ *   6. Other Collections (lateral exploration strip)
+ */
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import SiteHeader from "@/components/layout/SiteHeader.astro";
+import SiteFooter from "@/components/layout/SiteFooter.astro";
+import AmbientGlow from "@/components/brand/AmbientGlow.astro";
+import DecoCorner from "@/components/brand/DecoCorner.astro";
+import DecoOrnament from "@/components/brand/DecoOrnament.astro";
+import GoldDivider from "@/components/brand/GoldDivider.astro";
+import InquiryFormShort from "@/components/forms/InquiryFormShort.astro";
+import OtherCollections from "@/components/cards/OtherCollections.astro";
+import { collectionBySlug } from "@/content/collections";
+
+const { slug } = Astro.params;
+if (!slug) return Astro.redirect("/collections");
+
+const collection = collectionBySlug(slug);
+if (!collection) {
+  return new Response("Collection not found", { status: 404 });
+}
+
+const initial = collection.shortName.charAt(0);
+---
+
+<BaseLayout
+  title={`${collection.displayName} · Smile NOLA`}
+  description={collection.philosophy}
+>
+  <SiteHeader />
+
+  <main id="main">
+    <!-- ============ COLLECTION HERO ============ -->
+    <section class="c-hero" aria-labelledby="c-title">
+      <DecoOrnament opacity={0.04} size="100vh" />
+      <AmbientGlow />
+      <DecoCorner position="tl" size="md" animate delay={400} />
+      <DecoCorner position="tr" size="md" animate delay={500} />
+      <DecoCorner position="bl" size="md" animate delay={600} />
+      <DecoCorner position="br" size="md" animate delay={700} />
+
+      <div class="c-hero-grid">
+        <div class="c-hero-text">
+          <p class="eyebrow">— the smile nola collections —</p>
+          <h1 id="c-title" class="c-hero-title font-deco">{collection.shortName}</h1>
+          <p class="c-hero-display font-deco">
+            <span class="script">{collection.displayName.replace(/^The /, "")}.</span>
+          </p>
+          <p class="c-hero-tagline">{collection.tagline}</p>
+
+          <div class="c-hero-actions">
+            <a href="#inquire" class="btn-gold">Begin your inquiry</a>
+            <a href="#whats-included" class="btn-ghost">What's included</a>
+          </div>
+        </div>
+
+        <aside class="c-hero-poster" aria-hidden="true">
+          <div class="poster-inner">
+            <span class="poster-initial font-deco">{initial}</span>
+            <span class="poster-name font-deco">{collection.shortName}</span>
+            <DecoCorner position="tl" size="sm" />
+            <DecoCorner position="br" size="sm" />
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ============ PHILOSOPHY ============ -->
+    <section class="philosophy" aria-labelledby="philosophy-heading">
+      <p class="eyebrow reveal">— philosophy —</p>
+      <h2 id="philosophy-heading" class="font-deco reveal">why this collection exists.</h2>
+      <div class="philosophy-body reveal">
+        {collection.philosophyLong.split("\n\n").map((para) => (
+          <p>{para}</p>
+        ))}
+      </div>
+      <div class="reveal" style="display: flex; justify-content: center; margin-top: 36px;">
+        <GoldDivider width="180px" />
+      </div>
+    </section>
+
+    <!-- ============ WHAT'S INCLUDED ============ -->
+    <section id="whats-included" class="whats-included" aria-labelledby="included-heading">
+      <header class="reveal">
+        <p class="eyebrow">— what's included —</p>
+        <h2 id="included-heading" class="font-deco">designed end to end.</h2>
+      </header>
+      <ul class="bullets reveal-stagger">
+        {collection.whatsIncluded.map((line) => (
+          <li class="reveal">
+            <span class="bullet-mark" aria-hidden="true"></span>
+            <span class="bullet-text">{line}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <!-- ============ PORTFOLIO (empty state until admin populates) ============ -->
+    <section class="portfolio-teaser" aria-labelledby="port-heading">
+      <header class="reveal">
+        <p class="eyebrow">— portfolio —</p>
+        <h2 id="port-heading" class="font-deco">recent {collection.shortName.toLowerCase()} work.</h2>
+      </header>
+      <div class="empty reveal" role="status">
+        <p>Films and case studies for this collection will appear here as they're added. In the meantime, inquire below — we'll share recent work that matches your event.</p>
+      </div>
+    </section>
+
+    <!-- ============ INQUIRY ============ -->
+    <section class="inquiry" aria-labelledby="inquiry-heading">
+      <header class="reveal">
+        <p class="eyebrow">— begin your inquiry —</p>
+        <h2 id="inquiry-heading" class="font-deco">design the moment with us.</h2>
+      </header>
+      <div class="reveal">
+        <InquiryFormShort
+          collection={collection.slug}
+          intro={`A few details about your event and we'll be in touch within 24 hours with thoughts on what ${collection.shortName} can do for your day.`}
+        />
+      </div>
+    </section>
+
+    <!-- ============ OTHER COLLECTIONS ============ -->
+    <OtherCollections current={collection.slug} />
+  </main>
+
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  /* ============ HERO ============ */
+  .c-hero {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--sn-black);
+    padding: clamp(140px, 18vh, 200px) clamp(28px, 6vw, 96px) clamp(80px, 12vh, 140px);
+    border-bottom: 1px solid var(--sn-gold-24);
+  }
+  .c-hero-grid {
+    position: relative;
+    z-index: 10;
+    max-width: 1300px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: clamp(32px, 5vw, 64px);
+    align-items: center;
+  }
+  @media (min-width: 900px) {
+    .c-hero-grid {
+      grid-template-columns: 1.15fr 1fr;
+    }
+  }
+
+  .c-hero-text {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .c-hero-title {
+    font-weight: 400;
+    font-size: clamp(48px, 7vw, 120px);
+    line-height: 0.95;
+    letter-spacing: 0.02em;
+    color: var(--sn-gold);
+    text-shadow: 0 0 36px var(--sn-amber-20);
+    margin: 0;
+  }
+  .c-hero-display {
+    margin: -10px 0 0;
+    color: var(--sn-champagne);
+    font-weight: 400;
+    font-size: clamp(20px, 2vw, 28px);
+    line-height: 1.1;
+    text-transform: lowercase;
+    letter-spacing: 0.04em;
+  }
+  .c-hero-display .script {
+    font-family: var(--font-italic-serif);
+    font-style: italic;
+    color: var(--sn-champagne);
+    font-size: 1.2em;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .c-hero-tagline {
+    color: var(--sn-muted-stone);
+    font-size: 0.9rem;
+    letter-spacing: 0.06em;
+    margin: 6px 0 0;
+  }
+  .c-hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 20px;
+  }
+
+  .c-hero-poster {
+    position: relative;
+    aspect-ratio: 4 / 5;
+    width: 100%;
+    max-width: 480px;
+    justify-self: end;
+  }
+  @media (max-width: 900px) {
+    .c-hero-poster { justify-self: center; max-width: 320px; aspect-ratio: 1; }
+  }
+  .poster-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background:
+      radial-gradient(50% 60% at 50% 45%, var(--sn-gold-12), transparent 65%),
+      linear-gradient(135deg, var(--sn-black) 0%, var(--sn-soft-black) 100%);
+    border: 1px solid var(--sn-gold-24);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+  }
+  .poster-initial {
+    font-size: clamp(150px, 28vw, 300px);
+    line-height: 0.78;
+    color: var(--sn-gold);
+    opacity: 0.18;
+    text-shadow: 0 0 40px var(--sn-amber-20);
+    user-select: none;
+  }
+  .poster-name {
+    position: absolute;
+    bottom: 22px;
+    left: 22px;
+    color: var(--sn-gold);
+    font-size: 0.75rem;
+    letter-spacing: 0.35em;
+    text-transform: lowercase;
+    opacity: 0.7;
+  }
+
+  /* ============ PHILOSOPHY ============ */
+  .philosophy {
+    background-color: var(--sn-soft-black);
+    padding: clamp(72px, 12vh, 140px) clamp(28px, 6vw, 96px);
+    text-align: center;
+  }
+  .philosophy h2 {
+    font-weight: 400;
+    font-size: clamp(28px, 4vw, 48px);
+    line-height: 1.05;
+    color: var(--sn-ivory);
+    margin: 14px auto 0;
+    max-width: 20ch;
+  }
+  .philosophy-body {
+    max-width: 60ch;
+    margin: 32px auto 0;
+    color: var(--sn-champagne);
+    text-align: left;
+  }
+  .philosophy-body p {
+    font-size: clamp(0.96rem, 1.15vw, 1.08rem);
+    line-height: 1.8;
+    margin: 0 0 22px;
+  }
+
+  /* ============ WHAT'S INCLUDED ============ */
+  .whats-included {
+    background-color: var(--sn-black);
+    padding: clamp(72px, 12vh, 140px) clamp(28px, 6vw, 96px);
+  }
+  .whats-included header {
+    text-align: center;
+    margin-bottom: 42px;
+  }
+  .whats-included h2 {
+    font-weight: 400;
+    font-size: clamp(26px, 3.4vw, 42px);
+    color: var(--sn-ivory);
+    margin: 12px 0 0;
+  }
+  .bullets {
+    max-width: 780px;
+    margin: 0 auto;
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .bullets li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 18px;
+    align-items: baseline;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--sn-gold-12);
+  }
+  .bullets li:last-of-type { border-bottom: 0; }
+  .bullet-mark {
+    width: 10px;
+    height: 10px;
+    transform: rotate(45deg);
+    background: var(--sn-gold);
+    box-shadow: 0 0 10px var(--sn-amber-40);
+    margin-top: 8px;
+  }
+  .bullet-text {
+    color: var(--sn-ivory);
+    font-size: 1.02rem;
+    line-height: 1.7;
+  }
+
+  /* ============ PORTFOLIO TEASER ============ */
+  .portfolio-teaser {
+    background-color: var(--sn-soft-black);
+    padding: clamp(72px, 12vh, 140px) clamp(28px, 6vw, 96px);
+    text-align: center;
+  }
+  .portfolio-teaser h2 {
+    font-weight: 400;
+    font-size: clamp(26px, 3.4vw, 42px);
+    color: var(--sn-ivory);
+    margin: 12px 0 0;
+  }
+  .empty {
+    max-width: 56ch;
+    margin: 36px auto 0;
+    padding: 28px;
+    border: 1px dashed var(--sn-gold-24);
+    color: var(--sn-muted-stone);
+    font-size: 0.95rem;
+    line-height: 1.7;
+  }
+  .empty p { margin: 0; }
+
+  /* ============ INQUIRY ============ */
+  .inquiry {
+    background-color: var(--sn-black);
+    padding: clamp(72px, 12vh, 140px) clamp(28px, 6vw, 96px);
+  }
+  .inquiry header {
+    text-align: center;
+    margin-bottom: 44px;
+  }
+  .inquiry h2 {
+    font-weight: 400;
+    font-size: clamp(26px, 3.4vw, 42px);
+    color: var(--sn-ivory);
+    margin: 12px 0 0;
+  }
+</style>

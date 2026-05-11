@@ -1,0 +1,118 @@
+---
+/**
+ * OtherCollections — strip of small cards linking to every collection that
+ * isn't the one currently being viewed. Renders at the bottom of each
+ * collection page so the visitor can explore laterally without going back
+ * to the homepage.
+ */
+import { COLLECTIONS } from "@/content/collections";
+import type { CollectionId } from "@/content/collection-id";
+
+interface Props {
+  /** Slug of the collection that's currently rendered — excluded from the strip. */
+  current: CollectionId;
+}
+
+const { current } = Astro.props;
+const others = COLLECTIONS.filter((c) => c.slug !== current);
+---
+
+<section class="others" aria-labelledby="others-heading">
+  <header class="head">
+    <p class="eyebrow">— continue exploring —</p>
+    <h2 id="others-heading" class="font-deco">other collections.</h2>
+  </header>
+
+  <div class="grid">
+    {others.map((c) => (
+      <a class="card reveal" href={`/collections/${c.slug}`}>
+        <span class="initial font-deco" aria-hidden="true">{c.shortName.charAt(0)}</span>
+        <div class="body">
+          <h3 class="font-deco">{c.shortName}</h3>
+          <p>{c.tagline.split("·")[0].trim()}</p>
+        </div>
+        <span class="arrow" aria-hidden="true">→</span>
+      </a>
+    ))}
+  </div>
+</section>
+
+<style>
+  .others {
+    background: var(--sn-soft-black);
+    border-top: 1px solid var(--sn-gold-12);
+    padding: clamp(64px, 10vh, 120px) clamp(28px, 6vw, 96px);
+  }
+  .head {
+    text-align: center;
+    margin-bottom: clamp(36px, 5vw, 56px);
+  }
+  .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0 0 14px;
+  }
+  .head h2 {
+    margin: 0;
+    font-weight: 400;
+    font-size: clamp(24px, 3vw, 38px);
+    color: var(--sn-ivory);
+    line-height: 1.05;
+  }
+
+  .grid {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 18px;
+  }
+  .card {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 16px;
+    padding: 22px 22px 22px 18px;
+    background: var(--sn-black);
+    border: 1px solid var(--sn-gold-24);
+    transition:
+      border-color 220ms ease,
+      transform 320ms var(--ease-cinematic),
+      box-shadow 220ms ease;
+  }
+  .card:hover,
+  .card:focus-visible {
+    border-color: var(--sn-gold);
+    transform: translateY(-2px);
+    box-shadow: 0 0 24px var(--sn-amber-20);
+    outline: none;
+  }
+  .initial {
+    font-size: 56px;
+    line-height: 0.8;
+    color: var(--sn-gold);
+    opacity: 0.35;
+    user-select: none;
+  }
+  .body h3 {
+    margin: 0 0 4px;
+    font-weight: 400;
+    font-size: 1.05rem;
+    color: var(--sn-ivory);
+    line-height: 1;
+  }
+  .body p {
+    color: var(--sn-muted-stone);
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    margin: 0;
+  }
+  .arrow {
+    color: var(--sn-gold);
+    font-size: 1.1rem;
+    transition: transform 200ms ease;
+  }
+  .card:hover .arrow { transform: translateX(4px); }
+</style>

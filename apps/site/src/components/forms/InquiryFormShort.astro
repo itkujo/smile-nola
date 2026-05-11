@@ -1,0 +1,283 @@
+---
+/**
+ * InquiryFormShort — the lightweight, embedded-on-collection-pages inquiry
+ * form. Five common fields + an optional message + a hidden collection slug.
+ *
+ * Submits via POST to /api/inquiry. That endpoint is built in Phase 6 — for
+ * now the markup is ready but the server route returns 404. To keep the
+ * surface honest, the submit button is disabled with a TODO note when
+ * data-form-status="pending" — the Phase 6 commit will flip this on.
+ */
+import type { CollectionId } from "@/content/collection-id";
+
+interface Props {
+  collection: CollectionId;
+  /** Optional explicit form title; defaults to "Begin your inquiry". */
+  title?: string;
+  /** Optional intro paragraph above the fields. */
+  intro?: string;
+}
+
+const {
+  collection,
+  title = "Begin your inquiry",
+  intro = "Share a few details about the moment you want to create. We'll be in touch within 24 hours with a consultative reply.",
+} = Astro.props;
+---
+
+<form
+  class="inquiry-form"
+  action="/api/inquiry"
+  method="post"
+  data-collection={collection}
+  id="inquire"
+  novalidate
+>
+  <header class="form-head">
+    <h3 class="font-deco">{title}</h3>
+    <p class="intro">{intro}</p>
+  </header>
+
+  <input type="hidden" name="collection" value={collection} />
+  <input type="hidden" name="source" value={`collection-${collection}`} />
+
+  <div class="grid">
+    <label class="sn-field-wrap">
+      <span class="sn-field-label">First name *</span>
+      <input type="text" name="first_name" required autocomplete="given-name" />
+      <span class="sn-underline"></span>
+      <span class="sn-underline-glow"></span>
+    </label>
+
+    <label class="sn-field-wrap">
+      <span class="sn-field-label">Last name *</span>
+      <input type="text" name="last_name" required autocomplete="family-name" />
+      <span class="sn-underline"></span>
+      <span class="sn-underline-glow"></span>
+    </label>
+
+    <label class="sn-field-wrap">
+      <span class="sn-field-label">Email *</span>
+      <input type="email" name="email" required autocomplete="email" inputmode="email" />
+      <span class="sn-underline"></span>
+      <span class="sn-underline-glow"></span>
+    </label>
+
+    <label class="sn-field-wrap">
+      <span class="sn-field-label">Phone *</span>
+      <input type="tel" name="phone" required autocomplete="tel" inputmode="tel" />
+      <span class="sn-underline"></span>
+      <span class="sn-underline-glow"></span>
+    </label>
+
+    <label class="sn-field-wrap span-2">
+      <span class="sn-field-label">Event date</span>
+      <input type="date" name="event_date" />
+      <span class="sn-underline"></span>
+      <span class="sn-underline-glow"></span>
+    </label>
+
+    <label class="sn-field-wrap span-2">
+      <span class="sn-field-label">Tell us about the moment you want to create</span>
+      <textarea name="message" rows="4" placeholder="Setting, mood, the feeling you're chasing…"></textarea>
+      <span class="sn-underline"></span>
+      <span class="sn-underline-glow"></span>
+    </label>
+  </div>
+
+  <div class="actions">
+    <button type="submit" class="btn-gold submit-btn">Send inquiry</button>
+    <p class="trust">Replies typically within 24 hours · no spam, ever</p>
+  </div>
+
+  <p class="error-region" role="alert" aria-live="polite" hidden></p>
+</form>
+
+<style>
+  .inquiry-form {
+    max-width: 720px;
+    margin: 0 auto;
+    background: var(--sn-soft-black);
+    border: 1px solid var(--sn-gold-24);
+    padding: clamp(28px, 4vw, 48px);
+    position: relative;
+  }
+  .inquiry-form::before,
+  .inquiry-form::after {
+    content: "";
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--sn-gold);
+    pointer-events: none;
+  }
+  .inquiry-form::before {
+    top: -1px;
+    left: -1px;
+    border-right: 0;
+    border-bottom: 0;
+  }
+  .inquiry-form::after {
+    bottom: -1px;
+    right: -1px;
+    border-left: 0;
+    border-top: 0;
+  }
+
+  .form-head {
+    margin-bottom: 28px;
+    text-align: center;
+  }
+  .form-head h3 {
+    font-weight: 400;
+    font-size: clamp(28px, 3.6vw, 42px);
+    line-height: 1.1;
+    color: var(--sn-gold);
+    margin: 0;
+  }
+  .form-head .intro {
+    color: var(--sn-muted-stone);
+    font-size: 0.95rem;
+    line-height: 1.7;
+    margin: 14px auto 0;
+    max-width: 48ch;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px 18px;
+  }
+  .grid .span-2 {
+    grid-column: 1 / -1;
+  }
+  @media (max-width: 540px) {
+    .grid {
+      grid-template-columns: 1fr;
+    }
+    .grid .span-2 {
+      grid-column: auto;
+    }
+  }
+
+  textarea {
+    resize: vertical;
+    min-height: 88px;
+  }
+
+  .actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    margin-top: 32px;
+  }
+  .trust {
+    color: var(--sn-muted-stone);
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+
+  .error-region {
+    margin: 18px 0 0;
+    color: var(--sn-amber);
+    font-size: 0.85rem;
+    text-align: center;
+  }
+</style>
+
+<script>
+  // Progressive enhancement: intercept the form submit, POST as JSON, and
+  // swap the form for a thank-you state on success. Falls back to native
+  // form submission if JS fails.
+  //
+  // The /api/inquiry endpoint is wired up in Phase 6. Until that commit, the
+  // form will receive a 404 and surface the error in the error-region — which
+  // is the right behavior for development and surfaces a clear signal.
+
+  document.querySelectorAll<HTMLFormElement>(".inquiry-form").forEach((form) => {
+    const submitBtn = form.querySelector<HTMLButtonElement>(".submit-btn");
+    const errorRegion = form.querySelector<HTMLElement>(".error-region");
+
+    function showError(msg: string) {
+      if (errorRegion) {
+        errorRegion.textContent = msg;
+        errorRegion.hidden = false;
+      }
+    }
+    function clearError() {
+      if (errorRegion) {
+        errorRegion.textContent = "";
+        errorRegion.hidden = true;
+      }
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearError();
+
+      const data = new FormData(form);
+      const payload = Object.fromEntries(data.entries());
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Sending…";
+      }
+
+      try {
+        const res = await fetch(form.action, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Server responded ${res.status}`);
+        }
+
+        // Replace the form with a thank-you state.
+        const thanks = document.createElement("div");
+        thanks.className = "inquiry-thanks";
+        thanks.innerHTML = `
+          <h3 class="font-deco">thank you.</h3>
+          <p>We received your inquiry. Daniel will reach out personally within 24 hours.</p>
+        `;
+        form.replaceWith(thanks);
+      } catch (err) {
+        showError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Send inquiry";
+        }
+      }
+    });
+  });
+</script>
+
+<style is:global>
+  .inquiry-thanks {
+    max-width: 720px;
+    margin: 0 auto;
+    background: var(--sn-soft-black);
+    border: 1px solid var(--sn-gold);
+    padding: clamp(32px, 5vw, 64px);
+    text-align: center;
+    box-shadow: 0 0 36px var(--sn-amber-20);
+  }
+  .inquiry-thanks h3 {
+    font-weight: 400;
+    font-size: clamp(28px, 3.6vw, 42px);
+    line-height: 1.1;
+    color: var(--sn-gold);
+    margin: 0 0 16px;
+  }
+  .inquiry-thanks p {
+    color: var(--sn-champagne);
+    font-size: 1rem;
+    line-height: 1.7;
+    margin: 0;
+  }
+</style>

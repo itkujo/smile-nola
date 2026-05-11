@@ -1,0 +1,117 @@
+---
+/**
+ * /collections — overview page listing all five collections.
+ *
+ * Reuses the homepage CollectionCard with the same alternating layout, but
+ * adds a dedicated header section so the page is its own destination (e.g.
+ * for emails that link directly here instead of the home hero).
+ */
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import SiteHeader from "@/components/layout/SiteHeader.astro";
+import SiteFooter from "@/components/layout/SiteFooter.astro";
+import AmbientGlow from "@/components/brand/AmbientGlow.astro";
+import DecoOrnament from "@/components/brand/DecoOrnament.astro";
+import GoldDivider from "@/components/brand/GoldDivider.astro";
+import CollectionCard from "@/components/cards/CollectionCard.astro";
+import { COLLECTIONS } from "@/content/collections";
+---
+
+<BaseLayout
+  title="Collections · Smile NOLA"
+  description="Five collections, engineered as one polished evening: Smile photo booth, Visionary cinematic videography, Digital Atelier event web and design, Aurora lighting and video walls, and Resonance concert-grade sound."
+>
+  <SiteHeader />
+
+  <main id="main">
+    <!-- ============ INTRO ============ -->
+    <section class="overview-hero" aria-labelledby="ov-title">
+      <DecoOrnament opacity={0.04} />
+      <AmbientGlow />
+
+      <div class="ov-inner">
+        <p class="eyebrow">— the smile nola collections —</p>
+        <h1 id="ov-title" class="ov-title font-deco">
+          five collections. <span class="script">one</span> polished evening.
+        </h1>
+        <p class="ov-body">
+          Smile NOLA designs cinematic event experiences end to end. Choose the
+          collections that fit your day — or let us help you compose the full
+          picture.
+        </p>
+        <GoldDivider width="200px" />
+      </div>
+    </section>
+
+    <!-- ============ STACK ============ -->
+    <section class="collections-stack reveal-stagger">
+      {COLLECTIONS.map((collection, i) => (
+        <CollectionCard
+          collection={collection}
+          imageSide={i % 2 === 0 ? "left" : "right"}
+          index={i}
+        />
+      ))}
+    </section>
+  </main>
+
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  .overview-hero {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--sn-black);
+    padding: clamp(140px, 18vh, 200px) clamp(28px, 6vw, 96px) clamp(72px, 10vh, 120px);
+    text-align: center;
+    border-bottom: 1px solid var(--sn-gold-24);
+  }
+  .ov-inner {
+    position: relative;
+    z-index: 10;
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+  }
+  .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.72rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .ov-title {
+    font-weight: 400;
+    font-size: clamp(34px, 5vw, 72px);
+    line-height: 1.05;
+    color: var(--sn-gold);
+    margin: 0;
+    max-width: 18ch;
+    text-shadow: 0 0 36px var(--sn-amber-20);
+  }
+  .ov-title .script {
+    font-family: var(--font-italic-serif);
+    font-style: italic;
+    font-weight: 500;
+    color: var(--sn-champagne);
+    text-transform: none;
+    font-size: 1.15em;
+  }
+  .ov-body {
+    color: var(--sn-champagne);
+    font-size: clamp(0.96rem, 1.2vw, 1.1rem);
+    line-height: 1.7;
+    max-width: 56ch;
+    margin: 0;
+  }
+
+  .collections-stack {
+    background-color: var(--sn-black);
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: clamp(40px, 6vh, 80px) clamp(0px, 3vw, 32px) clamp(72px, 10vh, 120px);
+  }
+</style>
