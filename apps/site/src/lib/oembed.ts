@@ -1,18 +1,23 @@
 /**
  * Lightweight video URL parser + thumbnail resolver.
  *
- * Supports YouTube and Vimeo. YouTube thumbnails come from the static
- * img.youtube.com URL pattern (no API call needed). Vimeo thumbnails come
- * from the oEmbed JSON endpoint (one fetch on save; result cached in the
- * portfolio_items row so we never call it on render).
+ * Supports YouTube, Vimeo, and PicTime.
+ *   • YouTube thumbnails come from the static img.youtube.com URL pattern
+ *     (no API call needed).
+ *   • Vimeo thumbnails come from the oEmbed JSON endpoint (one fetch on
+ *     save; result cached in the portfolio_items row so we never call it
+ *     on render).
+ *   • PicTime: their URLs carry an opaque videoview access token. We store
+ *     the full URL and render the iframe directly from it. No public
+ *     thumbnail endpoint — falls back to the typographic placeholder.
  */
 
-export type VideoProvider = "youtube" | "vimeo";
+export type VideoProvider = "youtube" | "vimeo" | "pictime";
 
 export interface ParsedVideo {
   provider: VideoProvider;
   embedId: string;
-  /** Canonical share URL (what we render <iframe src="..."> against). */
+  /** Canonical embed URL (what we render <iframe src="..."> against). */
   embedUrl: string;
   /** Path under which the user-facing watch page lives. */
   watchUrl: string;
@@ -62,6 +67,22 @@ export function parseVideoUrl(input: string): ParsedVideo | null {
     return id ? vimeoOf(id) : null;
   }
 
+  // ---- PicTime ----------------------------------------------------------
+  // Format: https://<sub>.pic-time.com/<gallery-slug>/featuredvideo/<id>?videoview=...&transparentbg=true
+  // The videoview token in the query string is an opaque access token that
+  // grants iframe-embed permission. We can't reduce the URL to an id alone;
+  // store and render the full URL.
+  if (host.endsWith(".pic-time.com") || host === "pic-time.com") {
+    const segs = url.pathname.split("/").filter(Boolean);
+    const featuredIdx = segs.indexOf("featuredvideo");
+    if (featuredIdx >= 0 && featuredIdx + 1 < segs.length) {
+      const id = segs[featuredIdx + 1];
+      if (/^\d+$/.test(id)) {
+        return pictimeOf(id, input.trim(), url);
+      }
+    }
+  }
+
   return null;
 }
 
@@ -80,6 +101,23 @@ function vimeoOf(id: string): ParsedVideo {
     embedId: id,
     embedUrl: `https://player.vimeo.com/video/${id}`,
     watchUrl: `https://vimeo.com/${id}`,
+  };
+}
+
+function pictimeOf(id: string, fullUrl: string, parsed: URL): ParsedVideo {
+  // Watch URL = gallery base (drop /featuredvideo/<id> and the query string).
+  // The user can navigate to the gallery if they want the full PicTime UX.
+  const segs = parsed.pathname.split("/").filter(Boolean);
+  const fvIdx = segs.indexOf("featuredvideo");
+  const baseSegs = fvIdx > 0 ? segs.slice(0, fvIdx) : segs;
+  const watchUrl = `${parsed.origin}/${baseSegs.join("/")}`;
+  return {
+    provider: "pictime",
+    embedId: id,
+    // Use the FULL original URL for the iframe src — the videoview token is
+    // mandatory for the embed to load. Render-side code reads this back.
+    embedUrl: fullUrl,
+    watchUrl,
   };
 }
 
@@ -111,5 +149,8 @@ export async function resolveThumbnail(parsed: ParsedVideo): Promise<string | nu
     }
   }
 
+  // PicTime has no public thumbnail endpoint we can reliably hit without
+  // authentication. Falls back to the typographic placeholder on the cards.
+  // Future: owner can manually upload a thumbnail via a future admin field.
   return null;
 }

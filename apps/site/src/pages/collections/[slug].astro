@@ -38,10 +38,14 @@ if (!collection) {
 const initial = collection.shortName.charAt(0);
 const relatedVideos = listPortfolio({ collection: collection.slug });
 
-function getEmbedSrc(provider: string | null, embedId: string | null): string {
-  if (!provider || !embedId) return "";
-  if (provider === "youtube") return `https://www.youtube.com/embed/${embedId}`;
-  if (provider === "vimeo")   return `https://player.vimeo.com/video/${embedId}`;
+function getEmbedSrc(
+  provider: string | null,
+  embedId: string | null,
+  url: string,
+): string {
+  if (provider === "youtube" && embedId) return `https://www.youtube.com/embed/${embedId}`;
+  if (provider === "vimeo" && embedId)   return `https://player.vimeo.com/video/${embedId}`;
+  if (provider === "pictime") return url;
   return "";
 }
 ---

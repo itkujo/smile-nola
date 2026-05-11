@@ -13,11 +13,11 @@ import { COLLECTIONS } from "@/content/collections";
 const items = listPortfolio({ featuredFirst: true });
 ---
 
-<AdminLayout title="Portfolio" section="portfolio">
+<AdminLayout title="Video Portfolio" section="portfolio">
   <header class="head">
     <p class="eyebrow">— admin · portfolio —</p>
     <h1 class="font-deco">add the work that closes the deal.</h1>
-    <p class="head-sub">Paste a YouTube or Vimeo URL. The thumbnail and embed are fetched automatically.</p>
+    <p class="head-sub">Paste a YouTube, Vimeo, or PicTime gallery video URL. Thumbnails are fetched automatically for YouTube and Vimeo; PicTime videos fall back to a typographic placeholder until you upload a custom thumbnail.</p>
   </header>
 
   <section class="form-block" aria-labelledby="form-heading">
@@ -28,7 +28,7 @@ const items = listPortfolio({ featuredFirst: true });
       <div class="grid">
         <label class="sn-field-wrap span-2">
           <span class="sn-field-label">Video URL *</span>
-          <input type="url" name="url" required placeholder="https://www.youtube.com/watch?v=… or https://vimeo.com/…" />
+          <input type="url" name="url" required placeholder="YouTube, Vimeo, or PicTime gallery URL" title="Accepted: youtube.com / youtu.be / vimeo.com / <subdomain>.pic-time.com" />
           <span class="sn-underline"></span>
           <span class="sn-underline-glow"></span>
         </label>

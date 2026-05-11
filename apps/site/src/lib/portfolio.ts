@@ -18,7 +18,7 @@ export interface PortfolioRow {
   url: string;
   thumbnail_url: string | null;
   embed_id: string | null;
-  provider: "youtube" | "vimeo" | null;
+  provider: "youtube" | "vimeo" | "pictime" | null;
   description: string | null;
   featured: number; // 0 | 1
   display_order: number;

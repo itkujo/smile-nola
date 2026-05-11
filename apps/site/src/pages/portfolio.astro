@@ -18,17 +18,23 @@ function shortName(slug: string): string {
   return COLLECTIONS.find((c) => c.slug === slug)?.shortName ?? slug;
 }
 
-function getEmbedSrc(provider: string | null, embedId: string | null): string {
-  if (!provider || !embedId) return "";
-  if (provider === "youtube") return `https://www.youtube.com/embed/${embedId}`;
-  if (provider === "vimeo")   return `https://player.vimeo.com/video/${embedId}`;
+function getEmbedSrc(
+  provider: string | null,
+  embedId: string | null,
+  url: string,
+): string {
+  if (provider === "youtube" && embedId) return `https://www.youtube.com/embed/${embedId}`;
+  if (provider === "vimeo" && embedId)   return `https://player.vimeo.com/video/${embedId}`;
+  // PicTime: the URL carries an opaque access token in its query string —
+  // there's nothing to reconstruct. Use the original URL directly.
+  if (provider === "pictime") return url;
   return "";
 }
 ---
 
 <BaseLayout
-  title="Portfolio · Smile NOLA"
-  description="Recent Smile NOLA work across all five collections — videography, photo booth, lighting, sound, and event design."
+  title="Video Portfolio · Smile NOLA"
+  description="Recent Smile NOLA films across all five collections — wedding, event, and brand work from our videography team."
 >
   <SiteHeader />
 
@@ -38,13 +44,14 @@ function getEmbedSrc(provider: string | null, embedId: string | null): string {
       <AmbientGlow />
 
       <div class="pf-hero-inner">
-        <p class="eyebrow">— portfolio —</p>
+        <p class="eyebrow">— video portfolio —</p>
         <h1 id="pf-title" class="pf-title font-deco">
-          recent <span class="script">work,</span> across the collections.
+          recent <span class="script">films,</span> across the collections.
         </h1>
         <p class="pf-lede">
-          Films and case studies from Smile NOLA's most recent events. Browse
-          all, or filter by collection.
+          Films from Smile NOLA's most recent events. Browse all, or filter
+          by collection. Photo, lighting, sound, and web portfolios are on
+          the way.
         </p>
         <GoldDivider width="200px" />
       </div>
@@ -53,7 +60,7 @@ function getEmbedSrc(provider: string | null, embedId: string | null): string {
     {items.length === 0 ? (
       <section class="pf-empty">
         <div class="empty-inner">
-          <h2 class="font-deco">portfolio coming soon.</h2>
+          <h2 class="font-deco">video portfolio coming soon.</h2>
           <p>
             We're curating the strongest recent work from our archives. In the
             meantime, inquire below — we'll share films and case studies that
@@ -64,7 +71,7 @@ function getEmbedSrc(provider: string | null, embedId: string | null): string {
       </section>
     ) : (
       <section class="pf-body" aria-labelledby="pf-grid-heading">
-        <h2 id="pf-grid-heading" class="sr-only">Portfolio grid</h2>
+        <h2 id="pf-grid-heading" class="sr-only">Video portfolio grid</h2>
 
         <div class="pf-filters" role="tablist" aria-label="Filter portfolio by collection">
           <button type="button" class="pf-chip is-active" data-filter="all" role="tab" aria-selected="true">All</button>
@@ -76,7 +83,7 @@ function getEmbedSrc(provider: string | null, embedId: string | null): string {
         <div class="pf-grid">
           {items.map((it) => (
             <article class="pf-card reveal" data-collection={it.collection}>
-              <button type="button" class="pf-play" data-embed={getEmbedSrc(it.provider, it.embed_id)} data-title={it.title}>
+              <button type="button" class="pf-play" data-embed={getEmbedSrc(it.provider, it.embed_id, it.url)} data-title={it.title}>
                 {it.thumbnail_url ? (
                   <img src={it.thumbnail_url} alt="" loading="lazy" />
                 ) : (
@@ -106,7 +113,16 @@ function getEmbedSrc(provider: string | null, embedId: string | null): string {
       <button type="button" class="pf-modal-close" aria-label="Close video">×</button>
       <h3 class="pf-modal-title font-deco"></h3>
       <div class="pf-modal-iframe-wrap">
-        <iframe class="pf-modal-iframe" src="" title="" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>
+        {/* allowtransparency is non-standard but harmless; helps PicTime's
+          transparentbg=true URL parameter sit on our dark background. */}
+      <iframe
+        class="pf-modal-iframe"
+        src=""
+        title=""
+        allow="autoplay; fullscreen; picture-in-picture"
+        allowfullscreen
+        allowtransparency="true"
+      ></iframe>
       </div>
     </div>
   </div>

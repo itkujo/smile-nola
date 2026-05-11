@@ -57,16 +57,20 @@ import GoldDivider from "@/components/brand/GoldDivider.astro";
     <!-- ============ FOUNDER STORY ============ -->
     <section class="founder" aria-labelledby="founder-heading">
       <div class="founder-grid">
-        <aside class="founder-portrait reveal" aria-hidden="true">
-          <div class="portrait-inner">
-            <span class="initial font-deco">DV</span>
+        <aside class="founder-portrait reveal">
+          <div class="portrait-inner has-image">
+            <img
+              src="/images/daniel.jpg"
+              alt="Daniel Velez, founder of Smile NOLA, in a forest-green suit and cream tie photographed in a tropical garden courtyard"
+              width="880"
+              height="1100"
+              loading="lazy"
+              decoding="async"
+            />
             <span class="caption font-deco">daniel velez</span>
             <DecoCorner position="tl" size="sm" />
             <DecoCorner position="br" size="sm" />
           </div>
-          <p class="portrait-note">
-            Photography goes here. Owner uploads later — see admin.
-          </p>
         </aside>
 
         <div class="founder-body">
@@ -310,30 +314,31 @@ import GoldDivider from "@/components/brand/GoldDivider.astro";
     place-items: center;
     overflow: hidden;
   }
-  .portrait-inner .initial {
-    font-size: clamp(120px, 18vw, 200px);
-    line-height: 0.78;
-    color: var(--sn-gold);
-    opacity: 0.18;
-    text-shadow: 0 0 40px var(--sn-amber-20);
-    user-select: none;
+  /* Real photograph: fill the frame edge-to-edge with cover. The crop in
+     /public/images/daniel.jpg is already 4:5, so cover ≈ contain here, but
+     cover protects us if the source ever drifts off-ratio. */
+  .portrait-inner.has-image {
+    background: var(--sn-black);
+  }
+  .portrait-inner.has-image img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center top;
+    display: block;
   }
   .portrait-inner .caption {
     position: absolute;
-    bottom: 22px;
+    bottom: 18px;
     left: 22px;
+    z-index: 2;
     color: var(--sn-gold);
     font-size: 0.75rem;
     letter-spacing: 0.3em;
-    opacity: 0.65;
-  }
-  .portrait-note {
-    color: var(--sn-muted-stone);
-    font-size: 0.7rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    margin-top: 14px;
-    opacity: 0.7;
+    /* Subtle dark scrim so gold letters stay legible over the photo */
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
   }
 
   .founder-body { min-width: 0; }
