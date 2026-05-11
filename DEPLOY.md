@@ -81,43 +81,53 @@ in the Coolify UI so they're masked.
 
 ## 4. Persistent storage
 
-The compose file declares one bind mount:
+The compose file uses a Docker **named volume** (not a host bind mount):
 
 ```yaml
 volumes:
-  - ./data:/data
+  - smile_nola_data:/data
 ```
 
-Inside the container, two things live there:
+Inside the container, two things live under `/data`:
 
 - `/data/leads.db` — SQLite (inquiries, portfolio items, testimonials, booth
   leads — shared schema, separate tables)
 - `/data/uploads/portfolio/<id>.jpg` — admin-uploaded portfolio thumbnails
   (resized to 1280×720 by Sharp on upload)
 
-Coolify treats this directory as a managed bind mount on the deploy server —
-it survives container rebuilds and redeploys. To inspect or back up:
+Docker named volumes survive container rebuilds and redeploys. Coolify will
+NOT delete them on a normal redeploy. To inspect or back up:
 
 ```sh
-# On the Coolify server, find the application's resource path
+# On the Coolify server, find the volume (Coolify prefixes it with the
+# project uuid):
 ssh coolify-server
-ls /data/coolify/applications/<app-id>/data
+docker volume ls | grep smile_nola_data
+# e.g.  local   <coolify-project-uuid>_smile_nola_data
 ```
 
-(Adjust path to match your Coolify install. The Coolify UI also shows the
-exact host path under the application's **Storages** tab.)
+The volume's contents live at `/var/lib/docker/volumes/<volume-name>/_data/`.
 
 To **back up** the database (recommended weekly, especially after onboarding
-real client data):
+real client data) — run on the Coolify server with the container running:
 
 ```sh
-# On the Coolify server, with the container running:
-docker exec smile-nola-site sqlite3 /data/leads.db ".backup /tmp/leads-$(date +%F).db"
-docker cp smile-nola-site:/tmp/leads-$(date +%F).db ./backups/
+# Find the actual container name (Coolify generates one per deploy)
+CONTAINER=$(docker ps --filter "label=coolify.applicationId" --format '{{.Names}}' | grep smile-nola | head -1)
+
+# Back up to a host path
+docker exec "$CONTAINER" sqlite3 /data/leads.db ".backup /tmp/leads-$(date +%F).db"
+docker cp "$CONTAINER:/tmp/leads-$(date +%F).db" ~/backups/
 ```
 
 WAL files (`leads.db-wal`, `leads.db-shm`) live in the same directory and
 back up alongside the main DB file.
+
+**Why not a bind mount?** A `./data:/data` bind mount overlays the image's
+`/data` directory (which we chown to the unprivileged `app` user in the
+Dockerfile) with the host filesystem's ownership (root). The container then
+can't write to `/data` and SQLite fails to open the DB. Named volumes auto-
+populate from the image on first mount with ownership intact.
 
 ---
 

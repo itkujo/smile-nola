@@ -65,10 +65,21 @@ services:
       SMTP_PASS: ${SMTP_PASS:-}
 
     volumes:
-      # Persistent host directory — survives container rebuilds + redeploys.
-      # Coolify treats this as a managed bind mount; the path on disk is
-      # whatever directory Coolify allocates for the application.
-      - ./data:/data
+      # Docker-managed NAMED volume — survives container rebuilds + redeploys.
+      #
+      # We deliberately do NOT use a bind mount (`./data:/data`) here. With a
+      # bind mount, the host directory's ownership (root:root) overlays the
+      # image's /data (which we chown'd to app:app in the Dockerfile). The
+      # unprivileged `app` user inside the container then can't write to it,
+      # better-sqlite3 fails with "unable to open database file", and the
+      # healthcheck flatlines. Named volumes don't have this problem because
+      # Docker auto-populates them from the image's existing /data on first
+      # mount, ownership intact.
+      - smile_nola_data:/data
+
+volumes:
+  smile_nola_data:
+    # Persistent across redeploys. To back up, see DEPLOY.md §4.
 
     expose:
       # Coolify reads this and wires Traefik to route the configured Domain
