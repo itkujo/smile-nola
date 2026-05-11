@@ -8,6 +8,7 @@ out/
 dist/
 build/
 *.tsbuildinfo
+.astro/
 
 # Environment
 .env

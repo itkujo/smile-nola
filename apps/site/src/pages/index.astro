@@ -1,0 +1,30 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import LogoMark from "@/components/brand/LogoMark.astro";
+import GoldDivider from "@/components/brand/GoldDivider.astro";
+import DecoCorner from "@/components/brand/DecoCorner.astro";
+import AmbientGlow from "@/components/brand/AmbientGlow.astro";
+import DecoOrnament from "@/components/brand/DecoOrnament.astro";
+---
+
+<BaseLayout title="Smile NOLA · cinematic event production">
+  <main id="main" style="position: relative; min-height: 100vh; overflow: hidden; padding: 6rem 2rem; display: grid; place-items: center;">
+    <DecoOrnament />
+    <AmbientGlow />
+    <DecoCorner position="tl" size="lg" animate delay={200} />
+    <DecoCorner position="tr" size="lg" animate delay={400} />
+    <DecoCorner position="bl" size="lg" animate delay={600} />
+    <DecoCorner position="br" size="lg" animate delay={800} />
+
+    <div style="position: relative; z-index: 10; text-align: center;">
+      <LogoMark variant="full-gold" width={220} />
+      <h1 class="font-deco" style="font-size: clamp(2rem, 6vw, 4rem); color: var(--sn-gold); margin: 2rem 0 1rem;">
+        scaffold is alive.
+      </h1>
+      <GoldDivider />
+      <p style="color: var(--sn-champagne); margin-top: 1.5rem; max-width: 36ch; margin-left: auto; margin-right: auto;">
+        Brand primitives wired. Hero, collections, forms, and admin land next.
+      </p>
+    </div>
+  </main>
+</BaseLayout>

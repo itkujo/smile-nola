@@ -1,0 +1,90 @@
+---
+/**
+ * LogoMark — renders any of the four official Smile NOLA logo variants via
+ * CSS mask. Color is driven by `color` so the mark recolors to currentColor
+ * by default, with an optional amber drop-shadow glow.
+ *
+ * The "full-logo-gold" variant uses the pre-baked gold SVG (no mask) so the
+ * artwork stays crisp at any size without color drift.
+ */
+type Variant = "full" | "full-gold" | "icon" | "wordmark";
+
+interface Props {
+  variant?: Variant;
+  /** Width in CSS px (height auto-scales by aspect). */
+  width?: number;
+  /** When true and variant is mask-able, applies a soft amber drop-shadow. */
+  glow?: boolean;
+  /** CSS color value used to tint the mask (ignored for full-gold). */
+  color?: string;
+  /** Accessible label. Defaults to "Smile NOLA". Set to "" for decorative use. */
+  label?: string;
+  class?: string;
+}
+
+const {
+  variant = "full-gold",
+  width = 160,
+  glow = true,
+  color = "var(--sn-gold)",
+  label = "Smile NOLA",
+  class: className = "",
+} = Astro.props;
+
+// Mask-based variants — recolorable via background-color.
+const MASK_VARIANTS: Record<Exclude<Variant, "full-gold">, string> = {
+  full: "/logos/full-logo.svg",
+  icon: "/logos/icon.svg",
+  wordmark: "/logos/wordmark.svg",
+};
+
+// Approximate aspect ratios (height = width * aspect). Kept here so the
+// component is self-contained without needing to fetch SVG viewBoxes.
+const ASPECT: Record<Variant, number> = {
+  full: 0.42,
+  "full-gold": 0.42,
+  icon: 1,
+  wordmark: 0.32,
+};
+
+const height = Math.round(width * ASPECT[variant]);
+const isImageVariant = variant === "full-gold";
+const maskUrl = isImageVariant ? null : MASK_VARIANTS[variant as Exclude<Variant, "full-gold">];
+const ariaLabel = label || undefined;
+const ariaHidden = label === "" ? "true" : undefined;
+---
+
+{isImageVariant ? (
+  <img
+    src="/logos/full-logo-gold.svg"
+    alt={label}
+    width={width}
+    height={height}
+    class={`logomark ${glow ? "logomark--glow" : ""} ${className}`}
+    aria-hidden={ariaHidden}
+  />
+) : (
+  <span
+    role={label ? "img" : undefined}
+    aria-label={ariaLabel}
+    aria-hidden={ariaHidden}
+    class={`logomark logomark--mask ${glow ? "logomark--glow" : ""} ${className}`}
+    style={`
+      width: ${width}px;
+      height: ${height}px;
+      background-color: ${color};
+      -webkit-mask: url(${maskUrl}) no-repeat center / contain;
+      mask: url(${maskUrl}) no-repeat center / contain;
+    `}
+  />
+)}
+
+<style>
+  .logomark {
+    display: inline-block;
+    line-height: 0;
+  }
+  .logomark--glow {
+    filter: drop-shadow(0 0 18px var(--sn-amber-20));
+  }
+</style>

@@ -1,0 +1,13 @@
+---
+/**
+ * AmbientGlow — three-layer drifting radial gradients that breathe.
+ * Drop into any container with `position: relative` to give it the
+ * Smile NOLA stage-lighting atmosphere.
+ */
+interface Props {
+  class?: string;
+}
+const { class: className = "" } = Astro.props;
+---
+
+<div class={`ambient-glow ${className}`} aria-hidden="true"></div>

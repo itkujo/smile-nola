@@ -1,0 +1,102 @@
+---
+/**
+ * DecoOrnament — slow-rotating Art Deco starburst, very low opacity, sized
+ * to fill the viewport diagonal. Sits behind everything as ambient texture.
+ *
+ * One full rotation every 180s — near-imperceptible motion that nonetheless
+ * makes the page feel alive.
+ */
+interface Props {
+  /** Opacity 0-1. Default 0.05. */
+  opacity?: number;
+  /** Size as a CSS value relative to viewport. Default 120vh. */
+  size?: string;
+  /** Seconds per full rotation. Default 180. */
+  spin?: number;
+  class?: string;
+}
+
+const {
+  opacity = 0.05,
+  size = "120vh",
+  spin = 180,
+  class: className = "",
+} = Astro.props;
+---
+
+<div
+  class={`deco-ornament ${className}`}
+  style={`
+    --opacity: ${opacity};
+    --size: ${size};
+    --spin: ${spin}s;
+  `}
+  aria-hidden="true"
+>
+  <svg viewBox="-200 -200 400 400" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="rays-grad" cx="0" cy="0" r="200" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#D4AF37" stop-opacity="0"></stop>
+        <stop offset="40%" stop-color="#D4AF37" stop-opacity="0.45"></stop>
+        <stop offset="100%" stop-color="#D4AF37" stop-opacity="0"></stop>
+      </radialGradient>
+    </defs>
+    <g stroke="url(#rays-grad)" stroke-width="0.8" fill="none">
+      <line x1="0" y1="0" x2="0"    y2="-190"></line>
+      <line x1="0" y1="0" x2="49"   y2="-184"></line>
+      <line x1="0" y1="0" x2="95"   y2="-165"></line>
+      <line x1="0" y1="0" x2="134"  y2="-134"></line>
+      <line x1="0" y1="0" x2="165"  y2="-95"></line>
+      <line x1="0" y1="0" x2="184"  y2="-49"></line>
+      <line x1="0" y1="0" x2="190"  y2="0"></line>
+      <line x1="0" y1="0" x2="184"  y2="49"></line>
+      <line x1="0" y1="0" x2="165"  y2="95"></line>
+      <line x1="0" y1="0" x2="134"  y2="134"></line>
+      <line x1="0" y1="0" x2="95"   y2="165"></line>
+      <line x1="0" y1="0" x2="49"   y2="184"></line>
+      <line x1="0" y1="0" x2="0"    y2="190"></line>
+      <line x1="0" y1="0" x2="-49"  y2="184"></line>
+      <line x1="0" y1="0" x2="-95"  y2="165"></line>
+      <line x1="0" y1="0" x2="-134" y2="134"></line>
+      <line x1="0" y1="0" x2="-165" y2="95"></line>
+      <line x1="0" y1="0" x2="-184" y2="49"></line>
+      <line x1="0" y1="0" x2="-190" y2="0"></line>
+      <line x1="0" y1="0" x2="-184" y2="-49"></line>
+      <line x1="0" y1="0" x2="-165" y2="-95"></line>
+      <line x1="0" y1="0" x2="-134" y2="-134"></line>
+      <line x1="0" y1="0" x2="-95"  y2="-165"></line>
+      <line x1="0" y1="0" x2="-49"  y2="-184"></line>
+    </g>
+    <circle cx="0" cy="0" r="60"  stroke="#D4AF37" stroke-width="0.6" fill="none" opacity="0.5"></circle>
+    <circle cx="0" cy="0" r="120" stroke="#D4AF37" stroke-width="0.4" fill="none" opacity="0.35"></circle>
+    <circle cx="0" cy="0" r="180" stroke="#D4AF37" stroke-width="0.3" fill="none" opacity="0.2"></circle>
+  </svg>
+</div>
+
+<style>
+  .deco-ornament {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--size);
+    height: var(--size);
+    transform: translate(-50%, -50%) rotate(0deg);
+    pointer-events: none;
+    z-index: 0;
+    opacity: var(--opacity);
+    animation: deco-rotate var(--spin) linear infinite;
+    will-change: transform;
+  }
+  .deco-ornament svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  @keyframes deco-rotate {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to   { transform: translate(-50%, -50%) rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .deco-ornament { animation: none; }
+  }
+</style>

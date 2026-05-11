@@ -1,0 +1,60 @@
+---
+/**
+ * DecoCorner — Art Deco bracket placed in one corner of a container.
+ * Designed to be absolutely positioned inside any element with
+ * `position: relative`.
+ */
+type Position = "tl" | "tr" | "bl" | "br";
+type Size = "sm" | "md" | "lg";
+
+interface Props {
+  position: Position;
+  size?: Size;
+  /** Animate in with a slight scale + fade. */
+  animate?: boolean;
+  /** Delay before the entrance animation, in ms. */
+  delay?: number;
+  class?: string;
+}
+
+const {
+  position,
+  size = "md",
+  animate = false,
+  delay = 0,
+  class: className = "",
+} = Astro.props;
+
+const SIZE_PX: Record<Size, number> = { sm: 24, md: 40, lg: 56 };
+const px = SIZE_PX[size];
+---
+
+<span
+  aria-hidden="true"
+  class={`deco-corner pos-${position} ${animate ? "is-animated" : ""} ${className}`}
+  style={`--size: ${px}px; animation-delay: ${delay}ms;`}
+></span>
+
+<style>
+  .deco-corner {
+    position: absolute;
+    width: var(--size);
+    height: var(--size);
+    border: 1px solid var(--sn-gold);
+    pointer-events: none;
+  }
+  .pos-tl { top: 0;    left: 0;    border-right: 0; border-bottom: 0; }
+  .pos-tr { top: 0;    right: 0;   border-left: 0;  border-bottom: 0; }
+  .pos-bl { bottom: 0; left: 0;    border-right: 0; border-top: 0; }
+  .pos-br { bottom: 0; right: 0;   border-left: 0;  border-top: 0; }
+
+  .is-animated {
+    opacity: 0;
+    transform: scale(0.7);
+    animation: deco-in 1.2s var(--ease-cinematic) forwards;
+  }
+  @keyframes deco-in {
+    from { opacity: 0; transform: scale(0.7); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+</style>

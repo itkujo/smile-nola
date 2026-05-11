@@ -1,0 +1,17 @@
+---
+/**
+ * GoldDivider — thin gold gradient rule with a centered diamond ornament.
+ * Used between sections, beneath section titles, etc.
+ */
+interface Props {
+  /** Width as any CSS value. Defaults to 220px. */
+  width?: string;
+  class?: string;
+}
+
+const { width = "220px", class: className = "" } = Astro.props;
+---
+
+<div class={`gold-divider ${className}`} style={`max-width: ${width};`}>
+  <span class="diamond" aria-hidden="true"></span>
+</div>

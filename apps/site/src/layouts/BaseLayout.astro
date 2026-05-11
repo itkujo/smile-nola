@@ -1,0 +1,105 @@
+---
+/**
+ * BaseLayout — every page extends this. Loads brand tokens, fonts, scroll
+ * reveal observer, and the default open-graph + favicon metadata.
+ */
+import "@/styles/globals.css";
+
+interface Props {
+  title: string;
+  /** Meta description for SEO and social shares. */
+  description?: string;
+  /** Path under /images/ for the OG share image. Defaults to the gold logo on black. */
+  ogImage?: string;
+  /** Canonical URL. Defaults to the current page on smile-nola.com. */
+  canonical?: string;
+  /** When false, no Astro scroll-reveal observer is injected (use for admin pages). */
+  reveal?: boolean;
+  /** Additional class names on <body>. */
+  bodyClass?: string;
+}
+
+const {
+  title,
+  description = "Smile NOLA designs cinematic event experiences — lighting, video walls, concert-grade sound, videography, and event web design — for celebrations in New Orleans.",
+  ogImage = "/og/default.png",
+  canonical,
+  reveal = true,
+  bodyClass = "",
+} = Astro.props;
+
+const fullTitle = title.includes("Smile NOLA")
+  ? title
+  : `${title} · Smile NOLA`;
+
+const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? "https://smile-nola.com").toString();
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#050505" />
+    <meta name="color-scheme" content="dark" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalUrl} />
+
+    <!-- Favicons -->
+    <link rel="icon" type="image/svg+xml" href="/logos/icon.svg" />
+    <link rel="apple-touch-icon" href="/logos/icon.svg" />
+
+    <!-- OpenGraph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:image" content={new URL(ogImage, Astro.site ?? "https://smile-nola.com").toString()} />
+    <meta property="og:site_name" content="Smile NOLA" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={new URL(ogImage, Astro.site ?? "https://smile-nola.com").toString()} />
+
+    <!-- LocalBusiness structured data -->
+    <script type="application/ld+json" is:inline set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "LocalBusiness",
+      "name": "Smile NOLA",
+      "description": "Luxury event production — lighting, video walls, concert-grade sound, videography, and event web design in New Orleans.",
+      "areaServed": "New Orleans, LA",
+      "url": "https://smile-nola.com",
+      "image": "https://smile-nola.com/logos/full-logo-gold.svg",
+    })} />
+  </head>
+  <body class={bodyClass}>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <slot />
+
+    {reveal && (
+      <script>
+        // Scroll reveal — toggles `is-visible` on .reveal elements as they
+        // enter the viewport. Honors prefers-reduced-motion (the CSS already
+        // collapses the transition there; observer still runs harmlessly).
+        const els = document.querySelectorAll<HTMLElement>(".reveal");
+        if (els.length) {
+          const io = new IntersectionObserver(
+            (entries) => {
+              for (const entry of entries) {
+                if (entry.isIntersecting) {
+                  entry.target.classList.add("is-visible");
+                  io.unobserve(entry.target);
+                }
+              }
+            },
+            { threshold: 0.12, rootMargin: "0px 0px -10% 0px" }
+          );
+          els.forEach((el) => io.observe(el));
+        }
+      </script>
+    )}
+  </body>
+</html>
