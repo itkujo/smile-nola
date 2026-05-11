@@ -11,7 +11,6 @@
 # WHAT YOU SET IN COOLIFY UI (NOT here):
 #   • Domain                      (e.g. https://smile-nola.com)
 #   • Environment variables       (see required + optional sets below)
-#   • Persistent volume mappings  (or accept the bind mount we declare)
 #
 # REQUIRED ENV VARS:
 #   ADMIN_PASSWORD          — single password gate for /admin/*
@@ -24,13 +23,10 @@
 #                             blank the server logs inquiries to stdout and
 #                             still writes them to SQLite
 #
-# WHAT PERSISTS ACROSS DEPLOYS:
-#   • data/leads.db                       — SQLite (inquiries, portfolio
-#                                           items, testimonials, booth leads)
-#   • data/uploads/portfolio/<id>.jpg     — admin-uploaded portfolio thumbnails
-#
-# Both live under one host directory (./data) which is bind-mounted at /data
-# inside the container. Coolify keeps this directory between redeploys.
+# WHAT PERSISTS ACROSS DEPLOYS (in the smile_nola_data named volume):
+#   • /data/leads.db                       — SQLite (inquiries, portfolio
+#                                            items, testimonials, booth leads)
+#   • /data/uploads/portfolio/<id>.jpg     — admin-uploaded portfolio thumbnails
 # =============================================================================
 
 services:
@@ -49,7 +45,7 @@ services:
 
       # ---- Persistent data location ------------------------------------------
       # SQLite DB + uploaded thumbnails both live under this directory inside
-      # the container, mounted from the host volume below.
+      # the container, backed by the named volume mounted below.
       SMILE_NOLA_DB_DIR: "/data"
 
       # ---- Admin auth (REQUIRED) ---------------------------------------------
@@ -74,12 +70,8 @@ services:
       # better-sqlite3 fails with "unable to open database file", and the
       # healthcheck flatlines. Named volumes don't have this problem because
       # Docker auto-populates them from the image's existing /data on first
-      # mount, ownership intact.
+      # mount, with ownership intact.
       - smile_nola_data:/data
-
-volumes:
-  smile_nola_data:
-    # Persistent across redeploys. To back up, see DEPLOY.md §4.
 
     expose:
       # Coolify reads this and wires Traefik to route the configured Domain
@@ -100,3 +92,7 @@ volumes:
       timeout: 5s
       retries: 3
       start_period: 25s
+
+volumes:
+  smile_nola_data:
+    # Persistent across redeploys. See DEPLOY.md §4 for backup procedure.
