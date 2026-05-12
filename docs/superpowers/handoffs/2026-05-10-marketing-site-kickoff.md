@@ -22,9 +22,10 @@ Your project lives at `apps/site/` (to be created).
 Before asking the user a single question, read:
 
 1. **`/home/phoenix/Downloads/Smile_NOLA_Website_and_Forms_Brand_Brief_for_OpenCode.md`** — the authoritative brand brief. Brand promise, voice, typography rules, color tokens, collection architecture, brand rules. Treat it as canon.
-2. **`docs/superpowers/specs/2026-05-09-smile-nola-intake-form-design.md`** — the design doc for the booth intake. Useful as an example of how we work and what decisions were already locked.
-3. **`apps/intake/app/globals.css`** — the brand tokens are already in code. Copy the `:root` block (colors, fonts) into the new site so visual language stays consistent.
-4. **`apps/intake/components/brand/`** — DecoCorner, GoldDivider, LogoMark already exist and are battle-tested. You'll likely want to port the design language (not necessarily the components themselves, since framework differs).
+2. **`docs/superpowers/handoffs/2026-05-10-package-builder-spec.md`** — the canonical product spec for the "Build Your Smile NOLA Event Experience" interactive package builder. **This is a major feature of the marketing site.** Replaces the idea of using Qwilr. Has all the pricing, collection data, conditional logic, and UX requirements pre-authored by Daniel and reviewed against brand canon.
+3. **`docs/superpowers/specs/2026-05-09-smile-nola-intake-form-design.md`** — the design doc for the booth intake. Useful as an example of how we work and what decisions were already locked.
+4. **`apps/intake/app/globals.css`** — the brand tokens are already in code. Copy the `:root` block (colors, fonts) into the new site so visual language stays consistent. Add the three new tokens noted below.
+5. **`apps/intake/components/brand/`** — DecoCorner, GoldDivider, LogoMark, DensityToggle already exist and are battle-tested. You'll likely want to port them (the package-builder spec describes which patterns are directly reusable).
 
 ---
 
@@ -36,8 +37,12 @@ These came out of the user's day-one brainstorming with the previous agent. Do *
 2. **Location: `apps/site/`** as a new directory at the repo root. Sibling to `apps/intake/`. The repo is structured as a multi-app monorepo without a workspace manager (no pnpm workspaces yet — fine, keep it simple).
 3. **Brand canon honored from the brief**:
    - Typography: Holimount (signature, used sparingly), Broadway (Art Deco display), Poppins (utility/body). Holimount and Broadway font files live at `apps/intake/public/fonts/`. Copy them into `apps/site/public/fonts/` for now.
+   - **NO fourth font.** A previous draft considered adding Cormorant Garamond Italic for editorial italic accents — Daniel decided against (2026-05-10). Use *italic Poppins* where italic emphasis is needed.
    - **Important type rule the user discovered during the booth build**: Broadway is single-case-only — when paired with `text-transform: uppercase` the glyphs double-decorate and look bad. Always write Broadway headings in **lowercase source text** with a `lowercase` CSS class. The font renders its decorative caps automatically.
-   - Colors and tokens: see `apps/intake/app/globals.css` `:root` block. Verbatim from §6 of the brief.
+   - Colors and tokens: see `apps/intake/app/globals.css` `:root` block. Verbatim from §6 of the brief. **Plus three additions approved 2026-05-10:**
+     - `--sn-deep-brown-black: #1A120A` — warmer alternative to soft-black for select panels
+     - `--sn-warm-taupe: #9C8A6A` — editorial accent / warm neutral text
+     - `--sn-soft-coral: #D65A5A` — warning state accent only
 4. **Official logo artwork**: lives at `apps/intake/public/logos/`. Four variants:
    - `full-logo.svg` — submark + script wordmark, `currentColor` (recolorable)
    - `full-logo-gold.svg` — same, pre-baked gold `#D4AF37`
@@ -45,11 +50,16 @@ These came out of the user's day-one brainstorming with the previous agent. Do *
    - `wordmark.svg` — Holimount script "Smile Nola" only, `currentColor`
    - **The "PHOTO/VIDEO BOOTH" subtitle was deliberately removed** — Smile NOLA is positioning as a production company now, not a booth rental. Do not put PHOTO/VIDEO BOOTH anywhere.
 5. **Five collections** (Brand Brief §4) — each should have its own marketing page, inquiry path, and form:
-   - The Aurora Collection (lighting, video walls)
+   - The Aurora Collection (lighting, video walls, staging, LED video walls)
    - The Resonance Series (concert-grade sound)
    - The Visionary Suite (cinematic videography)
    - The Digital Atelier (web, event design)
-   - The Smile Collection (photo booths)
+   - The Smile Collection (photo booth experiences)
+6. **Database**: single SQLite file at `data/leads.db` (already exists). Add new tables — do NOT merge into the existing `leads` table.
+   - `contacts` table (new) — generic contact records, deduped by email
+   - `package_builder_submissions` (new) — see the package-builder spec
+   - Reason: the funnel matters — visitors fill out a contact form, then later configure a package, and Daniel needs to track who progressed where.
+7. **CRM stack decision (2026-05-10)**: Daniel keeps HoneyBook for operational CRM (he loves the mobile app), and the marketing site builds a custom **interactive package builder** ("Build Your Smile NOLA Event Experience") instead of buying Qwilr. This builder is a major feature of the marketing site — see `2026-05-10-package-builder-spec.md` for the full canonical spec.
 
 ---
 
@@ -59,11 +69,11 @@ Bring all of these to the user via brainstorming:
 
 1. **Sitemap & information architecture** — what pages, in what hierarchy, with what navigation. The brief §8.1 lists a recommended page set, but the user should confirm priorities and whether all collection pages launch v1 or some are deferred.
 2. **Content** — copy, imagery, the "About / Founder Story" voice, testimonials, case studies. The brief gives canonical copy blocks for each collection (§13) — use those as starting points.
-3. **Inquiry-per-collection forms** — Brand Brief §10 specifies the field sets for each of the 5 collection inquiry forms. These need to be built. Decide: do they save into the same SQLite DB as the booth intake, or a separate store? Recommend: same DB, new table `inquiries`, since the user already has admin tooling pointed at `data/leads.db`.
+3. **Per-collection inquiry forms** — Brand Brief §10 specifies field sets for each of the 5 collection inquiry forms. Note: Daniel's package builder (see separate spec) MAY replace these for the inquiry CTA — but a simple "interested in just videography" fast lane may still be valuable. Discuss with Daniel.
 4. **Imagery sourcing** — placeholder vs real event photography vs stock. Brand brief prohibits Lorem ipsum and example.com URLs (per global AGENTS.md). Get real content or pick contextually appropriate defaults with the user.
 5. **Hosting** — local-only like the booth, or actually deploy somewhere (Vercel, Cloudflare Pages, Netlify)? If deploying, decide on a domain.
 6. **Analytics, performance, SEO baseline** — sitemap.xml, robots.txt, OG images, twitter cards, structured data, Lighthouse targets. Astro makes most of this easy but it's still a content decision.
-7. **HoneyBook integration for inquiry forms** — the booth form exports CSV manually. The marketing-site inquiry forms could do the same, or directly POST to HoneyBook's API, or email-notify the founder. User preference required.
+7. **HoneyBook integration** — Daniel is keeping HoneyBook for CRM ops. The package builder + future forms could push leads to HoneyBook via Zapier (existing pattern) or direct API (limited). User preference required. Defer for v1; CSV export from the SQLite DB is the safe fallback.
 8. **Future evolution to "black-on-white editorial"** — Brand brief §1 hints at a possible future shift toward a more editorial light-mode aesthetic. Brief explicitly says "should not drive the first build" — confirm with user that v1 stays dark-luxury.
 
 ---
