@@ -1,51 +1,60 @@
 /**
- * Best-effort SMTP notification for new inquiries.
+ * Best-effort Resend notifications for inquiries and package builder submissions.
  *
- * Submissions are ALWAYS saved to SQLite before this is invoked — email is
- * a courtesy, never a blocker. If any SMTP env var is missing, this falls
- * back to a console log and returns silently.
+ * Submissions are ALWAYS persisted to SQLite before this is invoked — email is
+ * a courtesy, never a blocker. If RESEND_API_KEY is missing OR NOTIFY_EMAIL is
+ * missing, the helpers fall back to a console log and return silently. They
+ * NEVER throw. The caller fire-and-forgets and continues.
  *
- * The first SMTP send may stall briefly (TLS handshake, DNS, etc.) — the
- * caller should NOT await this on the request-response critical path. The
- * inquiry endpoint fires-and-forgets.
+ * Sender defaults to "Smile NOLA <onboarding@resend.dev>" (Resend's shared
+ * sandbox sender) so local dev without a verified domain still works. Production
+ * sets RESEND_FROM to "Smile NOLA <no-reply@mail.smile-nola.com>".
+ *
+ * The Resend client is lazy-built on first send so a missing key during module
+ * load doesn't blow up the import graph.
  */
 
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import type { InquiryRow } from "@/lib/db";
-import { getEnv } from "@/lib/env";
+import type { PackageBuilderSubmissionRow } from "@/lib/builder/submissions";
+import type { ComputeResult } from "@/lib/builder/compute";
+import { getEnv, getRequiredEnv } from "@/lib/env";
+import {
+  renderSubmissionSummaryHtml,
+  renderSubmissionSummaryText,
+} from "@/lib/builder/readable-summary";
 
-interface SmtpEnv {
-  host: string;
-  port: number;
-  user: string;
-  pass: string;
+const DEFAULT_FROM = "Smile NOLA <onboarding@resend.dev>";
+
+interface SendEnv {
+  apiKey: string;
+  from: string;
   to: string;
 }
 
-function readEnv(): SmtpEnv | null {
-  const host = getEnv("SMTP_HOST").trim();
-  const portStr = getEnv("SMTP_PORT").trim();
-  const user = getEnv("SMTP_USER").trim();
-  const pass = getEnv("SMTP_PASS").trim();
+function readEnv(): SendEnv | null {
   const to = getEnv("NOTIFY_EMAIL").trim();
-  if (!host || !portStr || !user || !pass || !to) return null;
-  const port = Number(portStr);
-  if (!Number.isFinite(port) || port <= 0) return null;
-  return { host, port, user, pass, to };
+  if (!to) return null;
+  let apiKey: string;
+  try {
+    apiKey = getRequiredEnv("RESEND_API_KEY");
+  } catch {
+    return null;
+  }
+  const from = getEnv("RESEND_FROM").trim() || DEFAULT_FROM;
+  return { apiKey, from, to };
 }
 
-// Lazy-build the transporter on first use.
-let _transporter: nodemailer.Transporter | null = null;
-function transporter(env: SmtpEnv): nodemailer.Transporter {
-  if (_transporter) return _transporter;
-  _transporter = nodemailer.createTransport({
-    host: env.host,
-    port: env.port,
-    secure: env.port === 465,
-    auth: { user: env.user, pass: env.pass },
-  });
-  return _transporter;
+let _client: Resend | null = null;
+function client(apiKey: string): Resend {
+  if (_client) return _client;
+  _client = new Resend(apiKey);
+  return _client;
 }
+
+/* ============================================================================
+ * Shared HTML helpers
+ * ========================================================================== */
 
 function escapeHtml(s: string): string {
   return s
@@ -62,7 +71,11 @@ function row(label: string, value: string | number | null | undefined): string {
   return `<tr><td style="padding:6px 18px 6px 0;color:#B8B2A5;font-size:12px;letter-spacing:.18em;text-transform:uppercase;vertical-align:top;white-space:nowrap">${escapeHtml(label)}</td><td style="padding:6px 0;color:#F8F4EA;font-size:15px">${escapeHtml(v)}</td></tr>`;
 }
 
-function bodyText(inquiry: InquiryRow): string {
+/* ============================================================================
+ * Inquiry notification (unchanged contract — same export, same row type)
+ * ========================================================================== */
+
+function inquiryBodyText(inquiry: InquiryRow): string {
   const lines = [
     `New inquiry — Smile NOLA`,
     `Captured: ${inquiry.created_at}`,
@@ -86,7 +99,7 @@ function bodyText(inquiry: InquiryRow): string {
   return lines.join("\n");
 }
 
-function bodyHtml(inquiry: InquiryRow): string {
+function inquiryBodyHtml(inquiry: InquiryRow): string {
   return `<!doctype html>
 <html><body style="margin:0;padding:32px;background:#050505;color:#F8F4EA;font-family:Poppins,system-ui,-apple-system,Segoe UI,Roboto,sans-serif">
   <div style="max-width:560px;margin:0 auto;background:#111111;border:1px solid #D4AF37;padding:32px">
@@ -116,27 +129,88 @@ function bodyHtml(inquiry: InquiryRow): string {
 }
 
 /**
- * Send the notification. Returns nothing; logs but never throws.
+ * Send the inquiry notification. Returns nothing; logs but never throws.
+ *
+ * Signature is UNCHANGED from the previous nodemailer implementation so
+ * existing callers (api/contact.ts, api/inquiry.ts) work as-is.
  */
 export async function sendInquiryNotification(inquiry: InquiryRow): Promise<void> {
   const env = readEnv();
   if (!env) {
     console.log(
-      `[inquiry] SMTP not configured — would have notified about #${inquiry.id} (${inquiry.email}). Submission saved.`
+      `[inquiry] Resend not configured — would have notified about #${inquiry.id} (${inquiry.email}). Submission saved.`
     );
     return;
   }
   try {
-    await transporter(env).sendMail({
-      from: `"Smile NOLA Inquiries" <${env.user}>`,
+    const result = await client(env.apiKey).emails.send({
+      from: env.from,
       to: env.to,
       subject: `New inquiry: ${inquiry.first_name} ${inquiry.last_name} · ${inquiry.source}`,
-      text: bodyText(inquiry),
-      html: bodyHtml(inquiry),
+      text: inquiryBodyText(inquiry),
+      html: inquiryBodyHtml(inquiry),
       replyTo: inquiry.email,
     });
-    console.log(`[inquiry] Notified ${env.to} about #${inquiry.id}.`);
+    if (result.error) {
+      console.error(`[inquiry] Resend rejected send for #${inquiry.id}:`, result.error);
+      return;
+    }
+    console.log(`[inquiry] Notified ${env.to} about #${inquiry.id} (id=${result.data?.id ?? "?"}).`);
   } catch (err) {
     console.error(`[inquiry] Email send failed for #${inquiry.id}:`, err);
+  }
+}
+
+/* ============================================================================
+ * Package builder submission notification (new)
+ * ========================================================================== */
+
+/**
+ * Send the package builder submission notification. Returns nothing; logs but
+ * never throws.
+ *
+ * Takes both the persisted row and the recomputed ComputeResult so it can
+ * include canonical totals, custom-quoted items, and warnings without
+ * re-parsing the JSON columns.
+ *
+ * If `computed.ok === false` we fall back to a minimal "selections present
+ * but failed server validation" notice — this branch shouldn't happen in
+ * practice because the endpoint refuses to persist unvalidated submissions,
+ * but keeping the helper total prevents surprise crashes.
+ */
+export async function sendBuilderSubmissionNotification(
+  submission: PackageBuilderSubmissionRow,
+  computed: ComputeResult,
+): Promise<void> {
+  const env = readEnv();
+  if (!env) {
+    console.log(
+      `[builder] Resend not configured — would have notified about submission #${submission.id} (${submission.email}). Saved.`
+    );
+    return;
+  }
+  try {
+    const dollars =
+      computed.ok
+        ? `$${(computed.fixedSubtotalCents / 100).toLocaleString("en-US")}`
+        : "—";
+    const subject = `New package builder submission — ${submission.first_name} ${submission.last_name} · ${dollars} starting`;
+    const text = renderSubmissionSummaryText(submission, computed);
+    const html = renderSubmissionSummaryHtml(submission, computed);
+    const result = await client(env.apiKey).emails.send({
+      from: env.from,
+      to: env.to,
+      subject,
+      text,
+      html,
+      replyTo: submission.email,
+    });
+    if (result.error) {
+      console.error(`[builder] Resend rejected send for submission #${submission.id}:`, result.error);
+      return;
+    }
+    console.log(`[builder] Notified ${env.to} about submission #${submission.id} (id=${result.data?.id ?? "?"}).`);
+  } catch (err) {
+    console.error(`[builder] Email send failed for submission #${submission.id}:`, err);
   }
 }
