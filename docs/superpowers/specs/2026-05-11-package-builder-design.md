@@ -321,7 +321,9 @@ All decisions from the brand brief §5 and the handoff doc are honored verbatim:
 
 ## 6. Canonical pricing config
 
-Single source of truth: **`apps/site/src/lib/collections.ts`**.
+Single source of truth: **`apps/site/src/lib/builder/catalog.ts`**. (Not
+`src/lib/collections.ts` — `src/content/collections.ts` already exists with marketing copy and
+display order; the builder's pricing catalog is a separate concern.)
 
 Exports a typed `COLLECTIONS: CollectionConfig[]` whose data is the verbatim §"Collection
 data and pricing — canonical" section of the handoff doc. Both the React island and the
@@ -611,8 +613,8 @@ apps/site/
 │   │       │   └── [id].astro                       [NEW] detail + actions
 │   │       └── inquiries/[id].astro                 [EDIT] add "Copy invite" button
 │   ├── lib/
-│   │   ├── collections.ts                           [NEW] canonical config
 │   │   ├── builder/
+│   │   │   ├── catalog.ts                           [NEW] canonical pricing config
 │   │   │   ├── compute.ts                           [NEW] server-side recompute + warnings
 │   │   │   ├── invites.ts                           [NEW] CRUD for builder_invites
 │   │   │   └── submissions.ts                       [NEW] CRUD for package_builder_submissions
