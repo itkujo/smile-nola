@@ -188,7 +188,7 @@ export function isAuthed(request: Request): boolean {
 }
 
 /* ============================================================================
- * Rate limit — in-memory, per-IP, sliding window
+ * Rate limit — in-memory, per-(bucket, IP), sliding window
  * ========================================================================== */
 
 interface RateBucket {
@@ -197,9 +197,16 @@ interface RateBucket {
   start: number;
 }
 
-const RATE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
-const RATE_MAX_ATTEMPTS = 5;
+/**
+ * Buckets are keyed by `${bucketKey}::${ip}` so different routes get isolated
+ * counters on the same IP. A hammered `/admin/login` cannot lock out
+ * `/api/package-builder` and vice versa.
+ */
 const buckets = new Map<string, RateBucket>();
+
+const LOGIN_BUCKET = "login";
+const LOGIN_WINDOW_MS = 5 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 5;
 
 /**
  * Returns the IP address to use as the rate-limit key. Honors common proxy
@@ -214,33 +221,58 @@ export function clientIp(request: Request): string {
 }
 
 /**
- * Returns true and increments if the request is allowed. Returns false if
- * the IP has exceeded the threshold for the current window.
+ * Generic sliding-window rate limiter. Returns `allowed: true` and decrements
+ * `remaining` while under the threshold; returns `allowed: false` with a
+ * `retryAfter` (seconds) once exceeded.
  *
- * Side effect: prunes expired buckets when called (cheap O(n) sweep).
+ * @param bucketKey  Logical bucket (e.g. "login", "builder-submit"). Buckets
+ *                   are isolated — exhausting one does not affect another.
+ * @param ip         Client IP from {@link clientIp}.
+ * @param opts       `windowMs` is the sliding-window length in ms;
+ *                   `max` is the maximum number of allowed calls per window.
+ *
+ * Side effect: prunes expired buckets on each call (cheap O(n) sweep).
  */
-export function loginRateLimit(ip: string): { allowed: boolean; remaining: number; retryAfter: number } {
+export function rateLimit(
+  bucketKey: string,
+  ip: string,
+  opts: { windowMs: number; max: number },
+): { allowed: boolean; remaining: number; retryAfter: number } {
   const now = Date.now();
-  // Prune
+  // Prune across ALL buckets — cheap.
   for (const [k, v] of buckets) {
-    if (now - v.start > RATE_WINDOW_MS) buckets.delete(k);
+    if (now - v.start > opts.windowMs) buckets.delete(k);
   }
 
-  const bucket = buckets.get(ip);
-  if (!bucket || now - bucket.start > RATE_WINDOW_MS) {
-    buckets.set(ip, { count: 1, start: now });
-    return { allowed: true, remaining: RATE_MAX_ATTEMPTS - 1, retryAfter: 0 };
+  const key = `${bucketKey}::${ip}`;
+  const bucket = buckets.get(key);
+  if (!bucket || now - bucket.start > opts.windowMs) {
+    buckets.set(key, { count: 1, start: now });
+    return { allowed: true, remaining: opts.max - 1, retryAfter: 0 };
   }
 
   bucket.count += 1;
-  if (bucket.count > RATE_MAX_ATTEMPTS) {
-    const retryAfter = Math.max(1, Math.ceil((RATE_WINDOW_MS - (now - bucket.start)) / 1000));
+  if (bucket.count > opts.max) {
+    const retryAfter = Math.max(1, Math.ceil((opts.windowMs - (now - bucket.start)) / 1000));
     return { allowed: false, remaining: 0, retryAfter };
   }
-  return { allowed: true, remaining: Math.max(0, RATE_MAX_ATTEMPTS - bucket.count), retryAfter: 0 };
+  return { allowed: true, remaining: Math.max(0, opts.max - bucket.count), retryAfter: 0 };
 }
 
-/** Reset the bucket for an IP — call after a successful login. */
+/**
+ * Login-specific wrapper. Preserves the original (single-arg) API exactly so
+ * `/api/admin/login` keeps working without edits. 5 attempts per 5 minutes.
+ */
+export function loginRateLimit(
+  ip: string,
+): { allowed: boolean; remaining: number; retryAfter: number } {
+  return rateLimit(LOGIN_BUCKET, ip, {
+    windowMs: LOGIN_WINDOW_MS,
+    max: LOGIN_MAX_ATTEMPTS,
+  });
+}
+
+/** Reset the login bucket for an IP — call after a successful login. */
 export function resetRateLimit(ip: string): void {
-  buckets.delete(ip);
+  buckets.delete(`${LOGIN_BUCKET}::${ip}`);
 }
