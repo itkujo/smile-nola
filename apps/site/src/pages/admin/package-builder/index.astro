@@ -1,0 +1,235 @@
+---
+/**
+ * /admin/package-builder — newest-first list of every package builder
+ * submission with status filter chips and a quick "starting" subtotal column.
+ *
+ * Spec: docs/superpowers/specs/2026-05-11-package-builder-design.md §11.1
+ *
+ * Note: plan calls listSubmissions() with no args; the actual export from
+ * lib/builder/submissions is listSubmissions(db). We pass getDb() here.
+ */
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { listSubmissions } from "@/lib/builder/submissions";
+import type { PackageBuilderSubmissionRow } from "@/lib/builder/submissions";
+import { getDb } from "@/lib/db";
+
+const status = Astro.url.searchParams.get("status") ?? "all";
+
+const allRows: PackageBuilderSubmissionRow[] = listSubmissions(getDb());
+const filtered = allRows.filter((r) =>
+  status === "all" ? true : r.status === status
+);
+
+const FILTERS = [
+  { value: "all",          label: "All",          count: allRows.length },
+  { value: "new",          label: "New",          count: allRows.filter((r) => r.status === "new").length },
+  { value: "invoice_sent", label: "Invoice Sent", count: allRows.filter((r) => r.status === "invoice_sent").length },
+] as const;
+
+function shortDate(iso: string): string {
+  const d = new Date(iso.replace(" ", "T") + "Z");
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function formatDollars(cents: number): string {
+  return `$${(cents / 100).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+}
+
+function sourceLabel(source: PackageBuilderSubmissionRow["source"]): string {
+  return source === "invited-builder" ? "invited" : "cold";
+}
+---
+
+<AdminLayout title="Package Builder" section="package-builder">
+  <header class="head">
+    <div>
+      <p class="eyebrow">— admin · package builder —</p>
+      <h1 class="font-deco">submissions in flight.</h1>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="chips">
+      {FILTERS.map((f) => (
+        <a
+          href={f.value === "all" ? "/admin/package-builder" : `/admin/package-builder?status=${f.value}`}
+          class:list={["chip", { "is-active": status === f.value }]}
+        >
+          {f.label} <span class="ct">{f.count}</span>
+        </a>
+      ))}
+    </div>
+  </div>
+
+  {filtered.length === 0 ? (
+    <div class="empty">
+      <p>No package builder submissions yet. Send an invite link from an inquiry to get started.</p>
+    </div>
+  ) : (
+    <div class="table-wrap">
+      <table class="rows">
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Submitted</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Event date</th>
+            <th>Subtotal</th>
+            <th>Source</th>
+            <th aria-label="Open"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.map((r) => (
+            <tr>
+              <td>
+                <span class={`status-pill is-${r.status}`}>
+                  {r.status === "invoice_sent" ? "invoice sent" : "new"}
+                </span>
+              </td>
+              <td class="dim">{shortDate(r.created_at)}</td>
+              <td>
+                <a href={`/admin/package-builder/${r.id}`} class="name">
+                  {r.first_name} {r.last_name}
+                </a>
+              </td>
+              <td class="contact">
+                <a href={`mailto:${r.email}`}>{r.email}</a>
+              </td>
+              <td class="dim">{r.event_date || "—"}</td>
+              <td class="subtotal">{formatDollars(r.fixed_subtotal_cents)}</td>
+              <td class="dim source">{sourceLabel(r.source)}</td>
+              <td><a href={`/admin/package-builder/${r.id}`} class="open" aria-label="Open">→</a></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</AdminLayout>
+
+<style>
+  .head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 32px;
+  }
+  .head .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .head h1 {
+    font-weight: 400;
+    font-size: clamp(28px, 3.6vw, 44px);
+    color: var(--sn-ivory);
+    margin: 6px 0 0;
+    line-height: 1.05;
+  }
+
+  .toolbar { margin-bottom: 28px; }
+  .chips { display: flex; gap: 10px; flex-wrap: wrap; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border: 1px solid var(--sn-gold-24);
+    border-radius: 999px;
+    color: var(--sn-ivory);
+    font-size: 0.78rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    transition: all 200ms ease;
+  }
+  .chip:hover { border-color: var(--sn-gold); }
+  .chip.is-active {
+    background-color: var(--sn-gold);
+    color: var(--sn-black);
+    border-color: var(--sn-gold);
+  }
+  .chip .ct {
+    background: rgba(0, 0, 0, 0.18);
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+  }
+  .chip:not(.is-active) .ct {
+    background: var(--sn-gold-12);
+    color: var(--sn-gold);
+  }
+
+  .empty {
+    background: var(--sn-soft-black);
+    border: 1px dashed var(--sn-gold-24);
+    color: var(--sn-muted-stone);
+    padding: 32px;
+    text-align: center;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    background: var(--sn-soft-black);
+    border: 1px solid var(--sn-gold-24);
+  }
+  table.rows {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 820px;
+  }
+  table.rows th {
+    text-align: left;
+    padding: 14px 16px;
+    color: var(--sn-gold);
+    font-weight: 400;
+    font-size: 0.68rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--sn-gold-24);
+    background: rgba(212, 175, 55, 0.04);
+  }
+  table.rows td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--sn-gold-12);
+    vertical-align: top;
+    font-size: 0.92rem;
+  }
+  table.rows tr:last-child td { border-bottom: 0; }
+  table.rows tr:hover td { background: rgba(212, 175, 55, 0.04); }
+
+  .dim { color: var(--sn-muted-stone); font-size: 0.85rem; }
+  .name { color: var(--sn-ivory); font-weight: 500; transition: color 200ms ease; }
+  .name:hover { color: var(--sn-gold); }
+  .contact a { color: var(--sn-champagne); }
+  .contact a:hover { color: var(--sn-gold); }
+  .source { font-size: 0.78rem; letter-spacing: 0.06em; }
+  .subtotal { color: var(--sn-gold); font-variant-numeric: tabular-nums; }
+
+  .status-pill {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.66rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    border: 1px solid;
+    white-space: nowrap;
+  }
+  .status-pill.is-new          { color: var(--sn-amber); border-color: var(--sn-amber); background: rgba(255, 178, 63, 0.08); }
+  .status-pill.is-invoice_sent { color: var(--sn-gold);  border-color: var(--sn-gold-40); background: rgba(212, 175, 55, 0.08); }
+
+  .open {
+    color: var(--sn-gold);
+    font-size: 1rem;
+    transition: transform 200ms ease;
+    display: inline-block;
+  }
+  .open:hover { transform: translateX(3px); }
+</style>
