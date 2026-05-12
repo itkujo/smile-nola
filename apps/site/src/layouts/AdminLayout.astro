@@ -13,15 +13,21 @@ import LogoMark from "@/components/brand/LogoMark.astro";
 interface Props {
   title: string;
   /** Section name highlighted in the admin nav. */
-  section?: "dashboard" | "inquiries" | "portfolio" | "testimonials";
+  section?:
+    | "dashboard"
+    | "inquiries"
+    | "package-builder"
+    | "portfolio"
+    | "testimonials";
 }
 const { title, section } = Astro.props;
 
 const NAV = [
-  { href: "/admin",               label: "Dashboard",    key: "dashboard"    },
-  { href: "/admin/inquiries",     label: "Inquiries",    key: "inquiries"    },
-  { href: "/admin/portfolio",     label: "Video Portfolio", key: "portfolio" },
-  { href: "/admin/testimonials",  label: "Testimonials", key: "testimonials" },
+  { href: "/admin",                  label: "Dashboard",        key: "dashboard"       },
+  { href: "/admin/inquiries",        label: "Inquiries",        key: "inquiries"       },
+  { href: "/admin/package-builder",  label: "Package Builder",  key: "package-builder" },
+  { href: "/admin/portfolio",        label: "Video Portfolio",  key: "portfolio"       },
+  { href: "/admin/testimonials",     label: "Testimonials",     key: "testimonials"    },
 ] as const;
 ---
 
