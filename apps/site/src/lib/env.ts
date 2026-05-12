@@ -27,3 +27,19 @@ export function getEnvBool(key: string, fallback = false): boolean {
   if (!v) return fallback;
   return v === "1" || v === "true" || v === "yes" || v === "on";
 }
+
+/**
+ * Strict env read — throws if the variable is missing or empty.
+ * Use for transports/secrets where a silent fallback would mask a real
+ * configuration bug (e.g. RESEND_API_KEY, ADMIN_SESSION_SECRET).
+ */
+export function getRequiredEnv(name: string): string {
+  const v = getEnv(name).trim();
+  if (!v) {
+    throw new Error(
+      `Missing required environment variable: ${name}. ` +
+        `Set it in apps/site/.env locally and in the Coolify env UI for production.`
+    );
+  }
+  return v;
+}
