@@ -1,10 +1,34 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { getAllLeads } from "@/lib/db";
 import { collectionLabel, SOURCE_DEFAULT } from "@/lib/schema";
 import { GoldDivider } from "@/components/brand/GoldDivider";
 import { LogoMark } from "@/components/brand/LogoMark";
 import { DeleteLeadButton } from "./DeleteLeadButton";
+import { verifyCookie, COOKIE_NAME } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Defense in depth: middleware already redirects unauthed requests away
+ * from /admin/*, but we re-check the cookie here so a misconfiguration
+ * that bypasses middleware (e.g. a future build that doesn't match the
+ * matcher correctly) still doesn't leak captured leads.
+ */
+async function requireAuth(): Promise<void> {
+  const hdrs = await headers();
+  const cookieHeader = hdrs.get("cookie");
+  const value = cookieHeader
+    ? cookieHeader
+        .split(/;\s*/)
+        .find((p) => p.startsWith(`${COOKIE_NAME}=`))
+        ?.slice(COOKIE_NAME.length + 1)
+        ?.trim()
+    : undefined;
+  if (!verifyCookie(value)) {
+    redirect("/login?next=/admin");
+  }
+}
 
 function fmtDate(iso: string): string {
   try {
@@ -34,6 +58,7 @@ function fmtEventDate(iso: string): string {
 }
 
 export default async function AdminPage() {
+  await requireAuth();
   const leads = getAllLeads();
 
   return (

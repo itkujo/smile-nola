@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server";
 import { softDeleteLead } from "@/lib/db";
+import { isAuthed } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  if (!isAuthed(request)) {
+    return NextResponse.json(
+      { ok: false, error: "Unauthenticated" },
+      { status: 401 },
+    );
+  }
   const { id } = await params;
   const numId = Number(id);
   if (!Number.isInteger(numId) || numId <= 0) {
