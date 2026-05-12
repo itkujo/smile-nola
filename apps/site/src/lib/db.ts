@@ -637,3 +637,79 @@ export function inquiryCounts(): { new: number; contacted: number; closed: numbe
   }
   return counts;
 }
+
+/* ============================================================================
+ * Booth -> prod replication (Phase 2)
+ * ========================================================================== */
+
+/**
+ * Shape of one inquiry row as the booth pushes it to the prod sync endpoint.
+ * Optional fields are nullable; the booth fills in everything it has and
+ * leaves NULL for fields it doesn't capture.
+ */
+export interface BoothSyncPayload {
+  external_uuid: string;
+  created_at: string;       // booth-local ISO timestamp (kept verbatim)
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  preferred_contact: string | null;
+  event_date: string | null;
+  venue: string | null;
+  collections_interested: string | null; // JSON-stringified array
+  notes: string | null;
+  // Booth-specific
+  partner1_name: string | null;
+  partner2_name: string | null;
+  event_setting: string | null;
+  poc_relationship: string | null;
+}
+
+/**
+ * Idempotent upsert keyed on external_uuid. If a row with that UUID already
+ * exists, do nothing (the booth's most recent push wins; prod is canonical
+ * after first ingest). Returns whether the row was newly inserted.
+ *
+ * The endpoint that calls this validates the bearer token; this function
+ * deliberately doesn't reach for auth state. Stays pure.
+ */
+export function upsertBoothInquiry(
+  payload: BoothSyncPayload,
+): { inserted: boolean; id: number } {
+  const db = getDb();
+
+  // Check first — INSERT OR IGNORE would also work but doesn't tell us
+  // whether we inserted or skipped, which the caller wants to report.
+  const existing = db
+    .prepare<[string], { id: number }>(
+      "SELECT id FROM inquiries WHERE external_uuid = ?",
+    )
+    .get(payload.external_uuid);
+
+  if (existing) {
+    return { inserted: false, id: existing.id };
+  }
+
+  const result = db
+    .prepare(
+      `INSERT INTO inquiries (
+         created_at, source, status, event_type,
+         first_name, last_name, email, phone,
+         preferred_contact, event_date, venue,
+         collections_interested, notes,
+         partner1_name, partner2_name, event_setting, poc_relationship,
+         external_uuid, synced_at
+       ) VALUES (
+         @created_at, 'booth-expo', 'new', 'wedding',
+         @first_name, @last_name, @email, @phone,
+         @preferred_contact, @event_date, @venue,
+         @collections_interested, @notes,
+         @partner1_name, @partner2_name, @event_setting, @poc_relationship,
+         @external_uuid, CURRENT_TIMESTAMP
+       )`,
+    )
+    .run(payload);
+
+  return { inserted: true, id: Number(result.lastInsertRowid) };
+}
