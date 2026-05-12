@@ -67,6 +67,14 @@ services:
       # the container, backed by the named volume mounted below.
       SMILE_NOLA_DB_DIR: "/data"
 
+      # ---- Public origin override (OPTIONAL) ---------------------------------
+      # Used by endpoints that ship shareable absolute URLs back to admins
+      # (e.g. the "Copy package builder link" button). The helper in
+      # /api/package-builder/invite.ts checks X-Forwarded-Proto +
+      # X-Forwarded-Host first (Traefik sets both), so this is a safety net
+      # if the proxy config ever drops those headers.
+      SITE_PUBLIC_URL: ${SITE_PUBLIC_URL:-}
+
       # ---- Admin auth (REQUIRED) ---------------------------------------------
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET}
