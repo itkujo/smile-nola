@@ -1,0 +1,608 @@
+---
+/**
+ * /admin/package-builder/<id> — single submission view with status actions.
+ *
+ * GET   renders the full submission summary.
+ * POST  flips status:
+ *         action=mark_invoice_sent → status='invoice_sent', invoice_sent_at=now
+ *         action=revert            → status='new',         invoice_sent_at=null
+ *
+ * Form actions post back to this same URL (progressive enhancement — they
+ * work without JavaScript). The "Copy invite link" button below is the only
+ * piece that requires JS, and it degrades gracefully (it stays inert).
+ *
+ * Spec: docs/superpowers/specs/2026-05-11-package-builder-design.md §11.2
+ *
+ * Note: plan called getSubmission(id) / markInvoiceSent(id) / revertToNew(id);
+ * the real exports all take (db, id). We pass getDb() explicitly.
+ */
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import {
+  getSubmission,
+  markInvoiceSent,
+  revertToNew,
+} from "@/lib/builder/submissions";
+import { getCollection, getPackage, getAddon } from "@/lib/builder/catalog";
+import type {
+  BuilderSelections,
+  BuilderWarning,
+  CustomQuotedItem,
+} from "@/lib/builder/compute";
+import { getDb } from "@/lib/db";
+
+const db = getDb();
+const id = Number(Astro.params.id);
+const submission = Number.isFinite(id) ? getSubmission(db, id) : undefined;
+if (!submission) {
+  return new Response("Submission not found", { status: 404 });
+}
+
+// ----- POST handler: status flip --------------------------------------------
+// Auth: this route lives under /admin/* so the global middleware already
+// requires a valid admin session cookie. No extra isAuthed() needed.
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const action = String(form.get("action") ?? "");
+  if (action === "mark_invoice_sent") {
+    markInvoiceSent(db, submission.id);
+    return Astro.redirect(`/admin/package-builder/${submission.id}`, 303);
+  }
+  if (action === "revert") {
+    revertToNew(db, submission.id);
+    return Astro.redirect(`/admin/package-builder/${submission.id}`, 303);
+  }
+  return new Response("Unknown action", { status: 400 });
+}
+
+// ----- Decode JSON columns --------------------------------------------------
+let selections: BuilderSelections = { collections: [], packages: [], addons: [] };
+try {
+  const parsed = JSON.parse(submission.selections_json);
+  if (parsed && typeof parsed === "object") selections = parsed as BuilderSelections;
+} catch { /* leave defaults */ }
+
+let customQuoted: CustomQuotedItem[] = [];
+try {
+  if (submission.custom_quoted_json) {
+    const parsed = JSON.parse(submission.custom_quoted_json);
+    if (Array.isArray(parsed)) customQuoted = parsed as CustomQuotedItem[];
+  }
+} catch { /* leave defaults */ }
+
+let warnings: BuilderWarning[] = [];
+try {
+  if (submission.warnings_json) {
+    const parsed = JSON.parse(submission.warnings_json);
+    if (Array.isArray(parsed)) warnings = parsed as BuilderWarning[];
+  }
+} catch { /* leave defaults */ }
+
+// ----- Helpers --------------------------------------------------------------
+function formatDollars(cents: number): string {
+  return `$${(cents / 100).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+}
+
+function relativeTime(iso: string | null): string {
+  if (!iso) return "";
+  const t = new Date(iso.replace(" ", "T") + "Z").getTime();
+  if (Number.isNaN(t)) return iso;
+  const diffMs = Date.now() - t;
+  const minutes = Math.round(diffMs / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
+
+// Group selections by collection for the readable list.
+interface DisplayLine {
+  label: string;
+  qty: number;
+  priceText: string;
+}
+interface DisplayGroup {
+  collectionId: string;
+  collectionName: string;
+  lines: DisplayLine[];
+}
+
+const groups: DisplayGroup[] = selections.collections.map((cid) => {
+  const c = getCollection(cid);
+  const lines: DisplayLine[] = [];
+
+  for (const sp of selections.packages.filter((p) => p.collectionId === cid)) {
+    const pkg = getPackage(cid, sp.packageId);
+    if (!pkg) continue;
+    lines.push({
+      label: pkg.name,
+      qty: 1,
+      priceText: formatDollars(pkg.priceCents),
+    });
+  }
+  for (const sa of selections.addons.filter((a) => a.collectionId === cid)) {
+    const a = getAddon(cid, sa.addonId);
+    if (!a) continue;
+    if (a.priceType === "fixed" && a.priceCents !== null) {
+      lines.push({
+        label: a.name,
+        qty: sa.qty,
+        priceText:
+          sa.qty > 1
+            ? `${formatDollars(a.priceCents)} × ${sa.qty} = ${formatDollars(a.priceCents * sa.qty)}`
+            : formatDollars(a.priceCents),
+      });
+    } else if (a.priceType === "starting" && a.priceCents !== null) {
+      lines.push({
+        label: a.name,
+        qty: sa.qty,
+        priceText: `starts at ${formatDollars(a.priceCents)}`,
+      });
+    } else {
+      lines.push({
+        label: a.name,
+        qty: sa.qty,
+        priceText: "custom quoted",
+      });
+    }
+  }
+
+  return {
+    collectionId: cid,
+    collectionName: c?.displayName ?? cid,
+    lines,
+  };
+});
+---
+
+<AdminLayout title={`Submission #${submission.id}`} section="package-builder">
+  <p class="back-link"><a href="/admin/package-builder">← All submissions</a></p>
+
+  <header class="head">
+    <div>
+      <p class="eyebrow">— submission #{submission.id} —</p>
+      <h1 class="font-deco">{submission.first_name} {submission.last_name}</h1>
+      <p class="head-meta">
+        <a href={`mailto:${submission.email}`}>{submission.email}</a> ·
+        <a href={`tel:${submission.phone.replace(/[^0-9+]/g, "")}`}>{submission.phone}</a> ·
+        <span class="muted">received {submission.created_at}</span>
+      </p>
+    </div>
+    <span class={`status-pill is-${submission.status}`}>
+      {submission.status === "invoice_sent" ? "invoice sent" : "new"}
+    </span>
+  </header>
+
+  <div class="layout">
+    <div class="col-main">
+      <section class="block">
+        <h2>Contact</h2>
+        <dl class="kv">
+          <div><dt>Name</dt><dd>{submission.first_name} {submission.last_name}</dd></div>
+          <div><dt>Email</dt><dd><a href={`mailto:${submission.email}`}>{submission.email}</a></dd></div>
+          <div><dt>Phone</dt><dd><a href={`tel:${submission.phone.replace(/[^0-9+]/g, "")}`}>{submission.phone}</a></dd></div>
+          {submission.inquiry_id !== null && (
+            <div>
+              <dt>Linked inquiry</dt>
+              <dd>
+                <a href={`/admin/inquiries/${submission.inquiry_id}`} class="link-badge">
+                  linked to inquiry #{submission.inquiry_id}
+                </a>
+              </dd>
+            </div>
+          )}
+        </dl>
+      </section>
+
+      <section class="block">
+        <h2>Event</h2>
+        <dl class="kv">
+          <div><dt>Date</dt><dd>{submission.event_date || "—"}</dd></div>
+          <div><dt>Type</dt><dd>{submission.event_type || "—"}</dd></div>
+          <div><dt>Venue</dt><dd>{submission.venue || "—"}</dd></div>
+          <div><dt>Guest count</dt><dd>{submission.guest_count ?? "—"}</dd></div>
+        </dl>
+      </section>
+
+      <section class="block">
+        <h2>Consultation preference</h2>
+        <p class="pref">
+          {submission.consultation_pref === "video"     && "Quick video call — Google Meet"}
+          {submission.consultation_pref === "in_person" && "In-person walkthrough"}
+          {submission.consultation_pref === "none"      && "No call needed"}
+          {!submission.consultation_pref                && "—"}
+        </p>
+      </section>
+
+      <section class="block">
+        <h2>Selections</h2>
+        {groups.length === 0 ? (
+          <p class="muted">No selections recorded.</p>
+        ) : (
+          <div class="groups">
+            {groups.map((g) => (
+              <div class="group">
+                <h3>{g.collectionName}</h3>
+                {g.lines.length === 0 ? (
+                  <p class="muted">No items selected from this collection.</p>
+                ) : (
+                  <ul class="line-list">
+                    {g.lines.map((line) => (
+                      <li>
+                        <span class="line-label">{line.label}</span>
+                        <span class="line-price">{line.priceText}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <p class="subtotal-line">
+          <span class="subtotal-label">Starting subtotal</span>
+          <span class="subtotal-amount">{formatDollars(submission.fixed_subtotal_cents)}</span>
+        </p>
+      </section>
+
+      {customQuoted.length > 0 && (
+        <section class="block">
+          <h2>Custom quoted items</h2>
+          <ul class="line-list">
+            {customQuoted.map((q) => (
+              <li>
+                <span class="line-label">{q.label}</span>
+                <span class="line-price">
+                  {q.startingPriceCents !== null
+                    ? `starts at ${formatDollars(q.startingPriceCents)}`
+                    : "custom quoted"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {warnings.length > 0 && (
+        <section class="block warnings">
+          <h2>Warnings shown to client</h2>
+          <ul class="warning-list">
+            {warnings.map((w) => <li>{w.message}</li>)}
+          </ul>
+        </section>
+      )}
+
+      {submission.client_note && (
+        <section class="block">
+          <h2>Client note</h2>
+          <div class="message">{submission.client_note}</div>
+        </section>
+      )}
+
+      <section class="block">
+        <h2>Admin notes</h2>
+        <p class="muted">Note editing lives on the inquiries detail page when this submission is linked to one. For unlinked submissions, capture notes in HoneyBook.</p>
+      </section>
+    </div>
+
+    <aside class="col-side">
+      <section class="side-block">
+        <h2>Status</h2>
+        <p class={`status-pill is-${submission.status}`}>
+          {submission.status === "invoice_sent" ? "invoice sent" : "new"}
+        </p>
+
+        {submission.status === "new" ? (
+          <form method="POST" class="action-form">
+            <input type="hidden" name="action" value="mark_invoice_sent" />
+            <button type="submit" class="btn-gold full">Mark Invoice Sent</button>
+          </form>
+        ) : (
+          <div class="invoice-sent-row">
+            <p class="invoice-sent-meta">
+              Invoice sent {relativeTime(submission.invoice_sent_at)}
+            </p>
+            <form method="POST" class="undo-form">
+              <input type="hidden" name="action" value="revert" />
+              <button type="submit" class="btn-ghost small">undo</button>
+            </form>
+          </div>
+        )}
+
+        {submission.inquiry_id !== null && (
+          <div class="invite-row">
+            <button
+              type="button"
+              class="btn-ghost full"
+              data-copy-invite
+              data-inquiry-id={submission.inquiry_id}
+            >Copy invite link</button>
+            <span class="copy-toast" aria-live="polite"></span>
+          </div>
+        )}
+      </section>
+
+      <section class="side-block">
+        <h2>Metadata</h2>
+        <dl class="kv side-kv">
+          <div><dt>ID</dt><dd>#{submission.id}</dd></div>
+          <div><dt>Source</dt><dd>{submission.source === "invited-builder" ? "invited" : "cold"}</dd></div>
+          <div><dt>Created</dt><dd>{submission.created_at}</dd></div>
+          {submission.invite_token && (
+            <div><dt>Invite token</dt><dd class="token">{submission.invite_token}</dd></div>
+          )}
+        </dl>
+      </section>
+    </aside>
+  </div>
+</AdminLayout>
+
+<script>
+  /**
+   * Copy invite link — admin-only. POSTs to /api/package-builder/invite,
+   * gets back a URL, copies it to clipboard, shows a small toast.
+   */
+  document.querySelectorAll<HTMLButtonElement>("[data-copy-invite]").forEach((btn) => {
+    const toast = btn.parentElement?.querySelector<HTMLSpanElement>(".copy-toast");
+    btn.addEventListener("click", async () => {
+      const inquiryId = Number(btn.dataset.inquiryId);
+      if (!Number.isFinite(inquiryId)) return;
+      btn.setAttribute("disabled", "true");
+      const originalLabel = btn.textContent ?? "Copy invite link";
+      btn.textContent = "Copying…";
+      try {
+        const res = await fetch("/api/package-builder/invite", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ inquiryId }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Server responded ${res.status}`);
+        }
+        const data = (await res.json()) as { url: string };
+        await navigator.clipboard.writeText(data.url);
+        if (toast) {
+          toast.textContent = "Invite link copied.";
+          toast.style.color = "var(--sn-gold)";
+        }
+      } catch (err) {
+        if (toast) {
+          toast.textContent = err instanceof Error ? err.message : "Copy failed.";
+          toast.style.color = "var(--sn-amber)";
+        }
+      } finally {
+        btn.removeAttribute("disabled");
+        btn.textContent = originalLabel;
+      }
+    });
+  });
+</script>
+
+<style>
+  .back-link {
+    margin: 0 0 18px;
+    font-size: 0.8rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .back-link a {
+    color: var(--sn-muted-stone);
+    transition: color 200ms ease;
+  }
+  .back-link a:hover { color: var(--sn-gold); }
+
+  .head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-bottom: 36px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--sn-gold-12);
+  }
+  .head .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .head h1 {
+    font-weight: 400;
+    font-size: clamp(28px, 3.8vw, 44px);
+    color: var(--sn-ivory);
+    margin: 8px 0 8px;
+    line-height: 1.05;
+  }
+  .head-meta { color: var(--sn-champagne); font-size: 0.92rem; margin: 0; }
+  .head-meta a { color: var(--sn-champagne); transition: color 200ms ease; }
+  .head-meta a:hover { color: var(--sn-gold); }
+  .head-meta .muted { color: var(--sn-muted-stone); font-size: 0.85rem; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+  @media (min-width: 1024px) {
+    .layout { grid-template-columns: minmax(0, 1fr) 320px; }
+  }
+
+  .block,
+  .side-block {
+    margin-bottom: 28px;
+    padding: 24px;
+    background: var(--sn-soft-black);
+    border: 1px solid var(--sn-gold-24);
+  }
+  .side-block { margin-bottom: 20px; }
+  .block.warnings { border-left: 2px solid var(--sn-soft-coral, #d18b7d); }
+
+  h2 {
+    color: var(--sn-gold);
+    font-family: var(--font-body);
+    font-size: 0.72rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin: 0 0 18px;
+  }
+  h3 {
+    color: var(--sn-gold);
+    font-size: 0.78rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin: 0 0 12px;
+  }
+
+  .kv {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 18px 24px;
+    margin: 0;
+  }
+  .side-kv {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .kv > div { min-width: 0; }
+  dt {
+    color: var(--sn-muted-stone);
+    font-size: 0.65rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  dd {
+    color: var(--sn-ivory);
+    margin: 0;
+    font-size: 0.95rem;
+    word-break: break-word;
+  }
+  dd a { color: var(--sn-champagne); }
+  dd a:hover { color: var(--sn-gold); }
+  .token { font-family: ui-monospace, monospace; font-size: 0.78rem; color: var(--sn-muted-stone); }
+
+  .link-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border: 1px solid var(--sn-gold-40);
+    border-radius: 999px;
+    color: var(--sn-gold);
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+  }
+
+  .status-pill {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    border: 1px solid;
+    white-space: nowrap;
+    margin: 0 0 18px;
+  }
+  .status-pill.is-new          { color: var(--sn-amber); border-color: var(--sn-amber); background: rgba(255, 178, 63, 0.08); }
+  .status-pill.is-invoice_sent { color: var(--sn-gold);  border-color: var(--sn-gold-40); background: rgba(212, 175, 55, 0.08); }
+
+  .groups { display: flex; flex-direction: column; gap: 22px; }
+  .group {
+    padding: 16px 18px;
+    background: var(--sn-black);
+    border-left: 2px solid var(--sn-gold-40);
+  }
+  .line-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .line-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--sn-gold-12);
+    font-size: 0.92rem;
+  }
+  .line-list li:last-child { border-bottom: 0; }
+  .line-label  { color: var(--sn-ivory); }
+  .line-price  { color: var(--sn-gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .subtotal-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin: 22px 0 0;
+    padding-top: 18px;
+    border-top: 1px solid var(--sn-gold-24);
+  }
+  .subtotal-label {
+    color: var(--sn-muted-stone);
+    font-size: 0.7rem;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+  }
+  .subtotal-amount {
+    color: var(--sn-gold);
+    font-size: 1.4rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .warning-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    color: var(--sn-champagne);
+    font-size: 0.92rem;
+    line-height: 1.5;
+  }
+
+  .pref { color: var(--sn-ivory); margin: 0; }
+  .message { color: var(--sn-champagne); font-size: 1rem; line-height: 1.7; white-space: pre-wrap; }
+  .muted { color: var(--sn-muted-stone); font-size: 0.85rem; margin: 0; }
+
+  .action-form { margin: 0; }
+  .btn-gold.full,
+  .btn-ghost.full { width: 100%; }
+  .btn-ghost.small {
+    padding: 4px 10px;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+  }
+  .invoice-sent-row {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .invoice-sent-meta {
+    margin: 0;
+    color: var(--sn-muted-stone);
+    font-size: 0.85rem;
+  }
+  .invite-row {
+    margin-top: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .copy-toast {
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    min-height: 1em;
+  }
+</style>
