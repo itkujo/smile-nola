@@ -17,8 +17,37 @@ import type { APIRoute } from "astro";
 import { isAuthed } from "@/lib/auth";
 import { createOrGetActiveInvite } from "@/lib/builder/invites";
 import { getDb } from "@/lib/db";
+import { getEnv } from "@/lib/env";
 
 export const prerender = false;
+
+/**
+ * Resolve the public origin for invite links.
+ *
+ * Behind Coolify's Traefik (and any standard reverse proxy) the inbound
+ * `request.url` reflects the internal upstream URL (e.g. http://localhost:3000),
+ * which is wrong to ship back to the admin as a shareable link. Trust order:
+ *
+ *   1. X-Forwarded-Proto + X-Forwarded-Host  (Traefik sets these)
+ *   2. SITE_PUBLIC_URL env var               (explicit operator override)
+ *   3. new URL(request.url).origin           (local dev with no proxy)
+ *
+ * Returns an origin string with no trailing slash, e.g. "https://smile-nola.com".
+ */
+function publicOrigin(request: Request): string {
+  const proto = request.headers.get("x-forwarded-proto");
+  const host = request.headers.get("x-forwarded-host");
+  if (proto && host) {
+    // X-Forwarded-* can be comma-separated when chained through multiple
+    // proxies; the first value is the original client-facing one.
+    const firstProto = proto.split(",")[0]!.trim();
+    const firstHost = host.split(",")[0]!.trim();
+    if (firstProto && firstHost) return `${firstProto}://${firstHost}`;
+  }
+  const override = getEnv("SITE_PUBLIC_URL").trim();
+  if (override) return override.replace(/\/$/, "");
+  return new URL(request.url).origin;
+}
 
 interface InviteRequestBody {
   inquiryId?: unknown;
@@ -56,11 +85,12 @@ export const POST: APIRoute = async ({ request }) => {
     return jsonResponse(500, { ok: false, error: "server_error" });
   }
 
-  // ---- 4. Build the URL (origin from the inbound request) ---------------
-  // In production this evaluates to https://smile-nola.com/build?invite=…;
-  // locally it stays on http://localhost:4321 so dev testing works without
-  // hard-coded hosts.
-  const base = new URL(request.url).origin;
+  // ---- 4. Build the URL using the public origin -------------------------
+  // See publicOrigin() above — honors X-Forwarded-Proto + X-Forwarded-Host
+  // when set by Traefik, then SITE_PUBLIC_URL env, then falls back to
+  // request.url's origin for local dev. In production this evaluates to
+  // https://smile-nola.com/build?invite=…; in dev to http://localhost:4321.
+  const base = publicOrigin(request);
   const url = `${base}/build?invite=${encodeURIComponent(invite.token)}`;
 
   return jsonResponse(200, {

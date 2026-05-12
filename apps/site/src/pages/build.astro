@@ -2,21 +2,29 @@
 /**
  * /build — host page for the package builder React island.
  *
- * Resolves an optional ?invite=<token> server-side by calling the internal
- * /api/package-builder/invite/<token> handler. On success the prefill payload
- * is passed to the island as the `invite` prop; on failure (404/410/network)
- * we silently fall back to the cold flow per spec §4.5. The token resolution
- * happens here (not in the island) so the page renders with hydrated identity
- * on first paint — no client-side fetch flash.
+ * Resolves an optional ?invite=<token> server-side by reading directly from
+ * SQLite (same code path the public /api/package-builder/invite/<token>
+ * endpoint uses). On unknown/expired tokens we silently fall back to the
+ * cold flow per spec §4.5.
+ *
+ * Why direct in-process calls instead of an internal fetch: the previous
+ * implementation called fetch() against Astro.url-derived absolute URLs
+ * (e.g. https://smile-nola.com/api/...). Behind Coolify's Traefik proxy
+ * that means the container tries to call itself through the public DNS +
+ * Traefik routing layer, which fails with `TypeError: fetch failed` in
+ * undici. Going through SQLite directly is faster, has no network
+ * dependencies, and can't deadlock against the same process serving the
+ * request.
  *
  * Note: plan calls for `@/layouts/Layout.astro`, but this project ships
- * `BaseLayout.astro` as the canonical public layout (every other page uses
- * it). Substituted accordingly.
+ * `BaseLayout.astro` as the canonical public layout.
  */
 
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { Builder } from "@/components/builder/Builder";
 import type { BuilderProps } from "@/components/builder/Builder";
+import { getInvite } from "@/lib/builder/invites";
+import { getDb, getInquiry } from "@/lib/db";
 
 const token = Astro.url.searchParams.get("invite")?.trim() ?? "";
 
@@ -24,24 +32,41 @@ let invite: BuilderProps["invite"] = null;
 
 if (token) {
   try {
-    const url = new URL(`/api/package-builder/invite/${encodeURIComponent(token)}`, Astro.url);
-    const res = await fetch(url, { headers: { accept: "application/json" } });
-    if (res.ok) {
-      const body = (await res.json()) as {
-        ok: true;
-        prefill: BuilderProps["invite"] extends infer T
-          ? T extends { prefill: infer P } ? P : never
-          : never;
-        inquiryId: number;
-      };
-      if (body.ok) {
-        invite = { token, inquiryId: body.inquiryId, prefill: body.prefill };
+    const db = getDb();
+    const inviteRow = getInvite(db, token);
+    if (inviteRow) {
+      // Expiry check — null means "never expires" (the v1 default).
+      let expired = false;
+      if (inviteRow.expires_at) {
+        const expMs = Date.parse(inviteRow.expires_at.replace(" ", "T") + "Z");
+        if (Number.isFinite(expMs) && expMs < Date.now()) expired = true;
+      }
+      if (!expired) {
+        const inquiry = getInquiry(inviteRow.inquiry_id);
+        if (inquiry) {
+          invite = {
+            token,
+            inquiryId: inquiry.id,
+            prefill: {
+              firstName: inquiry.first_name,
+              lastName: inquiry.last_name,
+              email: inquiry.email,
+              phone: inquiry.phone,
+              event: {
+                date: inquiry.event_date ?? null,
+                type: inquiry.event_type ?? null,
+                venue: inquiry.venue ?? null,
+                guestCount: inquiry.guest_count ?? null,
+              },
+            },
+          };
+        }
       }
     }
-    // Non-ok statuses (404 invite_not_found, 410 invite_expired) silently fall
-    // through to the cold flow — visitor still gets a working builder.
+    // Anything that didn't produce an invite above (unknown token, expired,
+    // dangling inquiry) silently falls through to the cold flow.
   } catch (err) {
-    // Network hiccup talking to ourselves — log and degrade to cold flow.
+    // SQLite hiccup; log and degrade to cold flow rather than 500.
     // eslint-disable-next-line no-console
     console.warn("[build.astro] invite resolution failed", err);
   }
