@@ -27,7 +27,7 @@ import {
 import { getInvite, markInviteConsumed } from "@/lib/builder/invites";
 import { sendBuilderSubmissionNotification } from "@/lib/email";
 import { clientIp, rateLimit } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { getDb, getInquiry } from "@/lib/db";
 
 export const prerender = false;
 
@@ -140,9 +140,14 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   // ---- 7. Fire-and-forget notification (NEVER awaited) -------------------
+  // Load the linked inquiry so the email subject + body can carry the
+  // booth-origin partner names (the builder form doesn't capture them).
+  // Cold-flow submissions have inquiry_id=null and the email falls back to
+  // the submission's own contact name.
   const row = getSubmission(db, saved.id);
   if (row) {
-    void sendBuilderSubmissionNotification(row, computed);
+    const linkedInquiry = inquiryId != null ? (getInquiry(inquiryId) ?? null) : null;
+    void sendBuilderSubmissionNotification(row, computed, linkedInquiry);
   }
 
   // ---- 8. Respond --------------------------------------------------------

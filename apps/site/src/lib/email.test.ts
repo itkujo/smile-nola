@@ -119,8 +119,29 @@ describe("sendInquiryNotification (post-Resend migration)", () => {
     expect(arg.from).toBe("Smile NOLA <no-reply@mail.smile-nola.com>");
     expect(arg.to).toBe("ops@smile-nola.com");
     expect(arg.replyTo).toBe("test@example.com");
-    expect(arg.subject).toContain("Test Person");
-    expect(arg.subject).toContain("contact");
+
+    // Subject pins the Zapier contract — ID leads, partners fall back to
+    // first/last name when partner1/2 columns are NULL (site-form path),
+    // event_type is capitalized.
+    expect(arg.subject).toBe(
+      "-Lead- #42 \u00b7 Wedding \u00b7 Test Person \u00b7 2026-09-12",
+    );
+
+    // Body anchor block — Zapier's "extract field" step reads these lines.
+    expect(arg.text).toContain("Project ID: 42");
+    expect(arg.text).toContain(
+      "Project Name: Wedding \u00b7 Test Person \u00b7 2026-09-12 #42",
+    );
+    expect(arg.html).toContain("Project ID: 42");
+    expect(arg.html).toContain("Project Name: Wedding");
+
+    // Stable shape: every Phase 1 column is rendered (em-dash when null) so
+    // the email body is consistent regardless of source.
+    expect(arg.text).toContain("Partner 1:");
+    expect(arg.text).toContain("Partner 2:");
+    expect(arg.text).toContain("Event setting:");
+    expect(arg.text).toContain("POC relationship:");
+
     expect(arg.text).toContain("Test Person");
     expect(arg.html).toContain("Test Person");
   });
@@ -157,5 +178,47 @@ describe("sendInquiryNotification (post-Resend migration)", () => {
     const { sendInquiryNotification } = await import("@/lib/email");
     await expect(sendInquiryNotification(buildInquiry())).resolves.toBeUndefined();
     expect(errSpy).toHaveBeenCalled();
+  });
+
+  it("booth-origin inquiry uses partner1 & partner2 in subject + body, includes booth fields", async () => {
+    process.env.RESEND_API_KEY = "re_test_key";
+    process.env.NOTIFY_EMAIL = "ops@smile-nola.com";
+    sendMock.mockResolvedValue({ data: { id: "msg_456" }, error: null });
+
+    const { sendInquiryNotification } = await import("@/lib/email");
+    await sendInquiryNotification(
+      buildInquiry({
+        id: 7,
+        source: "booth-expo",
+        first_name: "Thibault",
+        last_name: "Kopp",
+        event_type: "wedding",
+        event_date: "2026-11-07",
+        partner1_name: "Thibault Kopp",
+        partner2_name: "Sarah Smith",
+        event_setting: "Outdoor — Covered",
+        poc_relationship: "One of the couple",
+        external_uuid: "f00fdcba-1234-4abc-9def-0123456789ab",
+        message: null,
+      }),
+    );
+
+    const arg = sendMock.mock.calls[0]![0];
+    expect(arg.subject).toBe(
+      "-Lead- #7 \u00b7 Wedding \u00b7 Thibault Kopp & Sarah Smith \u00b7 2026-11-07",
+    );
+    expect(arg.text).toContain("Project ID: 7");
+    expect(arg.text).toContain(
+      "Project Name: Wedding \u00b7 Thibault Kopp & Sarah Smith \u00b7 2026-11-07 #7",
+    );
+    // Labels are padded to width 20 via .padEnd(20), so "Partner 1:" (10
+    // chars) gets exactly 10 trailing spaces before the value.
+    expect(arg.text).toContain("Partner 1:          Thibault Kopp");
+    expect(arg.text).toContain("Partner 2:          Sarah Smith");
+    expect(arg.text).toContain("Event setting:      Outdoor — Covered");
+    expect(arg.text).toContain("POC relationship:   One of the couple");
+    expect(arg.text).toContain(
+      "External UUID:      f00fdcba-1234-4abc-9def-0123456789ab",
+    );
   });
 });
