@@ -42,7 +42,7 @@ describe("computeSubmission — Smile basics", () => {
 });
 
 describe("computeSubmission — Aurora minimum warning", () => {
-  it("triggers warning at $1,999.99", () => {
+  it("triggers warning when total is below the $2,000 minimum", () => {
     const r = computeSubmission(
       sel({
         collections: ["aurora"],
@@ -89,7 +89,7 @@ describe("computeSubmission — Aurora minimum warning", () => {
 });
 
 describe("computeSubmission — Resonance ceremony exception", () => {
-  it("Ceremony Speaker only — no minimum warning", () => {
+  it("Ceremony Speaker only — no planning-required warning", () => {
     const r = computeSubmission(
       sel({
         collections: ["resonance"],
@@ -102,7 +102,7 @@ describe("computeSubmission — Resonance ceremony exception", () => {
     expect(r.warnings.find((w) => w.code === "resonance-planning-required")).toBeUndefined();
   });
 
-  it("Ceremony Speaker + wireless mic — still no minimum warning", () => {
+  it("Ceremony Speaker + wireless mic — still no planning-required warning", () => {
     const r = computeSubmission(
       sel({
         collections: ["resonance"],

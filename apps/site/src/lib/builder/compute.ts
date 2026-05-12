@@ -80,7 +80,7 @@ const AURORA_MIN_WARNING: BuilderWarning = {
 const RESONANCE_PLANNING_WARNING: BuilderWarning = {
   code: "resonance-planning-required",
   message:
-    "Resonance requires a planning conversation before final scope is confirmed.",
+    "This Resonance selection requires a planning conversation to finalize pricing.",
 };
 
 export function computeSubmission(input: BuilderSelections): ComputeResult {
