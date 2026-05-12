@@ -61,6 +61,16 @@ try {
         ))}
       </div>
 
+      <div class="invite-row">
+        <button
+          type="button"
+          class="btn-ghost"
+          data-copy-builder-invite
+          data-inquiry-id={inquiry.id}
+        >Copy package builder link</button>
+        <span class="invite-toast" aria-live="polite"></span>
+      </div>
+
       <label class="notes-wrap sn-field-wrap">
         <span class="sn-field-label">Admin notes (internal, not shown to client)</span>
         <textarea name="notes" rows="4" placeholder="Conversation notes, follow-up dates, vendor connections…">{inquiry.notes ?? ""}</textarea>
@@ -173,6 +183,40 @@ try {
       submitBtn.removeAttribute("disabled");
       submitBtn.textContent = "Save";
     }
+  });
+
+  // Copy package builder invite link — POSTs to /api/package-builder/invite,
+  // copies the returned URL, shows a toast.
+  document.querySelectorAll("[data-copy-builder-invite]").forEach((btn) => {
+    const toast = btn.parentElement?.querySelector(".invite-toast");
+    btn.addEventListener("click", async () => {
+      if (!toast) return;
+      const originalLabel = btn.textContent ?? "Copy package builder link";
+      btn.setAttribute("disabled", "true");
+      btn.textContent = "Copying…";
+      toast.textContent = "";
+      try {
+        const res = await fetch("/api/package-builder/invite", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ inquiryId }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Server responded ${res.status}`);
+        }
+        const data = await res.json();
+        await navigator.clipboard.writeText(data.url);
+        toast.textContent = "Invite link copied. Send it from your inbox.";
+        toast.style.color = "var(--sn-gold)";
+      } catch (err) {
+        toast.textContent = err instanceof Error ? err.message : "Copy failed.";
+        toast.style.color = "var(--sn-amber)";
+      } finally {
+        btn.removeAttribute("disabled");
+        btn.textContent = originalLabel;
+      }
+    });
   });
 </script>
 
@@ -374,5 +418,22 @@ try {
     font-size: 1rem;
     line-height: 1.7;
     white-space: pre-wrap;
+  }
+
+  .invite-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin: 0 0 22px;
+    padding: 14px 16px;
+    border: 1px dashed var(--sn-gold-24);
+    border-radius: 4px;
+    background: var(--sn-black);
+  }
+  .invite-toast {
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+    min-height: 1em;
   }
 </style>
