@@ -32,9 +32,13 @@ export function CollectionChips({ selected, onToggle }: Props) {
               type="button"
               className={`cc__chip${isOn ? " cc__chip--on" : ""}`}
               aria-pressed={isOn}
+              aria-label={`${c.displayName} — ${c.tagline}`}
               onClick={() => onToggle(id)}
             >
-              {c.displayName}
+              <span className="cc__chip-name">{c.displayName}</span>
+              <span className="cc__chip-tagline" aria-hidden="true">
+                {c.tagline}
+              </span>
             </button>
           );
         })}
@@ -63,20 +67,39 @@ export function CollectionChips({ selected, onToggle }: Props) {
         }
         .cc__chip {
           font-family: var(--font-body);
-          font-size: 0.78rem;
-          letter-spacing: 0.18em;
-          text-transform: uppercase;
           background: transparent;
           color: var(--sn-ivory);
           border: 1px solid var(--sn-gold-40);
-          border-radius: 999px;
+          border-radius: 16px;
           padding: 10px 18px;
           cursor: pointer;
+          display: inline-flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 2px;
+          line-height: 1.2;
           transition:
             background-color 200ms ease,
             border-color 200ms ease,
             color 200ms ease,
             box-shadow 200ms ease;
+        }
+        .cc__chip-name {
+          font-size: 0.78rem;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+        }
+        .cc__chip-tagline {
+          font-size: 0.68rem;
+          letter-spacing: 0.08em;
+          color: var(--sn-muted-stone);
+          font-weight: 400;
+          text-transform: none;
+        }
+        .cc__chip--on .cc__chip-tagline {
+          /* Keep tagline readable on the gold background when selected. */
+          color: var(--sn-black);
+          opacity: 0.7;
         }
         .cc__chip:hover {
           border-color: var(--sn-gold);

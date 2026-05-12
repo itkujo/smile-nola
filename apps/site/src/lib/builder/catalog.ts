@@ -47,6 +47,13 @@ export type CollectionId =
 export interface CollectionConfig {
   id: CollectionId;
   displayName: string;
+  /**
+   * Plain-English subtitle rendered under the collection name on the
+   * toggle chips at the top of the builder. Keeps the marketing names
+   * legible to first-time visitors who don't yet know what each suite
+   * is. Kept intentionally short — 1–3 words.
+   */
+  tagline: string;
   shortDescription: string;
   /** Rendering order across the builder; lower = higher on the page. */
   displayOrder: number;
@@ -71,6 +78,7 @@ export const COLLECTIONS: CollectionConfig[] = [
   {
     id: "smile",
     displayName: "The Smile Collection",
+    tagline: "Photo Booth",
     shortDescription:
       "Photo experiences designed to feel like part of the event — polished, guest-friendly, layered into the overall design.",
     displayOrder: 1,
@@ -122,6 +130,7 @@ export const COLLECTIONS: CollectionConfig[] = [
   {
     id: "visionary",
     displayName: "The Visionary Suite",
+    tagline: "Videography",
     shortDescription:
       "Cinematic videography for weddings and events that deserve to be remembered with emotion, movement, and intention.",
     displayOrder: 2,
@@ -171,6 +180,7 @@ export const COLLECTIONS: CollectionConfig[] = [
   {
     id: "digital-atelier",
     displayName: "The Digital Atelier",
+    tagline: "Web & Branding",
     shortDescription:
       "Event websites, RSVP systems, branding, and guest-facing digital design.",
     displayOrder: 3,
@@ -244,6 +254,7 @@ export const COLLECTIONS: CollectionConfig[] = [
   {
     id: "aurora",
     displayName: "The Aurora Collection",
+    tagline: "Lighting & Staging",
     shortDescription:
       "Lighting, LED video walls, staging, and luminous atmosphere. Requires a $2,000 total Smile NOLA project minimum.",
     displayOrder: 4,
@@ -289,6 +300,7 @@ export const COLLECTIONS: CollectionConfig[] = [
   {
     id: "resonance",
     displayName: "The Resonance Series",
+    tagline: "Sound",
     shortDescription:
       "Concert-grade sound for celebrations. Every Resonance proposal begins with a planning conversation; pricing starts at $2,000 except the ceremony-speaker exception.",
     displayOrder: 5,
