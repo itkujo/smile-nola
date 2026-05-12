@@ -49,6 +49,14 @@ function buildInquiry(overrides: Partial<InquiryRow> = {}): InquiryRow {
     collections_interested: null,
     collection_fields_json: null,
     notes: null,
+    partner1_name: null,
+    partner2_name: null,
+    event_setting: null,
+    poc_relationship: null,
+    external_uuid: null,
+    synced_at: null,
+    source_legacy_id: null,
+    deleted_at: null,
     ...overrides,
   };
 }

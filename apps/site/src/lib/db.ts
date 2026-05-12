@@ -80,12 +80,30 @@ export function bootstrapSchema(db: Database.Database): void {
       referral               TEXT,
       collections_interested TEXT,
       collection_fields_json TEXT,
-      notes                  TEXT
+      notes                  TEXT,
+      -- Booth-expo origin columns (NULL for non-booth sources).
+      -- Added so apps/intake can write directly to inquiries instead of
+      -- maintaining a parallel leads table.
+      partner1_name          TEXT,
+      partner2_name          TEXT,
+      event_setting          TEXT,    -- indoor / outdoor / both (booth-coded)
+      poc_relationship       TEXT,    -- partner1 / partner2 / planner / family / etc.
+      -- Replication scaffolding for booth->prod one-way sync (Phase 2).
+      -- external_uuid is the canonical id across machines (booth assigns it
+      -- on first insert; prod upserts by this UUID, never by autoincrement id).
+      external_uuid          TEXT    UNIQUE,
+      synced_at              TEXT,    -- NULL = pending push to prod
+      source_legacy_id       INTEGER, -- old leads.id (booth migrations only)
+      deleted_at             TEXT     -- soft-delete from booth admin
     );
 
     CREATE INDEX IF NOT EXISTS idx_inq_created_at ON inquiries(created_at);
     CREATE INDEX IF NOT EXISTS idx_inq_status     ON inquiries(status);
     CREATE INDEX IF NOT EXISTS idx_inq_source     ON inquiries(source);
+    -- Indexes that reference the new booth/sync columns are created in
+    -- migrateInquiriesAddBoothAndSyncColumns() below, AFTER it ALTERs the
+    -- columns into existing databases. Putting them here would fail on
+    -- older DBs because the columns don't exist yet at this point.
 
     CREATE TABLE IF NOT EXISTS portfolio_items (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -166,6 +184,50 @@ export function bootstrapSchema(db: Database.Database): void {
 
   migratePortfolioToMultiCollection(db);
   migratePortfolioAddGalleryUrlAndNullableUrl(db);
+  migrateInquiriesAddBoothAndSyncColumns(db);
+}
+
+/**
+ * One-shot migration that brings older `inquiries` tables up to the unified
+ * shape (booth + site under one roof). Adds the 8 new columns and the two
+ * supporting indexes if they're missing.
+ *
+ * Idempotent: each `ALTER TABLE ADD COLUMN` is guarded by a `PRAGMA
+ * table_info` check, so running it on a fresh DB or an already-migrated DB
+ * is a no-op.
+ */
+function migrateInquiriesAddBoothAndSyncColumns(db: Database.Database): void {
+  type ColInfo = { name: string };
+  const cols = db
+    .prepare<[], ColInfo>("PRAGMA table_info(inquiries)")
+    .all() as ColInfo[];
+  const have = new Set(cols.map((c) => c.name));
+
+  const add = (col: string, sql: string): void => {
+    if (!have.has(col)) {
+      db.exec(`ALTER TABLE inquiries ADD COLUMN ${sql};`);
+    }
+  };
+
+  add("partner1_name",    "partner1_name    TEXT");
+  add("partner2_name",    "partner2_name    TEXT");
+  add("event_setting",    "event_setting    TEXT");
+  add("poc_relationship", "poc_relationship TEXT");
+  add("external_uuid",    "external_uuid    TEXT");
+  add("synced_at",        "synced_at        TEXT");
+  add("source_legacy_id", "source_legacy_id INTEGER");
+  add("deleted_at",       "deleted_at       TEXT");
+
+  // UNIQUE on external_uuid can't be added retroactively on an existing
+  // column with ALTER TABLE in SQLite. We enforce uniqueness via a partial
+  // index that ignores NULLs (existing rows that haven't been backfilled
+  // yet are NULL and don't participate in uniqueness checks).
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_inq_external_uuid " +
+      "ON inquiries(external_uuid) WHERE external_uuid IS NOT NULL;",
+  );
+  db.exec("CREATE INDEX IF NOT EXISTS idx_inq_deleted_at ON inquiries(deleted_at);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_inq_synced_at  ON inquiries(synced_at);");
 }
 
 /**
@@ -302,6 +364,16 @@ export interface InquiryRow {
   collections_interested: string | null;
   collection_fields_json: string | null;
   notes: string | null;
+  // Booth-expo origin columns (NULL for non-booth sources).
+  partner1_name: string | null;
+  partner2_name: string | null;
+  event_setting: string | null;
+  poc_relationship: string | null;
+  // Replication scaffolding for booth->prod sync.
+  external_uuid: string | null;
+  synced_at: string | null;
+  source_legacy_id: number | null;
+  deleted_at: string | null;
 }
 
 export interface InquiryInput {
