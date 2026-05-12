@@ -13,20 +13,39 @@
 #   • Environment variables       (see required + optional sets below)
 #
 # REQUIRED ENV VARS:
-#   ADMIN_PASSWORD          — single password gate for /admin/*
-#   ADMIN_SESSION_SECRET    — 32+ random bytes; signs the admin cookie
+#   ADMIN_PASSWORD          — single password gate for /admin on both
+#                             smile-nola.com and expo.smile-nola.com.
+#   ADMIN_SESSION_SECRET    — 32+ random bytes; signs the admin cookies
 #                             generate with:  openssl rand -hex 32
+#   INTAKE_SYNC_TOKEN       — bearer token used by the booth (intake) to
+#                             authenticate when pushing captured leads to
+#                             the prod sync endpoint. Same value on both
+#                             services. Generate with: openssl rand -hex 32
 #
 # OPTIONAL ENV VARS:
-#   NOTIFY_EMAIL            — where new inquiries get emailed (best-effort)
-#   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS  — SMTP relay; if any is
-#                             blank the server logs inquiries to stdout and
-#                             still writes them to SQLite
+#   RESEND_API_KEY          — Resend SDK key for outbound notifications.
+#                             Missing => console fallback (submission still
+#                             persists; no email sent).
+#   RESEND_FROM             — Sender for outbound mail. Defaults to
+#                             "Smile NOLA <onboarding@resend.dev>".
+#                             Production should set this to a verified
+#                             domain sender.
+#   NOTIFY_EMAIL            — Recipient for inquiry / submission alerts.
 #
 # WHAT PERSISTS ACROSS DEPLOYS (in the smile_nola_data named volume):
-#   • /data/leads.db                       — SQLite (inquiries, portfolio
-#                                            items, testimonials, booth leads)
+#   • /data/leads.db                       — Unified SQLite (inquiries
+#                                            from all sources, portfolio,
+#                                            testimonials, package builder
+#                                            submissions, invites)
 #   • /data/uploads/portfolio/<id>.jpg     — admin-uploaded portfolio thumbnails
+#
+# Two services share that volume:
+#   site    — Astro marketing site + package builder + admin
+#             (smile-nola.com)
+#   intake  — Next.js booth intake (expo.smile-nola.com). Writes booth
+#             captures to inquiries with source='booth-expo'. In offline
+#             expo scenarios the booth runs locally and replicates to
+#             this prod service via the INTAKE_SYNC_TOKEN-gated endpoint.
 # =============================================================================
 
 services:
@@ -52,13 +71,18 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET}
 
-      # ---- Inquiry email notifications (OPTIONAL) ----------------------------
-      # If any are blank, the app skips SMTP and just writes to SQLite.
+      # ---- Booth -> prod sync (REQUIRED) -------------------------------------
+      # Static bearer the booth uses to push captured leads. Must match the
+      # value on the `intake` service. Rotate by setting a new value in the
+      # Coolify env and redeploying both services together.
+      INTAKE_SYNC_TOKEN: ${INTAKE_SYNC_TOKEN}
+
+      # ---- Inquiry / submission email notifications (OPTIONAL) ---------------
+      # If RESEND_API_KEY is blank the app falls back to console logging and
+      # still persists the submission. SMTP_* are legacy and no longer read.
       NOTIFY_EMAIL: ${NOTIFY_EMAIL:-}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASS: ${SMTP_PASS:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM: ${RESEND_FROM:-}
 
     volumes:
       # Docker-managed NAMED volume — survives container rebuilds + redeploys.
@@ -83,6 +107,65 @@ services:
       # Node 22 has native fetch — no extra deps needed for the probe.
       # A 2xx response from the homepage means the SSR pipeline + DB
       # bootstrap both succeeded.
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+
+  # ---------------------------------------------------------------------------
+  # intake — booth lead intake (Next.js). Lives at expo.smile-nola.com.
+  #
+  # Routing: configure a second Coolify "Service" pointing at this compose
+  # file with the Service name `intake` and the public Domain
+  # expo.smile-nola.com. Traefik will route that hostname to the intake
+  # container's exposed port 3000.
+  #
+  # Shares /data/leads.db with the `site` service via the same named volume.
+  # WAL mode (configured in both apps' getDb() init) allows concurrent
+  # writers without blocking each other.
+  # ---------------------------------------------------------------------------
+  intake:
+    build:
+      context: ./apps/intake
+      dockerfile: Dockerfile
+    image: smile-nola/intake:latest
+    restart: unless-stopped
+
+    environment:
+      NODE_ENV: production
+      HOSTNAME: "0.0.0.0"
+      PORT: "3000"
+
+      # Shared SQLite location.
+      SMILE_NOLA_DB_DIR: "/data"
+
+      # Admin auth: same password + secret as the site so operators only
+      # memorize one. Cookie name is `sn_intake` (vs the site's `sn_admin`)
+      # so sessions don't bleed across domains.
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET}
+
+      # Booth -> prod replication.
+      # INTAKE_SYNC_URL: where to push captured rows when online. Defaults
+      # to the site's sync endpoint at smile-nola.com. Override only if
+      # you're standing up a non-default prod target (preview env, etc.).
+      INTAKE_SYNC_URL: ${INTAKE_SYNC_URL:-https://smile-nola.com/api/sync/inquiries}
+      INTAKE_SYNC_TOKEN: ${INTAKE_SYNC_TOKEN}
+      # 0 disables the auto-drain (manual flush only). Default 30000 (30s).
+      INTAKE_SYNC_INTERVAL: ${INTAKE_SYNC_INTERVAL:-30000}
+
+    volumes:
+      - smile_nola_data:/data
+
+    expose:
+      - "3000"
+
+    healthcheck:
       test:
         - "CMD"
         - "node"
