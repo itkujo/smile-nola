@@ -5,12 +5,17 @@
  */
 import AdminLayout from "@/layouts/AdminLayout.astro";
 import { getInquiry } from "@/lib/db";
+import { inquiryProjectName } from "@/lib/project-name";
 
 const id = Number(Astro.params.id);
 const inquiry = Number.isFinite(id) ? getInquiry(id) : undefined;
 if (!inquiry) {
   return new Response("Inquiry not found", { status: 404 });
 }
+
+// Canonical project name. Same string Zapier writes back to HoneyBook
+// so the operator can paste it in (or just visually confirm it).
+const projectName = inquiryProjectName(inquiry);
 
 // Decode JSON fields for the display.
 let collections: string[] = [];
@@ -47,6 +52,19 @@ try {
     </div>
     <span class={`status-pill is-${inquiry.status}`}>{inquiry.status}</span>
   </header>
+
+  <section class="project-name-block" aria-label="Project name">
+    <div class="pn-label">Project name</div>
+    <code class="pn-value">{projectName}</code>
+    <button
+      type="button"
+      class="btn-ghost pn-copy"
+      data-copy-project-name
+      data-project-name={projectName}
+      title="Copy to clipboard"
+    >Copy</button>
+    <span class="pn-toast" aria-live="polite"></span>
+  </section>
 
   <section class="status-block">
     <h2>Update</h2>
@@ -243,6 +261,26 @@ try {
       }
     });
   });
+
+  // Copy project name — pure clipboard, no network. The data-project-name
+  // attribute carries the canonical string verbatim so the operator can
+  // paste it into HoneyBook's project name field.
+  document.querySelectorAll("[data-copy-project-name]").forEach((btn) => {
+    const toast = btn.parentElement?.querySelector(".pn-toast");
+    const value = btn.getAttribute("data-project-name") ?? "";
+    btn.addEventListener("click", async () => {
+      if (!toast) return;
+      try {
+        await navigator.clipboard.writeText(value);
+        toast.textContent = "Copied.";
+        toast.style.color = "var(--sn-gold)";
+        setTimeout(() => { toast.textContent = ""; }, 2400);
+      } catch {
+        toast.textContent = "Copy failed.";
+        toast.style.color = "var(--sn-amber)";
+      }
+    });
+  });
 </script>
 
 <style>
@@ -312,6 +350,45 @@ try {
     border: 1px solid var(--sn-gold-24);
   }
   .status-block { border-left: 2px solid var(--sn-gold); }
+
+  .project-name-block {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin: -16px 0 28px;
+    padding: 14px 18px;
+    background: var(--sn-soft-black);
+    border: 1px solid var(--sn-gold-24);
+    border-left: 2px solid var(--sn-gold);
+  }
+  .pn-label {
+    color: var(--sn-gold);
+    font-size: 0.66rem;
+    letter-spacing: 0.36em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .pn-value {
+    flex: 1;
+    color: var(--sn-ivory);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.92rem;
+    line-height: 1.4;
+    background: transparent;
+    padding: 0;
+    word-break: break-word;
+  }
+  .pn-copy {
+    flex: 0 0 auto;
+  }
+  .pn-toast {
+    flex: 0 0 auto;
+    font-size: 0.78rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    min-height: 1.2em;
+  }
 
   h2 {
     color: var(--sn-gold);

@@ -28,7 +28,8 @@ import type {
   BuilderWarning,
   CustomQuotedItem,
 } from "@/lib/builder/compute";
-import { getDb } from "@/lib/db";
+import { getDb, getInquiry } from "@/lib/db";
+import { builderProjectName } from "@/lib/project-name";
 
 const db = getDb();
 const id = Number(Astro.params.id);
@@ -36,6 +37,12 @@ const submission = Number.isFinite(id) ? getSubmission(db, id) : undefined;
 if (!submission) {
   return new Response("Submission not found", { status: 404 });
 }
+
+// Load the linked inquiry so the visible project name matches the one in
+// the notification email (which pulls partner names from the linked row).
+const linkedInquiry =
+  submission.inquiry_id != null ? (getInquiry(submission.inquiry_id) ?? null) : null;
+const projectName = builderProjectName(submission, linkedInquiry);
 
 // ----- POST handler: status flip --------------------------------------------
 // Auth: this route lives under /admin/* so the global middleware already
@@ -173,6 +180,19 @@ const groups: DisplayGroup[] = selections.collections.map((cid) => {
       {submission.status === "invoice_sent" ? "invoice sent" : "new"}
     </span>
   </header>
+
+  <section class="project-name-block" aria-label="Project name">
+    <div class="pn-label">Project name</div>
+    <code class="pn-value">{projectName}</code>
+    <button
+      type="button"
+      class="btn-ghost pn-copy"
+      data-copy-project-name
+      data-project-name={projectName}
+      title="Copy to clipboard"
+    >Copy</button>
+    <span class="pn-toast" aria-live="polite"></span>
+  </section>
 
   <div class="layout">
     <div class="col-main">
@@ -379,6 +399,24 @@ const groups: DisplayGroup[] = selections.collections.map((cid) => {
       }
     });
   });
+
+  // Copy project name — pure clipboard, no network.
+  document.querySelectorAll<HTMLButtonElement>("[data-copy-project-name]").forEach((btn) => {
+    const toast = btn.parentElement?.querySelector<HTMLSpanElement>(".pn-toast");
+    const value = btn.getAttribute("data-project-name") ?? "";
+    btn.addEventListener("click", async () => {
+      if (!toast) return;
+      try {
+        await navigator.clipboard.writeText(value);
+        toast.textContent = "Copied.";
+        toast.style.color = "var(--sn-gold)";
+        setTimeout(() => { toast.textContent = ""; }, 2400);
+      } catch {
+        toast.textContent = "Copy failed.";
+        toast.style.color = "var(--sn-amber)";
+      }
+    });
+  });
 </script>
 
 <style>
@@ -441,6 +479,43 @@ const groups: DisplayGroup[] = selections.collections.map((cid) => {
   }
   .side-block { margin-bottom: 20px; }
   .block.warnings { border-left: 2px solid var(--sn-soft-coral, #d18b7d); }
+
+  .project-name-block {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin: -8px 0 28px;
+    padding: 14px 18px;
+    background: var(--sn-soft-black);
+    border: 1px solid var(--sn-gold-24);
+    border-left: 2px solid var(--sn-gold);
+  }
+  .pn-label {
+    color: var(--sn-gold);
+    font-size: 0.66rem;
+    letter-spacing: 0.36em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .pn-value {
+    flex: 1;
+    color: var(--sn-ivory);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.92rem;
+    line-height: 1.4;
+    background: transparent;
+    padding: 0;
+    word-break: break-word;
+  }
+  .pn-copy { flex: 0 0 auto; }
+  .pn-toast {
+    flex: 0 0 auto;
+    font-size: 0.78rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    min-height: 1.2em;
+  }
 
   h2 {
     color: var(--sn-gold);
