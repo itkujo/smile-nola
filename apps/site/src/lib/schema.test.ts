@@ -114,4 +114,22 @@ describe("BuilderSubmissionSchema", () => {
     const r = BuilderSubmissionSchema.safeParse(body);
     expect(r.success).toBe(true);
   });
+
+  it("accepts explicit null for optional event sub-fields (date/type/venue/note/guestCount)", () => {
+    // The /api/package-builder contract (and the React island) send `null` for
+    // empty optional fields, not missing keys or empty strings. The schema must
+    // accept `null` for parity with the inter-cluster contract.
+    const body = validBody();
+    // @ts-expect-error — intentional explicit-null payload
+    body.event = { date: null, type: null, venue: null, guestCount: null, note: null };
+    const r = BuilderSubmissionSchema.safeParse(body);
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.event.date).toBeNull();
+      expect(r.data.event.type).toBeNull();
+      expect(r.data.event.venue).toBeNull();
+      expect(r.data.event.guestCount).toBeNull();
+      expect(r.data.event.note).toBeNull();
+    }
+  });
 });

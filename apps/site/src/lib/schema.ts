@@ -112,18 +112,32 @@ const builderClientSchema = z.object({
   phone:     trim(40).min(7, "Please share a phone number"),
 });
 
+// Helper: same as optionalTrim() but also accepts explicit null, and always
+// transforms to `string | null`. The /api/package-builder contract sends null
+// for empty optional fields (not missing keys, not empty strings), so the
+// schema must accept null at parse time.
+const nullableTrim = (max = 200) =>
+  z
+    .union([
+      z.string().trim().max(max, `Must be ${max} characters or fewer`),
+      z.null(),
+    ])
+    .optional()
+    .transform((v) => (v ? v : null));
+
 const builderEventSchema = z.object({
   date: z
-    .string()
-    .trim()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a valid date")
-    .nullish()
-    .or(z.literal(""))
+    .union([
+      z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a valid date"),
+      z.literal(""),
+      z.null(),
+    ])
+    .optional()
     .transform((v) => (v ? v : null)),
-  type:  optionalTrim(80).transform((v) => v ?? null),
-  venue: optionalTrim(160).transform((v) => v ?? null),
+  type:  nullableTrim(80),
+  venue: nullableTrim(160),
   guestCount: z.coerce.number().int().min(0).max(100000).nullish().transform((v) => v ?? null),
-  note: optionalTrim(4000).transform((v) => v ?? null),
+  note: nullableTrim(4000),
 });
 
 const builderSelectedPackageSchema = z.object({
