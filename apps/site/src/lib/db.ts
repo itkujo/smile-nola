@@ -52,8 +52,11 @@ export function getDb(): Database.Database {
 /**
  * Create the marketing-site tables if they're missing. Safe to call on every
  * cold start — `CREATE TABLE IF NOT EXISTS` is idempotent.
+ *
+ * Exported so unit tests can bootstrap a `:memory:` Database without going
+ * through the file-backed singleton in `getDb()`.
  */
-function bootstrapSchema(db: Database.Database): void {
+export function bootstrapSchema(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS inquiries (
       id                     INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -111,6 +114,54 @@ function bootstrapSchema(db: Database.Database): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_ts_featured ON testimonials(featured);
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS package_builder_submissions (
+      id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at           TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      status               TEXT    NOT NULL DEFAULT 'new',
+      invoice_sent_at      TEXT,
+      source               TEXT    NOT NULL,
+
+      first_name           TEXT    NOT NULL,
+      last_name            TEXT    NOT NULL,
+      email                TEXT    NOT NULL,
+      phone                TEXT    NOT NULL,
+
+      inquiry_id           INTEGER REFERENCES inquiries(id),
+      invite_token         TEXT,
+
+      event_date           TEXT,
+      event_type           TEXT,
+      venue                TEXT,
+      guest_count          INTEGER,
+      consultation_pref    TEXT,
+      client_note          TEXT,
+
+      selections_json      TEXT    NOT NULL,
+      fixed_subtotal_cents INTEGER NOT NULL,
+      custom_quoted_json   TEXT,
+      warnings_json        TEXT,
+
+      notes                TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_pbs_created_at ON package_builder_submissions(created_at);
+    CREATE INDEX IF NOT EXISTS idx_pbs_status     ON package_builder_submissions(status);
+    CREATE INDEX IF NOT EXISTS idx_pbs_email      ON package_builder_submissions(email);
+    CREATE INDEX IF NOT EXISTS idx_pbs_inquiry    ON package_builder_submissions(inquiry_id);
+
+    CREATE TABLE IF NOT EXISTS builder_invites (
+      token        TEXT    PRIMARY KEY,
+      inquiry_id   INTEGER NOT NULL REFERENCES inquiries(id),
+      created_at   TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      expires_at   TEXT,
+      consumed_at  TEXT,
+      created_by   TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_bi_inquiry ON builder_invites(inquiry_id);
   `);
 
   migratePortfolioToMultiCollection(db);
