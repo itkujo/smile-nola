@@ -5,6 +5,7 @@ import { collectionLabel, SOURCE_DEFAULT } from "@/lib/schema";
 import { GoldDivider } from "@/components/brand/GoldDivider";
 import { LogoMark } from "@/components/brand/LogoMark";
 import { DeleteLeadButton } from "./DeleteLeadButton";
+import { SyncBadge } from "./SyncBadge";
 import { verifyCookie, COOKIE_NAME } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -81,6 +82,7 @@ export default async function AdminPage() {
           <span className="font-body text-sm tracking-[0.2em] uppercase text-[color:var(--sn-champagne)]">
             {leads.length} {leads.length === 1 ? "lead" : "leads"}
           </span>
+          <SyncBadge />
           <a
             href="/api/export"
             download
