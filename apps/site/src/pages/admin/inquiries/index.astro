@@ -7,11 +7,23 @@ import AdminLayout from "@/layouts/AdminLayout.astro";
 import { getAllInquiries } from "@/lib/db";
 
 const status = Astro.url.searchParams.get("status") ?? "all";
+const sourceParam = Astro.url.searchParams.get("source") ?? "all";
 const q = (Astro.url.searchParams.get("q") ?? "").trim().toLowerCase();
+
+// Booth-expo and "everything else" — keep it simple. If more sources show
+// up later (e.g. inbound-referral, partner-form, ...), add explicit chips.
+const SITE_SOURCES = (r: { source: string }): boolean =>
+  r.source !== "booth-expo";
 
 const allRows = getAllInquiries();
 const filtered = allRows
   .filter((r) => (status === "all" ? true : r.status === status))
+  .filter((r) => {
+    if (sourceParam === "all") return true;
+    if (sourceParam === "booth-expo") return r.source === "booth-expo";
+    if (sourceParam === "site") return SITE_SOURCES(r);
+    return r.source === sourceParam;
+  })
   .filter((r) => {
     if (!q) return true;
     return (
@@ -19,7 +31,9 @@ const filtered = allRows
       r.last_name.toLowerCase().includes(q) ||
       r.email.toLowerCase().includes(q) ||
       r.phone.toLowerCase().includes(q) ||
-      (r.venue ?? "").toLowerCase().includes(q)
+      (r.venue ?? "").toLowerCase().includes(q) ||
+      (r.partner1_name ?? "").toLowerCase().includes(q) ||
+      (r.partner2_name ?? "").toLowerCase().includes(q)
     );
   });
 
@@ -29,6 +43,27 @@ const FILTERS = [
   { value: "contacted", label: "In conversation", count: allRows.filter((r) => r.status === "contacted").length },
   { value: "closed",    label: "Closed",         count: allRows.filter((r) => r.status === "closed").length },
 ] as const;
+
+const SOURCE_FILTERS = [
+  { value: "all",        label: "Every source", count: allRows.length },
+  { value: "site",       label: "Site forms",   count: allRows.filter(SITE_SOURCES).length },
+  { value: "booth-expo", label: "Booth (expo)", count: allRows.filter((r) => r.source === "booth-expo").length },
+] as const;
+
+function buildHref(overrides: Record<string, string | null>): string {
+  const params = new URLSearchParams();
+  const next = {
+    status: status === "all" ? null : status,
+    source: sourceParam === "all" ? null : sourceParam,
+    q: q || null,
+    ...overrides,
+  };
+  for (const [k, v] of Object.entries(next)) {
+    if (v) params.set(k, v);
+  }
+  const qs = params.toString();
+  return qs ? `/admin/inquiries?${qs}` : "/admin/inquiries";
+}
 
 function shortDate(iso: string): string {
   // "2026-05-11 04:34:15" → "May 11"
@@ -53,23 +88,36 @@ const exportHref =
   </header>
 
   <form class="toolbar" method="get">
-    <div class="chips">
-      {FILTERS.map((f) => (
-        <a
-          href={f.value === "all" ? "/admin/inquiries" : `/admin/inquiries?status=${f.value}`}
-          class:list={["chip", { "is-active": status === f.value }]}
-        >
-          {f.label} <span class="ct">{f.count}</span>
-        </a>
-      ))}
+    <div class="chip-rows">
+      <div class="chips">
+        {FILTERS.map((f) => (
+          <a
+            href={buildHref({ status: f.value === "all" ? null : f.value })}
+            class:list={["chip", { "is-active": status === f.value }]}
+          >
+            {f.label} <span class="ct">{f.count}</span>
+          </a>
+        ))}
+      </div>
+      <div class="chips">
+        {SOURCE_FILTERS.map((f) => (
+          <a
+            href={buildHref({ source: f.value === "all" ? null : f.value })}
+            class:list={["chip", "chip-source", { "is-active": sourceParam === f.value }]}
+          >
+            {f.label} <span class="ct">{f.count}</span>
+          </a>
+        ))}
+      </div>
     </div>
 
     <div class="search">
       {status !== "all" && <input type="hidden" name="status" value={status} />}
+      {sourceParam !== "all" && <input type="hidden" name="source" value={sourceParam} />}
       <input
         type="search"
         name="q"
-        placeholder="Search name, email, phone, venue…"
+        placeholder="Search name, email, phone, venue, partner…"
         value={q}
         autocomplete="off"
       />
@@ -153,7 +201,9 @@ const exportHref =
     flex-wrap: wrap;
     margin-bottom: 28px;
   }
+  .chip-rows { display: flex; flex-direction: column; gap: 10px; }
   .chips { display: flex; gap: 10px; flex-wrap: wrap; }
+  .chip-source { font-size: 0.72rem; letter-spacing: 0.14em; }
   .chip {
     display: inline-flex;
     align-items: center;

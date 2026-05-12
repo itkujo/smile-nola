@@ -112,6 +112,31 @@ try {
     </dl>
   </section>
 
+  {inquiry.source === "booth-expo" && (
+    <section class="block booth-block">
+      <h2>Captured at the booth</h2>
+      <dl class="kv">
+        <div><dt>POC relationship</dt><dd>{inquiry.poc_relationship || "—"}</dd></div>
+        <div><dt>Partner 1</dt><dd>{inquiry.partner1_name || "—"}</dd></div>
+        <div><dt>Partner 2</dt><dd>{inquiry.partner2_name || "—"}</dd></div>
+        <div><dt>Setting</dt><dd>{inquiry.event_setting || "—"}</dd></div>
+        {inquiry.source_legacy_id !== null && (
+          <div><dt>Legacy booth id</dt><dd class="muted">leads.id #{inquiry.source_legacy_id}</dd></div>
+        )}
+        {inquiry.external_uuid && (
+          <div><dt>Sync UUID</dt><dd class="muted mono">{inquiry.external_uuid}</dd></div>
+        )}
+        <div>
+          <dt>Sync status</dt>
+          <dd>{inquiry.synced_at
+            ? <span class="muted">synced {inquiry.synced_at}</span>
+            : <span class="muted">pending push to prod</span>}
+          </dd>
+        </div>
+      </dl>
+    </section>
+  )}
+
   {collections.length > 0 && (
     <section class="block">
       <h2>Collections of interest</h2>
@@ -436,4 +461,14 @@ try {
     letter-spacing: 0.04em;
     min-height: 1em;
   }
+
+  /* Booth-expo block: visual cue that this lead came from a kiosk capture. */
+  .booth-block { border-left: 2px solid var(--sn-amber); }
+  .mono {
+    font-family: ui-monospace, monospace;
+    font-size: 0.78rem;
+    color: var(--sn-muted-stone);
+    word-break: break-all;
+  }
+  .muted { color: var(--sn-muted-stone); }
 </style>
