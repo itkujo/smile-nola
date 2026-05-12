@@ -13,6 +13,7 @@
  * vice versa). better-sqlite3 is synchronous — that's fine for our load.
  */
 
+import crypto from "node:crypto";
 import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
@@ -86,8 +87,8 @@ export function bootstrapSchema(db: Database.Database): void {
       -- maintaining a parallel leads table.
       partner1_name          TEXT,
       partner2_name          TEXT,
-      event_setting          TEXT,    -- indoor / outdoor / both (booth-coded)
-      poc_relationship       TEXT,    -- partner1 / partner2 / planner / family / etc.
+      event_setting          TEXT,    -- free-text from booth (e.g. "Indoor", "Outdoor — Covered")
+      poc_relationship       TEXT,    -- free-text from booth (e.g. "One of the couple", "Planner")
       -- Replication scaffolding for booth->prod one-way sync (Phase 2).
       -- external_uuid is the canonical id across machines (booth assigns it
       -- on first insert; prod upserts by this UUID, never by autoincrement id).
@@ -185,6 +186,7 @@ export function bootstrapSchema(db: Database.Database): void {
   migratePortfolioToMultiCollection(db);
   migratePortfolioAddGalleryUrlAndNullableUrl(db);
   migrateInquiriesAddBoothAndSyncColumns(db);
+  migrateLeadsIntoInquiries(db);
 }
 
 /**
@@ -228,6 +230,142 @@ function migrateInquiriesAddBoothAndSyncColumns(db: Database.Database): void {
   );
   db.exec("CREATE INDEX IF NOT EXISTS idx_inq_deleted_at ON inquiries(deleted_at);");
   db.exec("CREATE INDEX IF NOT EXISTS idx_inq_synced_at  ON inquiries(synced_at);");
+}
+
+/**
+ * Booth `leads` -> unified `inquiries` migration.
+ *
+ * Idempotent. Only fires when the legacy `leads` table is present AND has
+ * rows whose `id` isn't already in `inquiries.source_legacy_id`. Once every
+ * row is migrated, this becomes a per-boot no-op (one cheap COUNT query).
+ *
+ * Run inside a transaction so partial failure leaves the DB consistent.
+ *
+ * Mapping rules (locked in plan, see commit context):
+ *   leads.captured_at         -> inquiries.created_at
+ *   leads.poc_name            -> inquiries.first_name + last_name (split on
+ *                                FIRST space; single-word -> first_name="X",
+ *                                last_name="")
+ *   leads.poc_email           -> email
+ *   leads.poc_phone           -> phone
+ *   leads.poc_relationship    -> poc_relationship
+ *   leads.preferred_contact   -> preferred_contact
+ *   leads.partner1_name       -> partner1_name
+ *   leads.partner2_name       -> partner2_name
+ *   leads.event_date          -> event_date
+ *   leads.venue_name          -> venue
+ *   leads.setting             -> event_setting
+ *   leads.collections_interested -> collections_interested (verbatim JSON)
+ *   leads.notes               -> notes
+ *   leads.deleted_at          -> deleted_at
+ *   leads.id                  -> source_legacy_id (audit trail)
+ *   leads.source ("New Orleans Bridal and Wedding Expo" etc.)
+ *                             -> source = "booth-expo" (normalized)
+ *
+ *   constant: inquiries.event_type = "wedding" (booth is wedding-only)
+ *
+ * The booth's leads table is intentionally NOT dropped here. Phase 2 sync
+ * needs the source rows to remain readable for a while in case migration is
+ * found to have lost something. A separate one-shot script will rename it
+ * to `leads_archived` once you confirm production looks good.
+ */
+function migrateLeadsIntoInquiries(db: Database.Database): void {
+  // Skip silently if the legacy table doesn't exist (fresh DBs after this
+  // commit will have no `leads` table at all once Phase 1.3 lands).
+  const leadsExists = db
+    .prepare<[], { n: number }>(
+      "SELECT COUNT(*) AS n FROM sqlite_master " +
+        "WHERE type='table' AND name='leads'",
+    )
+    .get();
+  if (!leadsExists || leadsExists.n === 0) return;
+
+  // Find leads.id values not yet migrated.
+  interface LegacyLead {
+    id: number;
+    captured_at: string;
+    poc_name: string;
+    poc_email: string;
+    poc_phone: string;
+    poc_relationship: string;
+    preferred_contact: string;
+    partner1_name: string;
+    partner2_name: string | null;
+    event_date: string;
+    venue_name: string | null;
+    setting: string;
+    collections_interested: string;
+    notes: string | null;
+    source: string;
+    deleted_at: string | null;
+  }
+
+  const pending = db
+    .prepare<[], LegacyLead>(
+      `SELECT * FROM leads
+       WHERE id NOT IN (
+         SELECT source_legacy_id FROM inquiries
+         WHERE source_legacy_id IS NOT NULL AND source = 'booth-expo'
+       )`,
+    )
+    .all() as LegacyLead[];
+
+  if (pending.length === 0) return;
+
+  const insert = db.prepare(
+    `INSERT INTO inquiries (
+       created_at, source, status,
+       first_name, last_name, email, phone,
+       preferred_contact, event_date, event_type, venue,
+       collections_interested, notes,
+       partner1_name, partner2_name, event_setting, poc_relationship,
+       external_uuid, source_legacy_id, deleted_at
+     ) VALUES (
+       @created_at, 'booth-expo', 'new',
+       @first_name, @last_name, @email, @phone,
+       @preferred_contact, @event_date, 'wedding', @venue,
+       @collections_interested, @notes,
+       @partner1_name, @partner2_name, @event_setting, @poc_relationship,
+       @external_uuid, @source_legacy_id, @deleted_at
+     )`,
+  );
+
+  const tx = db.transaction((rows: LegacyLead[]) => {
+    for (const r of rows) {
+      const trimmed = r.poc_name.trim();
+      const spaceIdx = trimmed.indexOf(" ");
+      const firstName =
+        spaceIdx >= 0 ? trimmed.slice(0, spaceIdx) : trimmed || "(unknown)";
+      const lastName = spaceIdx >= 0 ? trimmed.slice(spaceIdx + 1).trim() : "";
+
+      insert.run({
+        created_at: r.captured_at,
+        first_name: firstName,
+        last_name: lastName,
+        email: r.poc_email,
+        phone: r.poc_phone,
+        preferred_contact: r.preferred_contact,
+        event_date: r.event_date,
+        venue: r.venue_name,
+        collections_interested: r.collections_interested,
+        notes: r.notes,
+        partner1_name: r.partner1_name,
+        partner2_name: r.partner2_name,
+        event_setting: r.setting,
+        poc_relationship: r.poc_relationship,
+        external_uuid: crypto.randomUUID(),
+        source_legacy_id: r.id,
+        deleted_at: r.deleted_at,
+      });
+    }
+  });
+
+  tx(pending);
+
+  // eslint-disable-next-line no-console
+  console.log(
+    `[db] migrated ${pending.length} booth lead${pending.length === 1 ? "" : "s"} into inquiries`,
+  );
 }
 
 /**
