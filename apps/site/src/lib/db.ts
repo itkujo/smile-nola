@@ -187,6 +187,59 @@ export function bootstrapSchema(db: Database.Database): void {
   migratePortfolioAddGalleryUrlAndNullableUrl(db);
   migrateInquiriesAddBoothAndSyncColumns(db);
   migrateLeadsIntoInquiries(db);
+  archiveLegacyLeadsTable(db);
+}
+
+/**
+ * Rename the legacy `leads` table to `leads_archived` once every row has
+ * been migrated into `inquiries`. Stops the booth intake (and any future
+ * code) from accidentally reading or writing the stale table.
+ *
+ * Idempotent:
+ *   - if `leads` doesn't exist, no-op
+ *   - if every leads.id is represented in inquiries.source_legacy_id,
+ *     rename it
+ *   - otherwise (something's still pending), leave both tables in place
+ *     so the next bootstrap can finish the data migration first
+ *
+ * We rename rather than DROP for audit safety: if anything looks wrong in
+ * inquiries post-migration, the operator can recover from leads_archived
+ * with a manual SQL pass. A separate, explicit DROP can happen weeks
+ * later once we're confident.
+ */
+function archiveLegacyLeadsTable(db: Database.Database): void {
+  const exists = db
+    .prepare<[], { n: number }>(
+      "SELECT COUNT(*) AS n FROM sqlite_master " +
+        "WHERE type='table' AND name='leads'",
+    )
+    .get();
+  if (!exists || exists.n === 0) return;
+
+  const pending = db
+    .prepare<[], { n: number }>(
+      `SELECT COUNT(*) AS n FROM leads
+       WHERE id NOT IN (
+         SELECT source_legacy_id FROM inquiries
+         WHERE source_legacy_id IS NOT NULL AND source = 'booth-expo'
+       )`,
+    )
+    .get();
+  if (!pending || pending.n > 0) return;
+
+  // Check whether leads_archived already exists (e.g. a previous boot did
+  // the rename). If so, we'd be trying to rename onto an existing name.
+  const archivedExists = db
+    .prepare<[], { n: number }>(
+      "SELECT COUNT(*) AS n FROM sqlite_master " +
+        "WHERE type='table' AND name='leads_archived'",
+    )
+    .get();
+  if (archivedExists && archivedExists.n > 0) return;
+
+  db.exec("ALTER TABLE leads RENAME TO leads_archived;");
+  // eslint-disable-next-line no-console
+  console.log("[db] renamed legacy `leads` table to `leads_archived`");
 }
 
 /**
