@@ -89,3 +89,67 @@ export const InquiryDeepSchema = z.object({
 });
 
 export type InquiryDeepInput = z.infer<typeof InquiryDeepSchema>;
+
+/* ---- Package builder submission (POST /api/package-builder) --------------- */
+
+/**
+ * Request body for the package builder. Shape locked by the inter-cluster
+ * contract in `docs/superpowers/plans/2026-05-11-package-builder.md`.
+ *
+ * The schema validates structure only. Per-id existence checks (does this
+ * packageId actually live in this collection?) live in `computeSubmission`
+ * from `@/lib/builder/compute`, which is the only authority on the catalog.
+ *
+ * Numbers in `event.guestCount` and `selections.addons[].qty` are coerced
+ * from strings so the same schema works for a JSON body or a form-data
+ * fallback if a future caller needs one.
+ */
+
+const builderClientSchema = z.object({
+  firstName: trim(80).min(1, "Please share your first name"),
+  lastName:  trim(80).min(1, "Please share your last name"),
+  email:     z.string().trim().min(1, "Please share an email").email("That email looks off"),
+  phone:     trim(40).min(7, "Please share a phone number"),
+});
+
+const builderEventSchema = z.object({
+  date: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a valid date")
+    .nullish()
+    .or(z.literal(""))
+    .transform((v) => (v ? v : null)),
+  type:  optionalTrim(80).transform((v) => v ?? null),
+  venue: optionalTrim(160).transform((v) => v ?? null),
+  guestCount: z.coerce.number().int().min(0).max(100000).nullish().transform((v) => v ?? null),
+  note: optionalTrim(4000).transform((v) => v ?? null),
+});
+
+const builderSelectedPackageSchema = z.object({
+  collectionId: trim(40).min(1),
+  packageId:    trim(80).min(1),
+});
+
+const builderSelectedAddonSchema = z.object({
+  collectionId: trim(40).min(1),
+  addonId:      trim(80).min(1),
+  qty: z.coerce.number().int().min(1, "Quantity must be at least 1"),
+});
+
+const builderSelectionsSchema = z.object({
+  collections: z.array(trim(40).min(1)),
+  packages:    z.array(builderSelectedPackageSchema),
+  addons:      z.array(builderSelectedAddonSchema),
+});
+
+export const BuilderSubmissionSchema = z.object({
+  /** Present iff the visitor arrived via an invite link. */
+  invite: optionalTrim(120),
+  client: builderClientSchema,
+  event:  builderEventSchema,
+  consultationPref: z.enum(["video", "in_person", "none"]),
+  selections: builderSelectionsSchema,
+});
+
+export type BuilderSubmissionInput = z.infer<typeof BuilderSubmissionSchema>;
