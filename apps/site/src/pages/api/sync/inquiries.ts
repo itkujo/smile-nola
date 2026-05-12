@@ -29,7 +29,8 @@
 import type { APIRoute } from "astro";
 import crypto from "node:crypto";
 import { getEnv } from "@/lib/env";
-import { upsertBoothInquiry, type BoothSyncPayload } from "@/lib/db";
+import { getInquiry, upsertBoothInquiry, type BoothSyncPayload } from "@/lib/db";
+import { sendInquiryNotification } from "@/lib/email";
 
 export const prerender = false;
 
@@ -113,6 +114,22 @@ export const POST: APIRoute = async ({ request }) => {
         inserted: r.inserted,
         id: r.id,
       });
+
+      // CRM hook: fire the Zapier-shaped lead email ONLY on fresh inserts.
+      // Re-pushes of the same external_uuid (`inserted: false`) are no-ops
+      // for email — exactly one notification per unique booth capture, no
+      // matter how many times the booth retries the queue. The send is
+      // fire-and-forget; never awaited, never blocks the sync response.
+      if (r.inserted) {
+        const row = getInquiry(r.id);
+        if (row) {
+          void sendInquiryNotification(row);
+        } else {
+          console.error(
+            `[sync] freshly-inserted inquiry id=${r.id} not found for notification`,
+          );
+        }
+      }
     } catch (err) {
       console.error("[sync] upsertBoothInquiry threw:", err);
       writeError = "database write failed";
