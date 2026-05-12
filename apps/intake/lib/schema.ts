@@ -45,13 +45,18 @@ export const SETTINGS = [
 const trimmedString = (max = 200) =>
   z.string().trim().max(max, `Must be ${max} characters or fewer`);
 
+// Accepts string | null | undefined | "" and normalizes to `string | undefined`
+// (undefined for any falsy input). The booth form's RHF will sometimes hand us
+// `null` from the JSON wire format, and the API route forwards bodies verbatim,
+// so we need to accept it explicitly here. Mirrors the same fix that landed on
+// the marketing site's BuilderSubmissionSchema (commit b9b3798).
 const optionalTrimmed = (max = 200) =>
   z
-    .string()
-    .trim()
-    .max(max, `Must be ${max} characters or fewer`)
+    .union([
+      z.string().trim().max(max, `Must be ${max} characters or fewer`),
+      z.null(),
+    ])
     .optional()
-    .or(z.literal(""))
     .transform((v) => (v ? v : undefined));
 
 export const LeadSchema = z.object({

@@ -53,7 +53,8 @@ export function middleware(req: NextRequest): NextResponse {
   const url = req.nextUrl.clone();
   const isApi =
     url.pathname.startsWith("/api/leads") ||
-    url.pathname === "/api/export";
+    url.pathname === "/api/export" ||
+    url.pathname.startsWith("/api/sync");
 
   if (isApi) {
     return NextResponse.json(
@@ -74,5 +75,6 @@ export const config = {
     "/api/leads/:path*",
     "/api/leads",
     "/api/export",
+    "/api/sync/:path*",
   ],
 };
