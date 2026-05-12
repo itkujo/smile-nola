@@ -28,11 +28,32 @@ function splitName(full: string): [string, string] {
   return [first, last];
 }
 
-function projectName(p1: string, p2: string | null | undefined): string {
-  const left = p1.trim();
-  const right = (p2 ?? "").trim();
-  if (right) return `${left} & ${right} Wedding`;
-  return `${left} Wedding`;
+/**
+ * Canonical project-name format for HoneyBook. MUST match the format
+ * emitted by apps/site/src/lib/project-name.ts so the same string
+ * appears in:
+ *   - Email subjects (Zapier filter)
+ *   - Admin detail pages
+ *   - This CSV's "Project Name" column
+ *
+ * Format: Wedding \u00b7 Partner1 & Partner2 \u00b7 YYYY-MM-DD #<id>
+ *
+ * Falls back gracefully when partners are blank (uses the poc name)
+ * and when event_date is empty (writes 'TBD'). The id always renders
+ * so even the worst data still produces a uniquely identifiable row.
+ */
+function projectName(lead: HydratedLead): string {
+  const p1 = lead.partner1Name.trim();
+  const p2 = (lead.partner2Name ?? "").trim();
+  let partners: string;
+  if (p1 && p2) partners = `${p1} & ${p2}`;
+  else if (p1) partners = p1;
+  else {
+    const poc = lead.pocName.trim();
+    partners = poc || "(unknown)";
+  }
+  const date = lead.eventDate.trim() || "TBD";
+  return `Wedding \u00b7 ${partners} \u00b7 ${date} #${lead.id}`;
 }
 
 function escapeField(value: string): string {
@@ -58,7 +79,11 @@ const COLUMN_DEFS: ColumnDef[] = [
   { header: "Partner 2", value: (l) => l.partner2Name ?? "" },
 
   // --- The event -------------------------------------------------------------
-  { header: "Project Name", value: (l) => projectName(l.partner1Name, l.partner2Name) },
+  { header: "Project Name", value: (l) => projectName(l) },
+  // The canonical id is the ANCHOR for cross-platform identification.
+  // Zapier writes it into HoneyBook's external_id; HoneyBook displays it
+  // in the project name; this column lets a human-run import preserve it.
+  { header: "Project ID", value: (l) => String(l.id) },
   { header: "Event Date", value: (l) => l.eventDate },
   { header: "Event Type", value: () => "Wedding" },
   { header: "Venue", value: (l) => l.venueName ?? "" },

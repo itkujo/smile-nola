@@ -13,18 +13,11 @@
  */
 
 import type { InquiryRow } from "@/lib/db";
+import { inquiryProjectName } from "@/lib/project-name";
 
 interface Column {
   header: string;
   value: (row: InquiryRow) => string;
-}
-
-function projectName(firstName: string, lastName: string): string {
-  // HoneyBook's "Project Name" column. Marketing-site inquiries are usually
-  // weddings or events; we use the contact's name as the project handle by
-  // default.  Owner can rename on the HoneyBook side after import.
-  const full = `${firstName} ${lastName}`.trim();
-  return full ? `${full} — Smile NOLA Inquiry` : "Smile NOLA Inquiry";
 }
 
 function escape(value: unknown): string {
@@ -72,11 +65,24 @@ const COLUMNS: Column[] = [
   { header: "Last Name",      value: (r) => r.last_name },
   { header: "Email",          value: (r) => r.email },
   { header: "Phone",          value: (r) => r.phone },
-  { header: "Project Name",   value: (r) => projectName(r.first_name, r.last_name) },
+  // Canonical project name shared with email subjects, admin UI, and the
+  // booth CSV. Same string lands in HoneyBook's project name field whether
+  // the row comes in via Zapier or a manual CSV import.
+  { header: "Project Name",   value: (r) => inquiryProjectName(r) },
+  // The canonical id. Zapier writes it as HoneyBook external_id; CSV
+  // imports preserve it so later cross-references still match.
+  { header: "Project ID",     value: (r) => String(r.id) },
   { header: "Event Date",     value: (r) => r.event_date ?? "" },
   { header: "Event Type",     value: (r) => r.event_type ?? "" },
   { header: "Venue",          value: (r) => r.venue ?? "" },
   { header: "Notes",          value: (r) => r.message ?? "" },
+
+  // ---- Booth-origin columns (NULL on non-booth rows, identical headers
+  // ---- as apps/intake/lib/csv.ts so unified mapping works) ----------------
+  { header: "Partner 1",        value: (r) => r.partner1_name ?? "" },
+  { header: "Partner 2",        value: (r) => r.partner2_name ?? "" },
+  { header: "Event Setting",    value: (r) => r.event_setting ?? "" },
+  { header: "POC Relationship", value: (r) => r.poc_relationship ?? "" },
 
   // ---- Smile NOLA marketing-site extras ----------------------------------
   { header: "Source",                value: (r) => r.source },
@@ -91,6 +97,7 @@ const COLUMNS: Column[] = [
   { header: "Collection Detail",      value: (r) => summarizeCollectionFields(r.collection_fields_json) },
   { header: "Referral",              value: (r) => r.referral ?? "" },
   { header: "Admin Notes",           value: (r) => r.notes ?? "" },
+  { header: "External UUID",         value: (r) => r.external_uuid ?? "" },
   { header: "Captured At",           value: (r) => r.created_at },
   { header: "Inquiry ID",            value: (r) => String(r.id) },
 ];
