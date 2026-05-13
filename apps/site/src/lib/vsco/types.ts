@@ -508,15 +508,29 @@ export interface JobRole {
 /* ============================================================================
  * Collection (list) wrapper
  *
- * The API wraps list responses in a `Collection` envelope. We type only the
- * fields we read; the spec has additional pagination metadata.
+ * The API wraps list responses in a `Collection` envelope. Verified from
+ * live API responses (the spec is not entirely literal about the shape).
+ * Real shape: { meta: { currentPage, totalPages, totalItems, rows },
+ *               type: "<entity>-collection", items: T[] }
+ *
+ * Some items also carry a `links` object with HATEOAS-style hrefs and a
+ * `hidden: boolean` flag (entities can be soft-hidden in Workspace) — both
+ * of which we ignore here.
  * ========================================================================= */
 
+export interface CollectionMeta {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  /** Rows returned on this page (≤ pageSize). */
+  rows: number;
+}
+
 export interface Collection<T> {
+  meta: CollectionMeta;
+  /** Always present; some endpoints use it (e.g. "jobtype-collection"). */
+  type?: string;
   items: T[];
-  total?: number;
-  page?: number;
-  pageSize?: number;
 }
 
 /* ============================================================================
