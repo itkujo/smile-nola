@@ -694,18 +694,25 @@ export interface InquiryInput {
  */
 export function insertInquiry(input: InquiryInput): { id: number; createdAt: string } {
   const db = getDb();
+  // Always assign an external_uuid for new inquiries. Booth-origin rows arrive
+  // with one already set via the sync endpoint (which uses upsertBoothInquiry,
+  // bypassing this function entirely). Website-origin rows didn't get one
+  // historically — they do now so the VSCO integration has a stable
+  // idempotency key across retries and admin actions.
   const result = db
     .prepare(
       `INSERT INTO inquiries (
         source, first_name, last_name, email, phone,
         preferred_contact, event_date, event_type, venue, guest_count,
         event_start, event_end, planner, budget_range,
-        message, referral, collections_interested, collection_fields_json
+        message, referral, collections_interested, collection_fields_json,
+        external_uuid
       ) VALUES (
         @source, @first_name, @last_name, @email, @phone,
         @preferred_contact, @event_date, @event_type, @venue, @guest_count,
         @event_start, @event_end, @planner, @budget_range,
-        @message, @referral, @collections_interested, @collection_fields_json
+        @message, @referral, @collections_interested, @collection_fields_json,
+        @external_uuid
       )`
     )
     .run({
@@ -731,6 +738,7 @@ export function insertInquiry(input: InquiryInput): { id: number; createdAt: str
       collection_fields_json: input.collection_fields
         ? JSON.stringify(input.collection_fields)
         : null,
+      external_uuid: crypto.randomUUID(),
     });
 
   // Read the row back to get the server-assigned created_at for the response.

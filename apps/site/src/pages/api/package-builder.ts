@@ -28,6 +28,7 @@ import { getInvite, markInviteConsumed } from "@/lib/builder/invites";
 import { sendBuilderSubmissionNotification } from "@/lib/email";
 import { clientIp, rateLimit } from "@/lib/auth";
 import { getDb, getInquiry } from "@/lib/db";
+import { pushBuilderToVsco } from "@/lib/vsco/push";
 
 export const prerender = false;
 
@@ -148,6 +149,10 @@ export const POST: APIRoute = async ({ request }) => {
   if (row) {
     const linkedInquiry = inquiryId != null ? (getInquiry(inquiryId) ?? null) : null;
     void sendBuilderSubmissionNotification(row, computed, linkedInquiry);
+    // Mirror to VSCO Workspace (no-op when VSCO_ENABLED=0 or the linked
+    // inquiry isn't qualified yet). Fire-and-forget — never blocks the
+    // response, never throws, always records an audit row.
+    void pushBuilderToVsco(row);
   }
 
   // ---- 8. Respond --------------------------------------------------------
