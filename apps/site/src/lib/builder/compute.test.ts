@@ -41,8 +41,8 @@ describe("computeSubmission — Smile basics", () => {
   });
 });
 
-describe("computeSubmission — Aurora minimum warning", () => {
-  it("triggers warning when total is below the $2,000 minimum", () => {
+describe("computeSubmission — project minimum warning (Aurora)", () => {
+  it("triggers warning when Aurora total is below the $2,000 minimum", () => {
     const r = computeSubmission(
       sel({
         collections: ["aurora"],
@@ -55,11 +55,11 @@ describe("computeSubmission — Aurora minimum warning", () => {
     if (!r.ok) return;
     expect(r.fixedSubtotalCents).toBe(5000 * 39);
     expect(r.warnings).toContainEqual(
-      expect.objectContaining({ code: "aurora-minimum-not-met" })
+      expect.objectContaining({ code: "project-minimum-not-met" })
     );
   });
 
-  it("does NOT trigger when total >= $2,000", () => {
+  it("does NOT trigger when Aurora total >= $2,000", () => {
     const r = computeSubmission(
       sel({
         collections: ["aurora"],
@@ -69,7 +69,7 @@ describe("computeSubmission — Aurora minimum warning", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.fixedSubtotalCents).toBe(300000);
-    expect(r.warnings.find((w) => w.code === "aurora-minimum-not-met")).toBeUndefined();
+    expect(r.warnings.find((w) => w.code === "project-minimum-not-met")).toBeUndefined();
   });
 
   it("counts spend from OTHER collections toward the Aurora minimum (total scope)", () => {
@@ -84,12 +84,12 @@ describe("computeSubmission — Aurora minimum warning", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.fixedSubtotalCents).toBe(89500 + 5000 * 23);
-    expect(r.warnings.find((w) => w.code === "aurora-minimum-not-met")).toBeUndefined();
+    expect(r.warnings.find((w) => w.code === "project-minimum-not-met")).toBeUndefined();
   });
 });
 
-describe("computeSubmission — Resonance ceremony exception", () => {
-  it("Ceremony Speaker only — no planning-required warning", () => {
+describe("computeSubmission — Resonance ceremony exception + project minimum", () => {
+  it("Ceremony Speaker only (no package) — no project-minimum warning", () => {
     const r = computeSubmission(
       sel({
         collections: ["resonance"],
@@ -99,10 +99,10 @@ describe("computeSubmission — Resonance ceremony exception", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.fixedSubtotalCents).toBe(35000);
-    expect(r.warnings.find((w) => w.code === "resonance-planning-required")).toBeUndefined();
+    expect(r.warnings.find((w) => w.code === "project-minimum-not-met")).toBeUndefined();
   });
 
-  it("Ceremony Speaker + wireless mic — still no planning-required warning", () => {
+  it("Ceremony Speaker + wireless mic only — still no project-minimum warning", () => {
     const r = computeSubmission(
       sel({
         collections: ["resonance"],
@@ -114,20 +114,53 @@ describe("computeSubmission — Resonance ceremony exception", () => {
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.warnings.find((w) => w.code === "resonance-planning-required")).toBeUndefined();
+    expect(r.warnings.find((w) => w.code === "project-minimum-not-met")).toBeUndefined();
   });
 
-  it("Full Resonance Minimum Spend — triggers planning-conversation warning", () => {
+  it("PA Package alone — triggers project-minimum warning (PA is $600, below $2k floor)", () => {
     const r = computeSubmission(
       sel({
         collections: ["resonance"],
-        addons: [{ collectionId: "resonance", addonId: "resonance-minimum", qty: 1 }],
+        packages: [{ collectionId: "resonance", packageId: "pa-package" }],
       })
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
+    expect(r.fixedSubtotalCents).toBe(60000);
     expect(r.warnings).toContainEqual(
-      expect.objectContaining({ code: "resonance-planning-required" })
+      expect.objectContaining({ code: "project-minimum-not-met" })
+    );
+  });
+
+  it("Concert Package alone — clears the $2,000 floor exactly", () => {
+    const r = computeSubmission(
+      sel({
+        collections: ["resonance"],
+        packages: [{ collectionId: "resonance", packageId: "concert-package" }],
+      })
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.fixedSubtotalCents).toBe(200000);
+    expect(r.warnings.find((w) => w.code === "project-minimum-not-met")).toBeUndefined();
+  });
+
+  it("Ceremony Speaker WITH a Resonance package — exception no longer applies, minimum enforced", () => {
+    // PA Package ($600) + ceremony speaker ($350) = $950, below $2k.
+    // Because a package is selected, the ceremony-speaker exception is void
+    // for this collection; warning fires.
+    const r = computeSubmission(
+      sel({
+        collections: ["resonance"],
+        packages: [{ collectionId: "resonance", packageId: "pa-package" }],
+        addons: [{ collectionId: "resonance", addonId: "ceremony-speaker", qty: 1 }],
+      })
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.fixedSubtotalCents).toBe(60000 + 35000);
+    expect(r.warnings).toContainEqual(
+      expect.objectContaining({ code: "project-minimum-not-met" })
     );
   });
 });

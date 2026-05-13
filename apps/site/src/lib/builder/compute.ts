@@ -43,9 +43,20 @@ export interface CustomQuotedItem {
   startingPriceCents: number | null;
 }
 
-export type WarningCode =
-  | "aurora-minimum-not-met"
-  | "resonance-planning-required";
+/**
+ * Soft warnings surfaced under the investment rail. Each is a guard-rail,
+ * not a blocker — submission still succeeds; daniel sees the warnings on
+ * the ops side and resolves them in the consultation.
+ *
+ * `project-minimum-not-met` — fires when a collection with a project-wide
+ *   minimum spend rule (currently Aurora and Resonance) is selected and
+ *   the total fixed subtotal across ALL collections is below that floor.
+ *   Resonance has an exception: addons listed in `minimumExceptionAddonIds`
+ *   (ceremony-speaker, ceremony-wireless-mic) may be ordered standalone
+ *   without triggering the warning, provided no Resonance package is
+ *   selected.
+ */
+export type WarningCode = "project-minimum-not-met";
 
 export interface BuilderWarning {
   code: WarningCode;
@@ -71,16 +82,10 @@ export type ComputeResult =
       details?: string;
     };
 
-const AURORA_MIN_WARNING: BuilderWarning = {
-  code: "aurora-minimum-not-met",
+const PROJECT_MINIMUM_WARNING: BuilderWarning = {
+  code: "project-minimum-not-met",
   message:
-    "Aurora requires a $2,000 total Smile NOLA project minimum before lighting or visual production is deployed.",
-};
-
-const RESONANCE_PLANNING_WARNING: BuilderWarning = {
-  code: "resonance-planning-required",
-  message:
-    "This Resonance selection requires a planning conversation to finalize pricing.",
+    "This selection requires a $2,000 total Smile NOLA project minimum. Add a package from another collection, or expand this one, to clear the floor.",
 };
 
 export function computeSubmission(input: BuilderSelections): ComputeResult {
@@ -155,26 +160,44 @@ export function computeSubmission(input: BuilderSelections): ComputeResult {
   // ---- 4. Warnings ----
   const warnings: BuilderWarning[] = [];
 
-  // Aurora minimum — evaluated against TOTAL fixedSubtotalCents (across all collections)
-  if (selectedCollectionIds.has("aurora")) {
-    const aurora = getCollection("aurora")!;
-    const min = aurora.rules.projectMinimumCents ?? 0;
-    if (fixedSubtotalCents < min) {
-      warnings.push(AURORA_MIN_WARNING);
-    }
-  }
+  // Project-minimum check — fires when any selected collection declares a
+  // `projectMinimumCents` rule and the project-wide fixedSubtotalCents is
+  // below that floor. Currently applies to Aurora and Resonance.
+  //
+  // Per-collection exception logic: Resonance allows certain addons
+  // (ceremony-speaker / wireless mic) to be ordered standalone without
+  // triggering the minimum, provided no Resonance package is selected.
+  // If a Resonance package IS selected, the floor applies regardless.
+  let minimumTriggered = false;
+  for (const c of collections) {
+    const min = c.rules.projectMinimumCents;
+    if (!min) continue;
+    if (fixedSubtotalCents >= min) continue;
 
-  // Resonance planning warning — fires when Resonance is selected AND any addon OTHER than
-  // the exception list is selected.
-  if (selectedCollectionIds.has("resonance")) {
-    const resonance = getCollection("resonance")!;
-    const exceptionIds = new Set(resonance.rules.minimumExceptionAddonIds ?? []);
-    const hasNonExceptionResonanceAddon = input.addons.some(
-      (sa) => sa.collectionId === "resonance" && !exceptionIds.has(sa.addonId),
-    );
-    if (hasNonExceptionResonanceAddon) {
-      warnings.push(RESONANCE_PLANNING_WARNING);
+    const exceptionIds = new Set(c.rules.minimumExceptionAddonIds ?? []);
+    if (exceptionIds.size > 0) {
+      const hasPackageInThisCollection = input.packages.some(
+        (sp) => sp.collectionId === c.id,
+      );
+      const collectionAddons = input.addons.filter(
+        (sa) => sa.collectionId === c.id,
+      );
+      const allAddonsAreExceptions =
+        collectionAddons.length > 0 &&
+        collectionAddons.every((sa) => exceptionIds.has(sa.addonId));
+
+      // Pure exception-only state: no package + only exception addons →
+      // waive the minimum for this collection.
+      if (!hasPackageInThisCollection && allAddonsAreExceptions) {
+        continue;
+      }
     }
+
+    minimumTriggered = true;
+    break;
+  }
+  if (minimumTriggered) {
+    warnings.push(PROJECT_MINIMUM_WARNING);
   }
 
   return { ok: true, fixedSubtotalCents, customQuoted, warnings };

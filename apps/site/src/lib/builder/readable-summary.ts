@@ -76,7 +76,13 @@ function groupSelections(sel: BuilderSelections): GroupedCollection[] {
       if (sp.collectionId !== c.id) continue;
       const pkg = getPackage(sp.collectionId, sp.packageId);
       if (!pkg) continue;
-      group.packages.push({ label: pkg.name, detail: dollars(pkg.priceCents) });
+      // Mirror the builder UI: "starting" packages render as "starts at $X"
+      // in the ops summary so daniel sees the same nuance the client did.
+      const detail =
+        pkg.priceType === "starting"
+          ? `starts at ${dollars(pkg.priceCents)}`
+          : dollars(pkg.priceCents);
+      group.packages.push({ label: pkg.name, detail });
     }
 
     for (const sa of sel.addons as SelectedAddon[]) {

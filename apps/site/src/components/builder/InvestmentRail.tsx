@@ -30,13 +30,20 @@ function buildLines(state: BuilderStateShape): DisplayLine[] {
       if (sp.collectionId !== collection.id) continue;
       const pkg = getPackage(sp.collectionId, sp.packageId);
       if (!pkg) continue;
+      // "starting" packages (e.g. Resonance Concert Package) need to be
+      // labeled as "starts at $X" in the rail, even though their priceCents
+      // still contributes to the gold subtotal as the floor. The italic
+      // soft styling matches the convention used for "starting" addons.
+      const isStartingPkg = pkg.priceType === "starting";
       lines.push({
         key: `pkg-${sp.collectionId}-${sp.packageId}`,
         collectionName: collection.displayName,
         label: pkg.name,
         qtySuffix: "",
-        priceLabel: formatDollars(pkg.priceCents),
-        isSoft: false,
+        priceLabel: isStartingPkg
+          ? `starts at ${formatDollars(pkg.priceCents)}`
+          : formatDollars(pkg.priceCents),
+        isSoft: isStartingPkg,
       });
     }
 
@@ -79,6 +86,7 @@ export function InvestmentRail({ state, preview }: Props) {
   const subtotalCents = preview.ok ? preview.fixedSubtotalCents : 0;
   const warnings = preview.ok ? preview.warnings : [];
 
+
   return (
     <div className="ir">
       <h2 className="ir__eyebrow">Your selections</h2>
@@ -120,7 +128,7 @@ export function InvestmentRail({ state, preview }: Props) {
             <li
               key={w.code}
               className={`ir__warning ir__warning--${
-                w.code === "aurora-minimum-not-met" ? "coral" : "gold"
+                w.code === "project-minimum-not-met" ? "coral" : "gold"
               }`}
             >
               {w.message}

@@ -138,7 +138,7 @@ describe("submissions CRUD", () => {
   it("persists JSON columns verbatim (round-trip)", () => {
     const selections = { collections: ["smile", "aurora"], packages: [], addons: [] };
     const customQuoted = [{ collectionId: "aurora", addonId: "lasers", startingPriceCents: 75000 }];
-    const warnings = [{ code: "aurora-minimum-not-met", message: "..." }];
+    const warnings = [{ code: "project-minimum-not-met", message: "..." }];
 
     const r = insertSubmission(
       db,
