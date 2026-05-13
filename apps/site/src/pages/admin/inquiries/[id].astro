@@ -111,36 +111,52 @@ const jobEntity = vscoEntities.find((e) => e.kind === "job");
 
   <section class="status-block vsco-block">
     <h2>VSCO Workspace</h2>
-    {!isQualified && (
-      <div class="vsco-row">
-        <p class="muted">
-          Not yet qualified. Mark this lead qualified to create a Job in VSCO Workspace.
-        </p>
-        <div class="form-actions">
-          <button type="button" class="btn-gold" id="qualify-btn">Mark Qualified</button>
-          <span class="qualify-status" aria-live="polite"></span>
+
+    {/* Status summary — always shown so the operator can see at a glance
+        what state this lead is in. */}
+    <div class="vsco-row">
+      <dl class="kv">
+        <div>
+          <dt>Qualified at</dt>
+          <dd>{inquiry.qualified_at ?? <span class="muted">— not yet —</span>}</dd>
         </div>
+        {jobEntity && (
+          <div>
+            <dt>VSCO Job ID</dt>
+            <dd class="muted mono">{jobEntity.vsco_id}</dd>
+          </div>
+        )}
+        {isQualified && !jobEntity && (
+          <div>
+            <dt>VSCO status</dt>
+            <dd class="muted">No Job in VSCO yet — push pending or previously failed.</dd>
+          </div>
+        )}
+      </dl>
+    </div>
+
+    {/* Action button — its label and behavior depend on state:
+        - not qualified              → "Mark Qualified"    (qualifies + pushes)
+        - qualified, no Job yet      → "Push to VSCO"      (retry push)
+        - qualified, Job exists      → "Re-sync to VSCO"   (read-modify-write update)
+        All three call the same endpoint; the backend decides what to do. */}
+    <div class="vsco-row">
+      <div class="form-actions">
+        <button type="button" class="btn-gold" id="qualify-btn">
+          {!isQualified && "Mark Qualified"}
+          {isQualified && !jobEntity && "Push to VSCO"}
+          {isQualified && jobEntity && "Re-sync to VSCO"}
+        </button>
+        <span class="qualify-status" aria-live="polite"></span>
       </div>
-    )}
-    {isQualified && (
-      <div class="vsco-row">
-        <dl class="kv">
-          <div><dt>Qualified at</dt><dd>{inquiry.qualified_at}</dd></div>
-          {jobEntity && (
-            <div>
-              <dt>VSCO Job ID</dt>
-              <dd class="muted mono">{jobEntity.vsco_id}</dd>
-            </div>
-          )}
-          {!jobEntity && (
-            <div>
-              <dt>Status</dt>
-              <dd class="muted">Push pending or failed — see history below.</dd>
-            </div>
-          )}
-        </dl>
-      </div>
-    )}
+      {isQualified && (
+        <p class="muted vsco-hint">
+          {!jobEntity
+            ? "Retrying the push. Audit history below will record the outcome."
+            : "Pushes the current inquiry data to the existing VSCO Job (read-modify-write)."}
+        </p>
+      )}
+    </div>
     {vscoPushes.length > 0 && (
       <details class="vsco-history">
         <summary>Sync history ({vscoPushes.length})</summary>
@@ -248,16 +264,29 @@ const jobEntity = vscoEntities.find((e) => e.kind === "job");
 </AdminLayout>
 
 <script define:vars={{ inquiryId: inquiry.id }}>
-  // Mark Qualified button — POSTs to the qualify endpoint, reloads the page
+  // VSCO action button — POSTs to the qualify endpoint, reloads the page
   // on success so the new qualified_at and any VSCO entities show up.
+  //
+  // The same endpoint handles three semantic actions:
+  //   1. Mark Qualified  (first time)
+  //   2. Push to VSCO    (qualified but no Job yet)
+  //   3. Re-sync to VSCO (qualified and Job exists)
+  //
+  // The endpoint figures out which case applies and does the right thing.
+  // We give the fire-and-forget VSCO push 2.5s to land before reloading,
+  // because the audit row only appears after the fetch resolves.
   const qualifyBtn = document.getElementById("qualify-btn");
   const qualifyStatus = qualifyBtn?.parentElement?.querySelector(".qualify-status");
   qualifyBtn?.addEventListener("click", async () => {
     if (!qualifyStatus) return;
+    const originalLabel = qualifyBtn.textContent ?? "Update VSCO";
+    const verbing = originalLabel.startsWith("Mark") ? "Qualifying…"
+                  : originalLabel.startsWith("Push") ? "Pushing…"
+                  : "Syncing…";
     qualifyBtn.setAttribute("disabled", "true");
-    const originalLabel = qualifyBtn.textContent;
-    qualifyBtn.textContent = "Qualifying…";
+    qualifyBtn.textContent = verbing;
     qualifyStatus.textContent = "";
+    qualifyStatus.style.color = "";
     try {
       const res = await fetch(`/api/admin/inquiries/${inquiryId}/qualify`, {
         method: "POST",
@@ -266,13 +295,14 @@ const jobEntity = vscoEntities.find((e) => e.kind === "job");
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || `Server responded ${res.status}`);
       }
-      qualifyStatus.textContent = "✓ Qualified — reloading…";
+      qualifyStatus.textContent = "✓ Reloading to show result…";
       qualifyStatus.style.color = "var(--sn-gold)";
-      // Give the fire-and-forget VSCO push ~1.5s to register an audit row,
-      // then reload so the operator sees the result.
-      setTimeout(() => { window.location.reload(); }, 1500);
+      // 2.5s gives the fire-and-forget push time to: hit VSCO, get a
+      // response, write the audit row, write any vsco_entities. With
+      // a fast network this is overkill; with a slow one it's borderline.
+      setTimeout(() => { window.location.reload(); }, 2500);
     } catch (err) {
-      qualifyStatus.textContent = err instanceof Error ? err.message : "Qualify failed";
+      qualifyStatus.textContent = err instanceof Error ? err.message : "Action failed";
       qualifyStatus.style.color = "var(--sn-amber)";
       qualifyBtn.removeAttribute("disabled");
       qualifyBtn.textContent = originalLabel;
@@ -673,6 +703,7 @@ const jobEntity = vscoEntities.find((e) => e.kind === "job");
   .vsco-trigger { font-family: ui-monospace, monospace; font-size: 0.78rem; }
 
   .qualify-status { font-size: 0.82rem; letter-spacing: 0.04em; }
+  .vsco-hint { font-size: 0.8rem; margin: 0.4rem 0 0; }
 
   .mono {
     font-family: ui-monospace, monospace;
