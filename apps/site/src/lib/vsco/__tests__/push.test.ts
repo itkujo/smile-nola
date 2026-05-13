@@ -281,6 +281,7 @@ describe('pushInquiryToVsco — happy path (create)', () => {
 
     let getCalled = false
     let putCalled = false
+    let healGetCalled = false
     setFakeFetch(async (url: string, init?: any) => {
       if (init?.method === 'GET' && url.includes('/job/JOB_PRE_EXISTING')) {
         getCalled = true
@@ -302,6 +303,18 @@ describe('pushInquiryToVsco — happy path (create)', () => {
           { status: 200, headers: { 'content-type': 'application/json' } },
         )
       }
+      if (
+        init?.method === 'GET' &&
+        url.includes('/job-contact') &&
+        url.includes('jobId=JOB_PRE_EXISTING')
+      ) {
+        // Self-heal GET — return empty (no contacts to heal in this test)
+        healGetCalled = true
+        return new Response(JSON.stringify({ items: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
       throw new Error(`unexpected: ${init?.method} ${url}`)
     })
 
@@ -310,6 +323,58 @@ describe('pushInquiryToVsco — happy path (create)', () => {
     expect(result.jobId).toBe('JOB_PRE_EXISTING')
     expect(getCalled).toBe(true)
     expect(putCalled).toBe(true)
+    expect(healGetCalled).toBe(true)
+  })
+
+  it('UPDATE path self-heals corrupted contact-poc entity from live JobContacts', async () => {
+    process.env.VSCO_ENABLED = '1'
+    const { id, externalUuid } = insertQualifiedInquiry()
+    const inq = dbMod.getInquiry(id)!
+
+    // Pre-record entities including a WRONG contact-poc id (simulating
+    // the JobContact-id-vs-Contact-id bug from a prior buggy push)
+    dbMod.recordVscoEntities(externalUuid, [
+      { kind: 'job', vscoId: 'JOB_HEAL' },
+      { kind: 'contact-poc', vscoId: 'BAD_JOBCONTACT_ID' }, // <-- wrong
+    ])
+
+    setFakeFetch(async (url: string, init?: any) => {
+      if (init?.method === 'GET' && url.includes('/job/JOB_HEAL') && !url.includes('/job-contact')) {
+        return new Response(
+          JSON.stringify({ id: 'JOB_HEAL', title: 'X', created: '', modified: '', stage: 'lead' }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      if (init?.method === 'PUT' && url.includes('/job/JOB_HEAL')) {
+        return new Response(
+          JSON.stringify({ id: 'JOB_HEAL', title: 'X', created: '', modified: '' }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      if (init?.method === 'GET' && url.includes('/job-contact') && url.includes('jobId=JOB_HEAL')) {
+        // Self-heal payload: returns JobContacts with nested Contact.id
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: 'JOBCONT_HEAL_001',
+                client: true,
+                jobRoles: ['JR_PRI'], // primary-contact role from test config
+                contact: { id: 'CORRECT_CONTACT_ID', kind: 'person' },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      throw new Error(`unexpected: ${init?.method} ${url}`)
+    })
+
+    const result = await pushMod.pushInquiryToVsco(inq, { trigger: 'inquiry-update' })
+    expect(result.ok).toBe(true)
+
+    // Heal should have replaced the bad id with the correct one
+    expect(dbMod.getVscoEntityId(externalUuid, 'contact-poc')).toBe('CORRECT_CONTACT_ID')
   })
 })
 

@@ -292,7 +292,7 @@ function collectEntitiesFromWorksheet(
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Update path (read-modify-write)
+// Update path (read-modify-write) + self-healing of vsco_entities
 // ──────────────────────────────────────────────────────────────────────
 
 async function updateJobFromInquiry(
@@ -320,6 +320,93 @@ async function updateJobFromInquiry(
     externalMappings: current.externalMappings ?? ws.externalMappings,
   }
   await client.put<JobRead>(`/job/${encodeURIComponent(jobId)}`, next)
+
+  // Self-heal vsco_entities: re-read the live JobContacts and refresh our
+  // mapping. Cheap (one extra GET) and fixes:
+  //   - Past bugs that recorded wrong IDs (e.g. JobContact id vs Contact id)
+  //   - Drift from manual VSCO UI changes (contact replaced/edited)
+  //   - Missing entity rows when a previous push partially succeeded
+  if (inquiry.external_uuid) {
+    await refreshContactEntities(inquiry.external_uuid, jobId, config).catch(
+      (err) => {
+        // Don't fail the whole update because of a heal step. Log + swallow.
+        // eslint-disable-next-line no-console
+        console.warn('[vsco] refreshContactEntities failed:', err)
+      },
+    )
+  }
+}
+
+/**
+ * Fetch JobContacts for a Job and re-write vsco_entities mappings for
+ * contact-poc / contact-partner-a / contact-partner-b / venue based on
+ * the current server-side state. Idempotent.
+ *
+ * Uses VSCO's role assignments to classify contacts:
+ *   - role 'partner-a' → contact-partner-a
+ *   - role 'partner-b' → contact-partner-b
+ *   - role 'primary-contact' (or anything with client:true and no partner role) → contact-poc
+ *   - role 'venue' → venue
+ */
+async function refreshContactEntities(
+  externalUuid: string,
+  jobId: string,
+  config: VscoConfig,
+): Promise<void> {
+  const client = getVscoClient()
+  const partnerAId = config.jobRoles['partner-a']
+  const partnerBId = config.jobRoles['partner-b']
+  const primaryContactId = config.jobRoles['primary-contact']
+  const venueRoleId = config.jobRoles.venue
+
+  // GET /job-contact?jobId=<jobId> returns JobContact join records with
+  // nested contact objects. (Discovered live during smoke test.)
+  type JobContactItem = {
+    id?: string
+    client?: boolean
+    jobRoles?: string[]
+    contact?: {
+      id?: string
+      kind?: 'person' | 'company' | 'location'
+    }
+  }
+  const resp = await client.get<{ items: JobContactItem[] }>(
+    `/job-contact?jobId=${encodeURIComponent(jobId)}&pageSize=50`,
+  )
+  const items = resp?.items ?? []
+
+  const updates: Array<{ kind: VscoEntityKind; vscoId: string }> = []
+
+  for (const jc of items) {
+    const contact = jc.contact
+    if (!contact?.id) continue
+    const roles = new Set(jc.jobRoles ?? [])
+
+    if (contact.kind === 'location') {
+      updates.push({ kind: 'venue', vscoId: contact.id })
+      continue
+    }
+    if (contact.kind === 'person') {
+      // Prefer partner roles over POC so the more specific role wins.
+      if (roles.has(partnerAId)) {
+        updates.push({ kind: 'contact-partner-a', vscoId: contact.id })
+      } else if (roles.has(partnerBId)) {
+        updates.push({ kind: 'contact-partner-b', vscoId: contact.id })
+      } else if (roles.has(primaryContactId) || jc.client) {
+        updates.push({ kind: 'contact-poc', vscoId: contact.id })
+      }
+      // Unknown person without a recognized role: skip — don't overwrite
+      // a good POC entry with a random extra contact added in the UI.
+      continue
+    }
+    if (roles.has(venueRoleId)) {
+      updates.push({ kind: 'venue', vscoId: contact.id })
+    }
+  }
+
+  if (updates.length > 0) {
+    recordVscoEntities(externalUuid, updates)
+  }
 }
 
 function mergeCustomFields<
