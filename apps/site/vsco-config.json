@@ -1,0 +1,73 @@
+{
+  "generatedAt": "2026-05-13T04:24:24.260Z",
+  "studioBrandId": "01hwgjjz6nyy2tmnjk1mg9c583",
+  "leadSources": {
+    "website-contact": "01krfs7her54z193s57m1g9xfy",
+    "website-collection-smile": "01krfs7hmmdrqhtdhcee7eqxkh",
+    "website-collection-visionary": "01krfs7hv34m8akk2p3nfkg6ch",
+    "website-collection-digital-atelier": "01krfs7j1cfrdkpp261ekm5z7q",
+    "website-collection-aurora": "01krfs7j5jtny0vcyp1qvvmr1g",
+    "website-collection-resonance": "01krfs7jb62zfcrwb3ww39dr8b",
+    "booth-expo": "01krfs7jhn598n7se6dct06bkr",
+    "referral": "01hwgjk1c7hstby1hsmegjr75d",
+    "other": "01hwgjk1c5c6ss1gpd63dgx12y"
+  },
+  "leadStatuses": {
+    "new": "01hwgjjz6q7anm6rdqs4x07ma5",
+    "contacted": "01hwgjjz6q7anm6rdqs4x07ma7",
+    "follow-up": "01hwgjjz6q7anm6rdqs4x07ma6",
+    "meeting-scheduled": "01hwgjjz6q7anm6rdqs4x07ma9",
+    "sent-quote": "01hwgjjz6q7anm6rdqs4x07maa",
+    "waiting-on-customer": "01hwgjjz6rkbh861kcpj17dv37",
+    "stale": "01hwgjjz6q7anm6rdqs4x07ma4"
+  },
+  "jobTypes": {
+    "wedding": "01hwgjk41q7rjhd61b068499g7",
+    "reception": "01krfs7keeg29mrp6bkxtr6aaz",
+    "engagement-rehearsal": "01hwgjk41v6xxxgxw213v7rx79",
+    "corporate": "01hwgjk41v6xxxgxw213v7rx78",
+    "gala": "01hwgjk41wz1mfwgs45hdejhe9",
+    "milestone": "01krfs7mb864f2je7s41fxt44n",
+    "anniversary": "01hwgjk41s89y2angry68fzjc9",
+    "birthday": "01hwgjk41s89y2angry68fzjca",
+    "bar-bat-mitzvah": "01hwgjk41r052x5yhdgfazhkm1",
+    "charity": "01hwgjk41tphqs6pkz8jxd71wy",
+    "graduation": "01hwgjk41x6ajyt0ykk2076faw",
+    "holiday": "01hwgjk41ym77ypsydnt9nfpcy",
+    "other": "01krfs7nyh1h61vtdc9emq4rk0"
+  },
+  "eventTypes": {
+    "ceremony": "01hwgjk41erhdwca3k4fy7cxd4",
+    "reception": "01hwgjk41erhdwca3k4fy7cxd3",
+    "main-event": "01hwgjk3cgzv69rwb78xk9mvka",
+    "consultation": "01hwgjk3cfexx2cn9wxsewv76r",
+    "walkthrough": "01hwgjk3cgzv69rwb78xk9mvkd",
+    "setup": "01hwgjk41djx60dcd6q6tes7jy",
+    "meeting": "01hwgjk3cgzv69rwb78xk9mvkb",
+    "call": "01hwgjk3cfexx2cn9wxsewv76q"
+  },
+  "jobRoles": {
+    "partner-a": "01hwgjk41mrab1mqt877t6gqgw",
+    "partner-b": "01hwgjk41mrab1mqt877t6gqgx",
+    "planner": "01hwgjk41j9cds7jn9spd6n1k8",
+    "primary-contact": "01hwgjk3cfexx2cn9wxsewv76m",
+    "secondary-contact": "01hwgjk3cfexx2cn9wxsewv76n",
+    "organizer-client": "01hwgjk3cfexx2cn9wxsewv76k",
+    "venue": "01hwgjk3cfexx2cn9wxsewv76p",
+    "parent-a": "01hwgjk41pywc3mq0fhep28vy2",
+    "parent-b": "01hwgjk41q7rjhd61b068499g6",
+    "organization": "01hwgjk3ce6hj6ck1qsp4g7xb9",
+    "main-subject": "01hwgjk41n14b7t0x0k4b2rbz7"
+  },
+  "customFields": {
+    "interested-smile": "01krfs7pr838y4xvfntgrgev7y",
+    "interested-visionary": "01krfs7py74rwe3rwpxpwyky1d",
+    "interested-digital-atelier": "01krfs7q486ghk0mpyh7qqbm97",
+    "interested-aurora": "01krfs7q826dj8a255pwv1hbj0",
+    "interested-resonance": "01krfs7qe9am22nd1n3v79nc00",
+    "reserved-package": "01krfs7qjm4jvvdmqkm4kpm7cp",
+    "event-setting": "01krfs7qqqds6y8eyrtgbetz21",
+    "consultation-preference": "01krfs7qvhhq9fj9hfk9ajbhk0",
+    "builder-submission-link": "01krfs7r17bv8s8dxsp720xqqv"
+  }
+}

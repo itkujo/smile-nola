@@ -4,7 +4,12 @@
 # Output: a small Node 22 image serving Astro SSR on port 3000.
 # =============================================================================
 
-ARG NODE_VERSION=22-alpine
+# Pinned to Alpine 3.22 (not :22-alpine which floats to 3.23+). Alpine 3.23's
+# musl libc dropped the `fcntl64` symbol that better-sqlite3's prebuilt
+# binary (from prebuild-install) expects, causing `Error relocating ...
+# fcntl64: symbol not found` at first DB query. Pin until better-sqlite3
+# publishes a prebuild against the newer musl, then bump.
+ARG NODE_VERSION=22-alpine3.22
 
 # -----------------------------------------------------------------------------
 # Stage 1: deps  — install all dependencies (build + runtime), compile native
@@ -62,6 +67,11 @@ COPY --from=build --chown=app:app /app/dist           ./dist
 COPY --from=build --chown=app:app /app/node_modules   ./node_modules
 COPY --from=build --chown=app:app /app/package.json   ./package.json
 COPY --from=build --chown=app:app /app/public         ./public
+
+# VSCO Workspace config — resolved studio IDs from the bootstrap script.
+# The push layer reads this file via process.cwd()+"/vsco-config.json".
+# Non-secret (just ULIDs); the actual API key lives in VSCO_API_KEY env.
+COPY --from=build --chown=app:app /app/apps/site/vsco-config.json ./vsco-config.json
 
 # The SQLite leads database lives at /data inside the container, mounted from
 # the host (see docker-compose.yml). Tell the app to look there.
