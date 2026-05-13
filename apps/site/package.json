@@ -15,7 +15,8 @@
     "test:watch": "vitest",
     "astro": "astro",
     "vsco:bootstrap": "node --experimental-strip-types scripts/vsco-bootstrap.ts",
-    "vsco:bootstrap:dry": "node --experimental-strip-types scripts/vsco-bootstrap.ts --dry-run"
+    "vsco:bootstrap:dry": "node --experimental-strip-types scripts/vsco-bootstrap.ts --dry-run",
+    "vsco:probe": "node --experimental-strip-types scripts/vsco-shape-probe.ts"
   },
   "dependencies": {
     "@astrojs/node": "^9.1.3",
