@@ -84,6 +84,7 @@ function buildLinkedInquiry(
     synced_at: "2026-05-10T00:01:00.000Z",
     source_legacy_id: null,
     deleted_at: null,
+    qualified_at: null,
     ...overrides,
   };
 }

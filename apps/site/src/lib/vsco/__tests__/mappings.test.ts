@@ -125,6 +125,7 @@ function makeInquiry(overrides: Partial<InquiryRow> = {}): InquiryRow {
     synced_at: null,
     source_legacy_id: null,
     deleted_at: null,
+    qualified_at: null,
     ...overrides,
   }
 }

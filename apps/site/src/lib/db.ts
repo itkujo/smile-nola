@@ -203,6 +203,86 @@ export function bootstrapSchema(db: Database.Database): void {
   migrateInquiriesAddBoothAndSyncColumns(db);
   migrateLeadsIntoInquiries(db);
   archiveLegacyLeadsTable(db);
+  migrateAddVscoTables(db);
+}
+
+/**
+ * VSCO Workspace integration tables.
+ *
+ *   inquiries.qualified_at          - timestamp set by admin "Mark Qualified"
+ *                                     button. Until this is non-null, no data
+ *                                     pushes to VSCO. After it's set, every
+ *                                     subsequent update (builder, manual edit)
+ *                                     mirrors to VSCO.
+ *
+ *   vsco_entities                   - records every VSCO ULID we've created so
+ *                                     we never re-create the same entity. PK
+ *                                     is (external_uuid, kind): one row per
+ *                                     (our row, type of VSCO entity). For
+ *                                     example after pushing inquiry uuid-1
+ *                                     we'd have rows for:
+ *                                       (uuid-1, 'job') -> ULID of the Job
+ *                                       (uuid-1, 'contact-poc') -> ULID
+ *                                       (uuid-1, 'contact-partner-a') -> ULID
+ *                                       (uuid-1, 'event-main') -> ULID
+ *                                       (uuid-1, 'venue') -> ULID
+ *
+ *   vsco_pushes                     - audit log of every push attempt. Records
+ *                                     the trigger, the verdict (ok/failed/
+ *                                     skipped), the HTTP status, the error
+ *                                     body (when failed), and the duration.
+ *                                     Indexed by external_uuid so the admin
+ *                                     UI can show a per-inquiry sync history.
+ *
+ * All three changes are idempotent: re-running them on an already-migrated
+ * DB is a no-op.
+ */
+function migrateAddVscoTables(db: Database.Database): void {
+  // 1. inquiries.qualified_at column
+  type ColInfo = { name: string };
+  const cols = db
+    .prepare<[], ColInfo>("PRAGMA table_info(inquiries)")
+    .all() as ColInfo[];
+  const have = new Set(cols.map((c) => c.name));
+  if (!have.has("qualified_at")) {
+    db.exec("ALTER TABLE inquiries ADD COLUMN qualified_at TEXT;");
+  }
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_inq_qualified_at ON inquiries(qualified_at);",
+  );
+
+  // 2. vsco_entities — maps (our external_uuid, kind) -> VSCO ULID
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS vsco_entities (
+      external_uuid TEXT    NOT NULL,
+      kind          TEXT    NOT NULL,
+      vsco_id       TEXT    NOT NULL,
+      created_at    TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (external_uuid, kind)
+    );
+    CREATE INDEX IF NOT EXISTS idx_vsco_ent_uuid ON vsco_entities(external_uuid);
+  `);
+
+  // 3. vsco_pushes — append-only audit log
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS vsco_pushes (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at     TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      external_uuid  TEXT,                -- usually inquiry.external_uuid; nullable for builder-only pushes
+      inquiry_id     INTEGER,             -- our inquiries.id when applicable
+      builder_id     INTEGER,             -- our package_builder_submissions.id when applicable
+      trigger        TEXT    NOT NULL,    -- 'inquiry-create' | 'inquiry-update' | 'builder-create' | 'qualify' | 'manual'
+      verdict        TEXT    NOT NULL,    -- 'ok' | 'failed' | 'skipped'
+      http_status    INTEGER,             -- VSCO HTTP status (when applicable)
+      error_body     TEXT,                -- JSON-stringified VSCO error body
+      duration_ms    INTEGER,             -- wall-clock duration of the push
+      notes          TEXT                 -- free-form, e.g. "VSCO_ENABLED=0 — skipped"
+    );
+    CREATE INDEX IF NOT EXISTS idx_vsco_pushes_uuid    ON vsco_pushes(external_uuid);
+    CREATE INDEX IF NOT EXISTS idx_vsco_pushes_inquiry ON vsco_pushes(inquiry_id);
+    CREATE INDEX IF NOT EXISTS idx_vsco_pushes_builder ON vsco_pushes(builder_id);
+    CREATE INDEX IF NOT EXISTS idx_vsco_pushes_at      ON vsco_pushes(created_at);
+  `);
 }
 
 /**
@@ -580,6 +660,8 @@ export interface InquiryRow {
   synced_at: string | null;
   source_legacy_id: number | null;
   deleted_at: string | null;
+  // VSCO Workspace integration — set when admin presses "Mark Qualified".
+  qualified_at: string | null;
 }
 
 export interface InquiryInput {
@@ -780,4 +862,180 @@ export function upsertBoothInquiry(
     .run(payload);
 
   return { inserted: true, id: Number(result.lastInsertRowid) };
+}
+
+/* ============================================================================
+ * VSCO Workspace integration helpers
+ * ========================================================================== */
+
+/**
+ * Kinds of VSCO entities we keep IDs for. New kinds may be added at any
+ * time; the database schema is intentionally a free-form text column so
+ * we never need a migration just to track a new entity.
+ *
+ *   job            - the main Job created for an inquiry
+ *   order          - the Order created from a builder submission
+ *   contact-poc    - the primary point-of-contact Person
+ *   contact-partner-a / contact-partner-b - paired partners (booth flow)
+ *   venue          - the Location contact for the event venue
+ *   event-main     - the main-event Event attached to the Job
+ */
+export type VscoEntityKind =
+  | "job"
+  | "order"
+  | "contact-poc"
+  | "contact-partner-a"
+  | "contact-partner-b"
+  | "venue"
+  | "event-main";
+
+export interface VscoEntityRow {
+  external_uuid: string;
+  kind: VscoEntityKind;
+  vsco_id: string;
+  created_at: string;
+}
+
+export function recordVscoEntity(
+  externalUuid: string,
+  kind: VscoEntityKind,
+  vscoId: string,
+): void {
+  getDb()
+    .prepare(
+      `INSERT OR REPLACE INTO vsco_entities (external_uuid, kind, vsco_id)
+       VALUES (?, ?, ?)`,
+    )
+    .run(externalUuid, kind, vscoId);
+}
+
+export function recordVscoEntities(
+  externalUuid: string,
+  entities: Array<{ kind: VscoEntityKind; vscoId: string }>,
+): void {
+  if (entities.length === 0) return;
+  const db = getDb();
+  const stmt = db.prepare(
+    `INSERT OR REPLACE INTO vsco_entities (external_uuid, kind, vsco_id)
+     VALUES (?, ?, ?)`,
+  );
+  const tx = db.transaction(
+    (rows: Array<{ kind: VscoEntityKind; vscoId: string }>) => {
+      for (const r of rows) stmt.run(externalUuid, r.kind, r.vscoId);
+    },
+  );
+  tx(entities);
+}
+
+export function getVscoEntities(externalUuid: string): VscoEntityRow[] {
+  return getDb()
+    .prepare<[string], VscoEntityRow>(
+      "SELECT * FROM vsco_entities WHERE external_uuid = ?",
+    )
+    .all(externalUuid) as VscoEntityRow[];
+}
+
+export function getVscoEntityId(
+  externalUuid: string,
+  kind: VscoEntityKind,
+): string | null {
+  const row = getDb()
+    .prepare<[string, string], { vsco_id: string }>(
+      "SELECT vsco_id FROM vsco_entities WHERE external_uuid = ? AND kind = ?",
+    )
+    .get(externalUuid, kind);
+  return row?.vsco_id ?? null;
+}
+
+export type VscoPushTrigger =
+  | "inquiry-create"
+  | "inquiry-update"
+  | "builder-create"
+  | "qualify"
+  | "manual";
+
+export type VscoPushVerdict = "ok" | "failed" | "skipped";
+
+export interface VscoPushInput {
+  external_uuid?: string | null;
+  inquiry_id?: number | null;
+  builder_id?: number | null;
+  trigger: VscoPushTrigger;
+  verdict: VscoPushVerdict;
+  http_status?: number | null;
+  error_body?: string | null;
+  duration_ms?: number | null;
+  notes?: string | null;
+}
+
+export function recordVscoPush(input: VscoPushInput): void {
+  getDb()
+    .prepare(
+      `INSERT INTO vsco_pushes (
+         external_uuid, inquiry_id, builder_id,
+         trigger, verdict, http_status, error_body,
+         duration_ms, notes
+       ) VALUES (
+         @external_uuid, @inquiry_id, @builder_id,
+         @trigger, @verdict, @http_status, @error_body,
+         @duration_ms, @notes
+       )`,
+    )
+    .run({
+      external_uuid: input.external_uuid ?? null,
+      inquiry_id: input.inquiry_id ?? null,
+      builder_id: input.builder_id ?? null,
+      trigger: input.trigger,
+      verdict: input.verdict,
+      http_status: input.http_status ?? null,
+      error_body: input.error_body ?? null,
+      duration_ms: input.duration_ms ?? null,
+      notes: input.notes ?? null,
+    });
+}
+
+export interface VscoPushRow {
+  id: number;
+  created_at: string;
+  external_uuid: string | null;
+  inquiry_id: number | null;
+  builder_id: number | null;
+  trigger: VscoPushTrigger;
+  verdict: VscoPushVerdict;
+  http_status: number | null;
+  error_body: string | null;
+  duration_ms: number | null;
+  notes: string | null;
+}
+
+export function getVscoPushesForInquiry(inquiryId: number): VscoPushRow[] {
+  return getDb()
+    .prepare<[number], VscoPushRow>(
+      "SELECT * FROM vsco_pushes WHERE inquiry_id = ? ORDER BY created_at DESC, id DESC",
+    )
+    .all(inquiryId) as VscoPushRow[];
+}
+
+/**
+ * Set `qualified_at = CURRENT_TIMESTAMP` on an inquiry. Returns the new
+ * timestamp on success, or null when the row doesn't exist or was already
+ * qualified.
+ *
+ * This is the gate for VSCO sync: until an inquiry is qualified, no data
+ * pushes outbound. Idempotent — re-qualifying a row is a no-op.
+ */
+export function markInquiryQualified(id: number): string | null {
+  const db = getDb();
+  const result = db
+    .prepare(
+      "UPDATE inquiries SET qualified_at = CURRENT_TIMESTAMP WHERE id = ? AND qualified_at IS NULL",
+    )
+    .run(id);
+  if (result.changes === 0) return null;
+  const row = db
+    .prepare<[number], { qualified_at: string }>(
+      "SELECT qualified_at FROM inquiries WHERE id = ?",
+    )
+    .get(id);
+  return row?.qualified_at ?? null;
 }
