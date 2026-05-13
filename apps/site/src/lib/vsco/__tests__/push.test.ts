@@ -212,30 +212,36 @@ describe('pushInquiryToVsco — happy path (create)', () => {
             // contains JobContact join records, NOT raw Contacts — the
             // actual Contact entity (with its id) is nested under
             // `contact`. Verified live on 2026-05-13.
+            //
+            // Important: VSCO may return contacts[] in a DIFFERENT order
+            // than we sent them. Position-based indexing is wrong; our
+            // code classifies by content (kind + jobRoles). Here we
+            // deliberately put the VENUE FIRST and POC SECOND to verify
+            // the classifier doesn't depend on send order.
             id: 'JOB_001',
             created: '',
             modified: '',
             title: 'X',
             contacts: [
               {
-                id: 'JOBCONT_POC', // JobContact join record id
-                client: true,
-                roleKinds: ['client'],
-                contact: {
-                  id: 'CONT_POC', // <-- the actual Contact id we want
-                  kind: 'person',
-                  firstName: 'Sarah',
-                  lastName: 'Beaumont',
-                  email: 'sarah@example.com',
-                },
-              },
-              {
                 id: 'JOBCONT_VENUE',
-                roleKinds: ['venue'],
+                jobRoles: ['JR_V'], // venue role from test config
                 contact: {
                   id: 'CONT_VENUE',
                   kind: 'location',
                   name: 'Ace Hotel',
+                },
+              },
+              {
+                id: 'JOBCONT_POC',
+                client: true,
+                jobRoles: ['JR_PRI'], // primary-contact role from test config
+                contact: {
+                  id: 'CONT_POC',
+                  kind: 'person',
+                  firstName: 'Sarah',
+                  lastName: 'Beaumont',
+                  email: 'sarah@example.com',
                 },
               },
             ],

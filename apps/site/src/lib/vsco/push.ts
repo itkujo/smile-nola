@@ -213,26 +213,31 @@ export async function pushInquiryToVsco(
 }
 
 /**
- * Match the response contacts to our worksheet ordering and tag with kinds.
+ * Classify the response's contacts[] entries by CONTENT (kind + roles),
+ * not by position. VSCO's worksheet response may reorder contacts
+ * relative to the order we sent them — verified live: I sent POC then
+ * venue, got back venue at index 0 and POC at index 1. Position-based
+ * indexing produced swapped (contact-poc, venue) entity rows; only the
+ * self-heal (which is content-based) recovered the correct mapping.
  *
- * The worksheet's `contacts[]` is built in a deterministic order by
- * inquiryToJobWorksheet:
- *   [0]      POC (always present, client: true)
- *   [1..2]   Partner A and/or Partner B (only when name differs from POC)
- *   [last]   Venue (location, only when inquiry.venue is set)
+ * Shape (verified 2026-05-13 against live API):
+ *   contacts[i] = JobContact join record:
+ *     { id, client, jobRoles[], contact: { id, kind, ... } }
+ *   - `id` is the JobContact id (a join row — not what we want)
+ *   - `contact.id` is the Contact id (the Person/Location entity)
+ *   - We always want `contact.id` for vsco_entities; using JobContact id
+ *     as a recipientId on an Order create produces a 400.
  *
- * VSCO's worksheet response returns `contacts[]` as JobContact join
- * records, NOT raw Contacts. The actual Contact (Person/Location/Company)
- * is nested under `contact`. Verified live on 2026-05-13: the top-level
- * `id` is the JobContact's id; `contact.id` is the Contact's id.
- *
- * For our `vsco_entities` table we want the **Contact** id (the thing we
- * pass as `recipientId` when creating an Order), not the JobContact id.
- * Reading respContact.id directly leads to a 400 reference-does-not-exist
- * on the next Order create.
+ * Classification (most specific role wins):
+ *   - contact.kind === 'location'        → venue
+ *   - jobRoles contains 'partner-a'      → contact-partner-a
+ *   - jobRoles contains 'partner-b'      → contact-partner-b
+ *   - jobRoles contains 'venue' (defensive — usually paired with kind=location) → venue
+ *   - jobRoles contains 'primary-contact' OR client:true → contact-poc
+ *   - else: skip (don't record random extras as POC)
  */
 function collectEntitiesFromWorksheet(
-  ws: ConcreteJobWorksheet,
+  _ws: ConcreteJobWorksheet,
   response: JobWorksheetResponse,
   jobId: string,
   contacts: ContactRead[],
@@ -245,43 +250,41 @@ function collectEntitiesFromWorksheet(
   const partnerAId = config.jobRoles['partner-a']
   const partnerBId = config.jobRoles['partner-b']
   const primaryContactId = config.jobRoles['primary-contact']
+  const venueRoleId = config.jobRoles.venue
 
-  for (let i = 0; i < ws.contacts.length; i++) {
-    const wsEntry = ws.contacts[i]!
-    const jobContact = contacts[i] as unknown as
-      | { contact?: { id?: string }; id?: string }
-      | undefined
-    if (!jobContact) break
+  type JobContactItem = {
+    id?: string
+    client?: boolean
+    jobRoles?: string[]
+    contact?: { id?: string; kind?: 'person' | 'company' | 'location' }
+  }
 
-    // The actual Contact id lives one level deeper in the worksheet
-    // response shape. Fall back to the top-level id only if `contact.id`
-    // is missing (shouldn't happen, but defensive).
-    const contactId = jobContact.contact?.id ?? jobContact.id
+  for (const respContact of contacts as unknown as JobContactItem[]) {
+    const contactId = respContact.contact?.id ?? respContact.id
     if (!contactId) continue
+    const roles = new Set(respContact.jobRoles ?? [])
+    const kind = respContact.contact?.kind
 
-    const c = wsEntry.contact
-    if (c.kind === 'location') {
+    // Location contacts are always venue regardless of role
+    if (kind === 'location' || roles.has(venueRoleId)) {
       entities.push({ kind: 'venue', vscoId: contactId })
       continue
     }
-    if (c.kind === 'person') {
-      const roles = new Set(wsEntry.jobRoles ?? [])
-      if (roles.has(primaryContactId)) {
-        // POC. Has primary-contact role (and possibly partner-a too).
-        entities.push({ kind: 'contact-poc', vscoId: contactId })
-      } else if (roles.has(partnerAId)) {
+    if (kind === 'person' || kind === undefined) {
+      // Prefer partner roles over POC so the more specific role wins.
+      if (roles.has(partnerAId)) {
         entities.push({ kind: 'contact-partner-a', vscoId: contactId })
       } else if (roles.has(partnerBId)) {
         entities.push({ kind: 'contact-partner-b', vscoId: contactId })
-      } else {
-        // Unknown person — record as POC by default (preserves data; never lose IDs).
+      } else if (roles.has(primaryContactId) || respContact.client) {
         entities.push({ kind: 'contact-poc', vscoId: contactId })
       }
+      // Unknown person without a recognized role: skip.
     }
   }
 
   // Event (if created)
-  if (ws.events.length > 0 && response.events && response.events.length > 0) {
+  if (response.events && response.events.length > 0) {
     const firstEvent = response.events[0] as { id?: string } | undefined
     if (firstEvent?.id) {
       entities.push({ kind: 'event-main', vscoId: firstEvent.id })
