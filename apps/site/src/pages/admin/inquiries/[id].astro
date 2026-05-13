@@ -4,7 +4,7 @@
  * Editable: status + admin notes. Everything else is read-only.
  */
 import AdminLayout from "@/layouts/AdminLayout.astro";
-import { getInquiry } from "@/lib/db";
+import { getInquiry, getVscoEntities, getVscoPushesForInquiry } from "@/lib/db";
 import { inquiryProjectName } from "@/lib/project-name";
 
 const id = Number(Astro.params.id);
@@ -35,6 +35,12 @@ try {
     }
   }
 } catch { /* ignore */ }
+
+// VSCO Workspace integration state
+const isQualified = !!inquiry.qualified_at;
+const vscoEntities = isQualified ? getVscoEntities(inquiry.external_uuid ?? "") : [];
+const vscoPushes = getVscoPushesForInquiry(inquiry.id);
+const jobEntity = vscoEntities.find((e) => e.kind === "job");
 ---
 
 <AdminLayout title={`Inquiry #${inquiry.id}`} section="inquiries">
@@ -101,6 +107,57 @@ try {
         <span class="save-status" aria-live="polite"></span>
       </div>
     </form>
+  </section>
+
+  <section class="status-block vsco-block">
+    <h2>VSCO Workspace</h2>
+    {!isQualified && (
+      <div class="vsco-row">
+        <p class="muted">
+          Not yet qualified. Mark this lead qualified to create a Job in VSCO Workspace.
+        </p>
+        <div class="form-actions">
+          <button type="button" class="btn-gold" id="qualify-btn">Mark Qualified</button>
+          <span class="qualify-status" aria-live="polite"></span>
+        </div>
+      </div>
+    )}
+    {isQualified && (
+      <div class="vsco-row">
+        <dl class="kv">
+          <div><dt>Qualified at</dt><dd>{inquiry.qualified_at}</dd></div>
+          {jobEntity && (
+            <div>
+              <dt>VSCO Job ID</dt>
+              <dd class="muted mono">{jobEntity.vsco_id}</dd>
+            </div>
+          )}
+          {!jobEntity && (
+            <div>
+              <dt>Status</dt>
+              <dd class="muted">Push pending or failed — see history below.</dd>
+            </div>
+          )}
+        </dl>
+      </div>
+    )}
+    {vscoPushes.length > 0 && (
+      <details class="vsco-history">
+        <summary>Sync history ({vscoPushes.length})</summary>
+        <ul class="vsco-history-list">
+          {vscoPushes.slice(0, 20).map((p) => (
+            <li class={`vsco-push is-${p.verdict}`}>
+              <span class="vsco-when muted">{p.created_at}</span>
+              <span class={`vsco-verdict is-${p.verdict}`}>{p.verdict}</span>
+              <span class="muted">·</span>
+              <span class="vsco-trigger">{p.trigger}</span>
+              {p.http_status !== null && <span class="muted">· HTTP {p.http_status}</span>}
+              {p.notes && <span class="muted">· {p.notes}</span>}
+            </li>
+          ))}
+        </ul>
+      </details>
+    )}
   </section>
 
   <section class="block">
@@ -191,6 +248,37 @@ try {
 </AdminLayout>
 
 <script define:vars={{ inquiryId: inquiry.id }}>
+  // Mark Qualified button — POSTs to the qualify endpoint, reloads the page
+  // on success so the new qualified_at and any VSCO entities show up.
+  const qualifyBtn = document.getElementById("qualify-btn");
+  const qualifyStatus = qualifyBtn?.parentElement?.querySelector(".qualify-status");
+  qualifyBtn?.addEventListener("click", async () => {
+    if (!qualifyStatus) return;
+    qualifyBtn.setAttribute("disabled", "true");
+    const originalLabel = qualifyBtn.textContent;
+    qualifyBtn.textContent = "Qualifying…";
+    qualifyStatus.textContent = "";
+    try {
+      const res = await fetch(`/api/admin/inquiries/${inquiryId}/qualify`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Server responded ${res.status}`);
+      }
+      qualifyStatus.textContent = "✓ Qualified — reloading…";
+      qualifyStatus.style.color = "var(--sn-gold)";
+      // Give the fire-and-forget VSCO push ~1.5s to register an audit row,
+      // then reload so the operator sees the result.
+      setTimeout(() => { window.location.reload(); }, 1500);
+    } catch (err) {
+      qualifyStatus.textContent = err instanceof Error ? err.message : "Qualify failed";
+      qualifyStatus.style.color = "var(--sn-amber)";
+      qualifyBtn.removeAttribute("disabled");
+      qualifyBtn.textContent = originalLabel;
+    }
+  });
+
   const form = document.getElementById("status-form");
   const saveStatus = form?.querySelector(".save-status");
   const submitBtn = form?.querySelector(".submit-btn");
@@ -541,6 +629,51 @@ try {
 
   /* Booth-expo block: visual cue that this lead came from a kiosk capture. */
   .booth-block { border-left: 2px solid var(--sn-amber); }
+
+  /* VSCO block — green when qualified, amber otherwise. Same shape as the
+     status-block so it sits naturally below it. */
+  .vsco-block { border-left: 2px solid var(--sn-gold); }
+  .vsco-row { margin: 0.5rem 0; }
+  .vsco-history {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed rgba(212, 175, 55, 0.18);
+  }
+  .vsco-history summary {
+    cursor: pointer;
+    color: var(--sn-muted-stone);
+    font-size: 0.85rem;
+  }
+  .vsco-history-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.75rem 0 0;
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+  .vsco-push {
+    padding: 0.25rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: baseline;
+  }
+  .vsco-when { font-family: ui-monospace, monospace; font-size: 0.78rem; }
+  .vsco-verdict {
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    padding: 0.05em 0.5em;
+    border-radius: 4px;
+  }
+  .vsco-verdict.is-ok       { color: var(--sn-gold);  border: 1px solid var(--sn-gold-40); background: rgba(212, 175, 55, 0.08); }
+  .vsco-verdict.is-failed   { color: var(--sn-amber); border: 1px solid var(--sn-amber); background: rgba(255, 178, 63, 0.08); }
+  .vsco-verdict.is-skipped  { color: var(--sn-muted-stone); border: 1px solid var(--sn-muted-stone); background: rgba(184, 178, 165, 0.06); }
+  .vsco-trigger { font-family: ui-monospace, monospace; font-size: 0.78rem; }
+
+  .qualify-status { font-size: 0.82rem; letter-spacing: 0.04em; }
+
   .mono {
     font-family: ui-monospace, monospace;
     font-size: 0.78rem;
