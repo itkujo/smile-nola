@@ -85,6 +85,13 @@ function buildLinkedInquiry(
     source_legacy_id: null,
     deleted_at: null,
     qualified_at: null,
+    venue_street_address: null,
+    venue_city: null,
+    venue_state: null,
+    venue_postal_code: null,
+    venue_country: null,
+    venue_latitude: null,
+    venue_longitude: null,
     ...overrides,
   };
 }

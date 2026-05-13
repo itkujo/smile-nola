@@ -204,6 +204,7 @@ export function bootstrapSchema(db: Database.Database): void {
   migrateLeadsIntoInquiries(db);
   archiveLegacyLeadsTable(db);
   migrateAddVscoTables(db);
+  migrateAddVenueAddressColumns(db);
 }
 
 /**
@@ -283,6 +284,60 @@ function migrateAddVscoTables(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_vsco_pushes_builder ON vsco_pushes(builder_id);
     CREATE INDEX IF NOT EXISTS idx_vsco_pushes_at      ON vsco_pushes(created_at);
   `);
+}
+
+/**
+ * Adds 7 nullable columns to inquiries and package_builder_submissions for
+ * structured venue address data captured from Google Places autocomplete.
+ *
+ * Idempotent — each ALTER TABLE is guarded by a PRAGMA check.
+ *
+ * Existing `venue TEXT` column is preserved as the human-readable name.
+ * New columns are populated only when the venue was picked from the
+ * autocomplete dropdown; free-text submissions leave them NULL.
+ */
+function migrateAddVenueAddressColumns(db: Database.Database): void {
+  type ColInfo = { name: string };
+
+  const inqCols = db
+    .prepare<[], ColInfo>("PRAGMA table_info(inquiries)")
+    .all() as ColInfo[];
+  const inqHave = new Set(inqCols.map((c) => c.name));
+  const TEXT_COLS = [
+    "venue_street_address",
+    "venue_city",
+    "venue_state",
+    "venue_postal_code",
+    "venue_country",
+  ];
+  const REAL_COLS = ["venue_latitude", "venue_longitude"];
+  for (const col of TEXT_COLS) {
+    if (!inqHave.has(col)) {
+      db.exec(`ALTER TABLE inquiries ADD COLUMN ${col} TEXT;`);
+    }
+  }
+  for (const col of REAL_COLS) {
+    if (!inqHave.has(col)) {
+      db.exec(`ALTER TABLE inquiries ADD COLUMN ${col} REAL;`);
+    }
+  }
+
+  const bldCols = db
+    .prepare<[], ColInfo>(
+      "PRAGMA table_info(package_builder_submissions)",
+    )
+    .all() as ColInfo[];
+  const bldHave = new Set(bldCols.map((c) => c.name));
+  for (const col of TEXT_COLS) {
+    if (!bldHave.has(col)) {
+      db.exec(`ALTER TABLE package_builder_submissions ADD COLUMN ${col} TEXT;`);
+    }
+  }
+  for (const col of REAL_COLS) {
+    if (!bldHave.has(col)) {
+      db.exec(`ALTER TABLE package_builder_submissions ADD COLUMN ${col} REAL;`);
+    }
+  }
 }
 
 /**
@@ -662,6 +717,15 @@ export interface InquiryRow {
   deleted_at: string | null;
   // VSCO Workspace integration — set when admin presses "Mark Qualified".
   qualified_at: string | null;
+  // Structured venue address — populated when user picked from Google Places
+  // autocomplete; NULL for free-text venue entries.
+  venue_street_address: string | null;
+  venue_city: string | null;
+  venue_state: string | null;
+  venue_postal_code: string | null;
+  venue_country: string | null;
+  venue_latitude: number | null;
+  venue_longitude: number | null;
 }
 
 export interface InquiryInput {
@@ -683,6 +747,14 @@ export interface InquiryInput {
   referral?: string | null;
   collections_interested?: string[] | null;
   collection_fields?: Record<string, unknown> | null;
+  // Optional structured venue address (from Google Places autocomplete).
+  venue_street_address?: string | null;
+  venue_city?: string | null;
+  venue_state?: string | null;
+  venue_postal_code?: string | null;
+  venue_country?: string | null;
+  venue_latitude?: number | null;
+  venue_longitude?: number | null;
 }
 
 /**
@@ -706,13 +778,17 @@ export function insertInquiry(input: InquiryInput): { id: number; createdAt: str
         preferred_contact, event_date, event_type, venue, guest_count,
         event_start, event_end, planner, budget_range,
         message, referral, collections_interested, collection_fields_json,
-        external_uuid
+        external_uuid,
+        venue_street_address, venue_city, venue_state, venue_postal_code,
+        venue_country, venue_latitude, venue_longitude
       ) VALUES (
         @source, @first_name, @last_name, @email, @phone,
         @preferred_contact, @event_date, @event_type, @venue, @guest_count,
         @event_start, @event_end, @planner, @budget_range,
         @message, @referral, @collections_interested, @collection_fields_json,
-        @external_uuid
+        @external_uuid,
+        @venue_street_address, @venue_city, @venue_state, @venue_postal_code,
+        @venue_country, @venue_latitude, @venue_longitude
       )`
     )
     .run({
@@ -739,6 +815,13 @@ export function insertInquiry(input: InquiryInput): { id: number; createdAt: str
         ? JSON.stringify(input.collection_fields)
         : null,
       external_uuid: crypto.randomUUID(),
+      venue_street_address: input.venue_street_address ?? null,
+      venue_city: input.venue_city ?? null,
+      venue_state: input.venue_state ?? null,
+      venue_postal_code: input.venue_postal_code ?? null,
+      venue_country: input.venue_country ?? null,
+      venue_latitude: input.venue_latitude ?? null,
+      venue_longitude: input.venue_longitude ?? null,
     });
 
   // Read the row back to get the server-assigned created_at for the response.
@@ -822,6 +905,16 @@ export interface BoothSyncPayload {
   partner2_name: string | null;
   event_setting: string | null;
   poc_relationship: string | null;
+  // Optional structured venue address — booth may have these if it
+  // ships an upgraded payload. Older booth payloads leave them undefined,
+  // in which case we treat them as null.
+  venue_street_address?: string | null;
+  venue_city?: string | null;
+  venue_state?: string | null;
+  venue_postal_code?: string | null;
+  venue_country?: string | null;
+  venue_latitude?: number | null;
+  venue_longitude?: number | null;
 }
 
 /**
@@ -857,17 +950,30 @@ export function upsertBoothInquiry(
          preferred_contact, event_date, venue,
          collections_interested, notes,
          partner1_name, partner2_name, event_setting, poc_relationship,
-         external_uuid, synced_at
+         external_uuid, synced_at,
+         venue_street_address, venue_city, venue_state, venue_postal_code,
+         venue_country, venue_latitude, venue_longitude
        ) VALUES (
          @created_at, 'booth-expo', 'new', 'wedding',
          @first_name, @last_name, @email, @phone,
          @preferred_contact, @event_date, @venue,
          @collections_interested, @notes,
          @partner1_name, @partner2_name, @event_setting, @poc_relationship,
-         @external_uuid, CURRENT_TIMESTAMP
+         @external_uuid, CURRENT_TIMESTAMP,
+         @venue_street_address, @venue_city, @venue_state, @venue_postal_code,
+         @venue_country, @venue_latitude, @venue_longitude
        )`,
     )
-    .run(payload);
+    .run({
+      ...payload,
+      venue_street_address: payload.venue_street_address ?? null,
+      venue_city: payload.venue_city ?? null,
+      venue_state: payload.venue_state ?? null,
+      venue_postal_code: payload.venue_postal_code ?? null,
+      venue_country: payload.venue_country ?? null,
+      venue_latitude: payload.venue_latitude ?? null,
+      venue_longitude: payload.venue_longitude ?? null,
+    });
 
   return { inserted: true, id: Number(result.lastInsertRowid) };
 }
