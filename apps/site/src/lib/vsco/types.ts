@@ -356,9 +356,18 @@ export interface JobWorksheet extends JobWrite {
   events?: EventWrite[];
 }
 
-/** Worksheet response shape. Spec returns the created Job + contacts + events. */
-export interface JobWorksheetResponse {
-  job: JobRead;
+/**
+ * Worksheet response shape.
+ *
+ * IMPORTANT (verified empirically against live API on 2026-05-13):
+ * The actual response is FLAT — the Job's fields are at the top level,
+ * with `contacts: []` and `events: [...]` arrays nested directly on it.
+ * NOT the spec's nominal { job: {...}, contacts: [], events: [] } shape.
+ *
+ * So a successful POST to /job/-/worksheet returns something like:
+ *   { id: "01...", stage: "lead", name: "...", ..., contacts: [...], events: [...] }
+ */
+export interface JobWorksheetResponse extends JobRead {
   contacts: ContactRead[];
   events?: EventWrite[];
 }

@@ -212,7 +212,11 @@ describe('pushInquiryToVsco — happy path (create)', () => {
       if (url.includes('/job/-/worksheet') && init?.method === 'POST') {
         return new Response(
           JSON.stringify({
-            job: { id: 'JOB_001', created: '', modified: '', title: 'X' },
+            // Flat shape: Job fields at top level + nested contacts/events
+            id: 'JOB_001',
+            created: '',
+            modified: '',
+            title: 'X',
             contacts: [
               { id: 'CONT_POC', kind: 'person', created: '', modified: '' },
               { id: 'CONT_VENUE', kind: 'location', name: 'Ace Hotel', created: '', modified: '' },

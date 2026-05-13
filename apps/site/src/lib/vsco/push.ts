@@ -187,7 +187,9 @@ export async function pushInquiryToVsco(
       '/job/-/worksheet',
       worksheet,
     )
-    const jobId = response.job.id
+    // The worksheet response is flat — the Job's fields are at the top level,
+    // not nested under a `job` key (spec is misleading; verified live).
+    const jobId = response.id
     const contacts = response.contacts ?? []
 
     // Record the new entities
