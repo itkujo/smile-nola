@@ -120,6 +120,18 @@ export function parseBudgetRangeToCents(input: string | null | undefined): numbe
   return Math.max(...valuesCents)
 }
 
+/**
+ * VSCO's `leadMaxBudget` field stores DOLLARS, not cents — they multiply
+ * by 100 internally. This is inconsistent with Order/OrderItem which use
+ * cents, but it's what the live API does (verified 2026-05-13 with a
+ * probe job: sent 100, read back 10000). Use this helper to convert our
+ * cents value to whatever the leadMaxBudget endpoint wants.
+ */
+export function budgetCentsToDollars(cents: number | null): number | null {
+  if (cents === null) return null
+  return Math.round(cents / 100)
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Source → leadSourceKey mapping
 // ──────────────────────────────────────────────────────────────────────
@@ -519,7 +531,13 @@ export function inquiryToJobWorksheet(
     eventDate: inquiry.event_date || null,
     guestCount: inquiry.guest_count ?? null,
     inquiryDate: isoDateOnly(inquiry.created_at),
-    leadMaxBudget: parseBudgetRangeToCents(inquiry.budget_range),
+    // leadMaxBudget is in DOLLARS, not cents — verified live on 2026-05-13.
+    // VSCO multiplies by 100 internally to store as cents. The spec
+    // marks all money fields as `integer` with the same min/max range, but
+    // the leadMaxBudget interpretation differs from Order/OrderItem totals
+    // (those ARE in cents). One of those VSCO quirks our parser handles
+    // by dividing our cents value by 100 before sending.
+    leadMaxBudget: budgetCentsToDollars(parseBudgetRangeToCents(inquiry.budget_range)),
     leadNotes: composeLeadNotes(inquiry),
     customFields,
     externalMappings,

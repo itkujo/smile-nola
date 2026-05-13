@@ -448,10 +448,13 @@ describe('inquiryToJobWorksheet', () => {
     expect(cfMap['CF_EVENT_SETTING']).toBe('Outdoor — Covered')
   })
 
-  it('parses budget_range into leadMaxBudget (cents, upper bound)', () => {
+  it('parses budget_range into leadMaxBudget (DOLLARS — VSCO multiplies x100 internally)', () => {
     const inquiry = makeInquiry({ budget_range: '$15,000 — $25,000' })
     const ws = inquiryToJobWorksheet(inquiry, { config: cfg, siteBase })
-    expect(ws.leadMaxBudget).toBe(2_500_000)
+    // leadMaxBudget is in dollars (25000), not cents (2_500_000), despite
+    // the spec marking all money fields the same way. VSCO multiplies by
+    // 100 server-side. Verified live 2026-05-13.
+    expect(ws.leadMaxBudget).toBe(25_000)
   })
 
   it('appends collection_fields_json deep answers to leadNotes as readable text', () => {
