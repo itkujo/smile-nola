@@ -495,11 +495,32 @@ export function inquiryToJobWorksheet(
 
   // 3. Venue (Location contact) if known
   if (inquiry.venue && inquiry.venue.trim()) {
+    // If the user picked the venue from Google Places autocomplete we
+    // have at least one address field set. In that case, attach a
+    // mailingAddress block so VSCO's Schedule section can pin the
+    // location on its map. For free-text-only venues, we still create
+    // the Location contact but omit mailingAddress entirely.
+    const hasAddress = Boolean(
+      inquiry.venue_street_address ||
+        inquiry.venue_city ||
+        inquiry.venue_state ||
+        inquiry.venue_postal_code ||
+        inquiry.venue_country,
+    )
     contacts.push({
       jobRoles: [config.jobRoles.venue],
       contact: {
         kind: 'location',
         name: inquiry.venue.trim(),
+        ...(hasAddress && {
+          mailingAddress: {
+            streetAddress: inquiry.venue_street_address || null,
+            city: inquiry.venue_city || null,
+            state: inquiry.venue_state || null,
+            postalCode: inquiry.venue_postal_code || null,
+            country: inquiry.venue_country || null,
+          },
+        }),
       },
     })
   }
