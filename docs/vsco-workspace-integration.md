@@ -238,6 +238,7 @@ Documented here so the next person doesn't have to relearn them:
 | 4 | OrderItem.children[] don't get summed into Order.total | Emit flat top-level items |
 | 5 | `Job.leadMaxBudget` is dollars, not cents | `budgetCentsToDollars()` helper |
 | 6 | Worksheet response contacts[] order doesn't match send order | Content-based classification |
+| 7 | Location contacts use `address`, not `mailingAddress` (which is a Person/Company field; silently no-ops on Locations) | LocationWrite has `address: Address`, mappings emit it. lat/lng/googlePlaceId on address are readOnly — VSCO geocodes server-side from the 5 textual fields. |
 
 ## Testing
 
