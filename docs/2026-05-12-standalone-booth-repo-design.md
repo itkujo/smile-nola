@@ -222,6 +222,22 @@ Content-Type: application/json
 
 **What changes on the main site side:** the existing `/api/sync/inquiries` endpoint already accepts the booth posting with this token. The only adjustment needed is the `source` validator accepting `"booth-standalone"` in addition to `"booth-expo"`. That is the *entire* main-site code change.
 
+### Machine-specific launchers (NOT part of the repo)
+
+This laptop has KDE desktop icons that wrap `docker compose up/down` so a non-technical operator can start and stop the booth without a terminal. Those scripts:
+
+- Live at `~/.local/bin/smile-nola-booth/start.sh` and `~/.local/bin/smile-nola-booth/stop.sh`.
+- Are referenced by `.desktop` files under `~/.local/share/applications/` (e.g. `smile-nola-booth-start.desktop`).
+- Are **not** committed to either repo. They're machine- and desktop-environment-specific (KDE `konsole`, `notify-send`, hardcoded paths, this user's home directory).
+- Content is adapted from today's `apps/intake/scripts/booth-{start,stop}.sh`, but operate against the published image's `docker run` / `docker compose` invocation, not a local build:
+  - `start.sh`: open konsole → `docker compose -f ~/code/smile-nola-booth/docker-compose.yml up -d` (or a `docker run` one-liner) → wait until healthy → print LAN URL + QR.
+  - `stop.sh`: check pending sync queue → `docker compose -f ~/.../docker-compose.yml down` → toast notification.
+- Loss tolerance: trivial to regenerate from the new repo's `README.md` after an OS reinstall. No backup obligation.
+
+The new portable repo's own `scripts/start.sh` and `scripts/stop.sh` (which ARE committed) are generic, terminal-friendly launchers — they print the same QR/URL but don't depend on a desktop environment. The machine-local KDE versions are a polish layer on top.
+
+This separation is intentional: the repo ships things that work anywhere. The laptop ships things that only make sense on this laptop.
+
 ### Versioning & release
 
 - Releases are tagged `v<major>.<minor>.<patch>` in the new repo.
@@ -242,8 +258,9 @@ Strict ordering so nothing in production breaks:
 4. **Create GitHub repo** `itkujo/smile-nola-booth` (public). Push.
 5. **Tag `v0.1.0`.** CI publishes the image to ghcr.io. Confirm the package is public.
 6. **Clean-machine pull test.** On a different machine (or after `docker system prune`), `docker run` the published image. Confirm it works without anything cached locally.
-7. **Only then** clean up this repo: delete `docker-compose.booth.yml`, `apps/intake/scripts/booth-{start,stop}.sh`, the uncommitted Dockerfile diff (its fixes have moved to the new repo). The hosted `expo.smile-nola.com` deployment is unaffected — it still uses `apps/intake/` and the prod `docker-compose.yml`.
-8. **(Future, optional)** Test on a Raspberry Pi. Test on a Peplink router. Document any quirks in `docs/deploying.md`.
+7. **Install the laptop-only desktop launchers.** Create `~/.local/bin/smile-nola-booth/{start.sh,stop.sh}` adapted from today's `apps/intake/scripts/booth-{start,stop}.sh`, but pointing at the new repo's compose file (or directly at the published image). Install `.desktop` entries under `~/.local/share/applications/`. Confirm the KDE desktop icons start and stop the booth cleanly.
+8. **Only then** clean up this repo: delete `docker-compose.booth.yml`, delete the untracked `apps/intake/scripts/booth-{start,stop}.sh` (their content lives on at `~/.local/bin/smile-nola-booth/`, just no longer pretending to be repo files), and either commit or abandon the uncommitted Dockerfile diff on `feature/booth-laptop-docker` (its fixes have moved to the new repo). The hosted `expo.smile-nola.com` deployment is unaffected — it still uses `apps/intake/` and the prod `docker-compose.yml`.
+9. **(Future, optional)** Test on a Raspberry Pi. Test on a Peplink router. Document any quirks in `docs/deploying.md`.
 
 If steps 2 or 3 fail, the new repo isn't ready and we don't proceed. The existing setup (broken laptop booth, working hosted expo) is no worse than today.
 
