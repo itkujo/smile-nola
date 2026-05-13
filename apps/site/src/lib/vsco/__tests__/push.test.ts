@@ -352,15 +352,16 @@ describe('pushInquiryToVsco — happy path (create)', () => {
         )
       }
       if (init?.method === 'GET' && url.includes('/job-contact') && url.includes('jobId=JOB_HEAL')) {
-        // Self-heal payload: returns JobContacts with nested Contact.id
+        // Self-heal payload: /job-contact returns FLAT JobContacts —
+        // `contactId` is the actual Contact id, no nested contact object.
         return new Response(
           JSON.stringify({
             items: [
               {
                 id: 'JOBCONT_HEAL_001',
+                contactId: 'CORRECT_CONTACT_ID', // <-- flat contactId
                 client: true,
                 jobRoles: ['JR_PRI'], // primary-contact role from test config
-                contact: { id: 'CORRECT_CONTACT_ID', kind: 'person' },
               },
             ],
           }),

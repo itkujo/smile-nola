@@ -342,11 +342,23 @@ async function updateJobFromInquiry(
  * contact-poc / contact-partner-a / contact-partner-b / venue based on
  * the current server-side state. Idempotent.
  *
- * Uses VSCO's role assignments to classify contacts:
- *   - role 'partner-a' → contact-partner-a
- *   - role 'partner-b' → contact-partner-b
- *   - role 'primary-contact' (or anything with client:true and no partner role) → contact-poc
- *   - role 'venue' → venue
+ * Shape note (verified live on 2026-05-13):
+ *   GET /job-contact?jobId=<id> returns items with FLAT fields:
+ *     - id (the JobContact join row id — NOT what we want)
+ *     - contactId (the actual Contact id — what we want)
+ *     - jobRoles (string[] of role ULIDs)
+ *     - client (boolean)
+ *     - roleKinds (string[] of denormalized role kinds: 'client'|'subject'|...)
+ *   No nested 'contact' object. Contact kind isn't returned here — we'd
+ *   need a separate /address-book/{id} GET to know if it's a person vs
+ *   location. So we classify purely on role IDs.
+ *
+ * Role-based classification (most specific wins):
+ *   - jobRoles contains 'partner-a' → contact-partner-a
+ *   - jobRoles contains 'partner-b' → contact-partner-b
+ *   - jobRoles contains 'venue'     → venue
+ *   - jobRoles contains 'primary-contact' OR client:true → contact-poc
+ *   - otherwise: skip (don't overwrite a good entry with a random extra)
  */
 async function refreshContactEntities(
   externalUuid: string,
@@ -359,16 +371,11 @@ async function refreshContactEntities(
   const primaryContactId = config.jobRoles['primary-contact']
   const venueRoleId = config.jobRoles.venue
 
-  // GET /job-contact?jobId=<jobId> returns JobContact join records with
-  // nested contact objects. (Discovered live during smoke test.)
   type JobContactItem = {
     id?: string
+    contactId?: string
     client?: boolean
     jobRoles?: string[]
-    contact?: {
-      id?: string
-      kind?: 'person' | 'company' | 'location'
-    }
   }
   const resp = await client.get<{ items: JobContactItem[] }>(
     `/job-contact?jobId=${encodeURIComponent(jobId)}&pageSize=50`,
@@ -378,30 +385,20 @@ async function refreshContactEntities(
   const updates: Array<{ kind: VscoEntityKind; vscoId: string }> = []
 
   for (const jc of items) {
-    const contact = jc.contact
-    if (!contact?.id) continue
+    const contactId = jc.contactId
+    if (!contactId) continue
     const roles = new Set(jc.jobRoles ?? [])
 
-    if (contact.kind === 'location') {
-      updates.push({ kind: 'venue', vscoId: contact.id })
-      continue
+    if (roles.has(partnerAId)) {
+      updates.push({ kind: 'contact-partner-a', vscoId: contactId })
+    } else if (roles.has(partnerBId)) {
+      updates.push({ kind: 'contact-partner-b', vscoId: contactId })
+    } else if (roles.has(venueRoleId)) {
+      updates.push({ kind: 'venue', vscoId: contactId })
+    } else if (roles.has(primaryContactId) || jc.client) {
+      updates.push({ kind: 'contact-poc', vscoId: contactId })
     }
-    if (contact.kind === 'person') {
-      // Prefer partner roles over POC so the more specific role wins.
-      if (roles.has(partnerAId)) {
-        updates.push({ kind: 'contact-partner-a', vscoId: contact.id })
-      } else if (roles.has(partnerBId)) {
-        updates.push({ kind: 'contact-partner-b', vscoId: contact.id })
-      } else if (roles.has(primaryContactId) || jc.client) {
-        updates.push({ kind: 'contact-poc', vscoId: contact.id })
-      }
-      // Unknown person without a recognized role: skip — don't overwrite
-      // a good POC entry with a random extra contact added in the UI.
-      continue
-    }
-    if (roles.has(venueRoleId)) {
-      updates.push({ kind: 'venue', vscoId: contact.id })
-    }
+    // No recognized role: skip
   }
 
   if (updates.length > 0) {
