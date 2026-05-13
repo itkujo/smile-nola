@@ -1,0 +1,223 @@
+---
+/**
+ * SiteBanner — site-wide announcement strip. Rendered above the
+ * SiteHeader on every public page (and above the builder's logo bar on
+ * /build). Reads the current banner config server-side from
+ * `site_settings`; the data layer's tolerant defaults mean this component
+ * never throws — it just renders nothing when the banner is disabled.
+ *
+ * Dismissal: when the visitor closes the banner, we store the current
+ * content hash (server-computed at render time) in localStorage under
+ * `sn-banner-dismissed`. On the next page load, an inline script hides
+ * the banner immediately if the stored hash matches the current one.
+ * Changing the message on the admin side rolls the hash and re-shows the
+ * banner to everyone — which is exactly what you want for a new sale.
+ *
+ * Variants:
+ *   gold      — calm announcement / general (default)
+ *   champagne — warm sale / promotion
+ *   coral     — urgent / limited window
+ */
+import { getBannerSettings, bannerContentHash } from "@/lib/site-settings";
+
+const banner = getBannerSettings();
+// Cheap fast-path: when disabled or message is blank, skip the entire
+// markup — no node in the DOM, no inline script work for visitors.
+const shouldRender = banner.enabled && banner.message.trim().length > 0;
+const contentHash = shouldRender ? bannerContentHash(banner) : "";
+---
+
+{shouldRender && (
+  <aside
+    class={`site-banner site-banner--${banner.variant}`}
+    role="region"
+    aria-label="Site announcement"
+    data-banner-hash={contentHash}
+  >
+    <div class="site-banner__inner">
+      <p class="site-banner__message">
+        <span class="site-banner__text">{banner.message}</span>
+        {banner.linkUrl && banner.linkLabel && (
+          <a class="site-banner__link" href={banner.linkUrl}>
+            {banner.linkLabel}
+            <span class="site-banner__arrow" aria-hidden="true">→</span>
+          </a>
+        )}
+      </p>
+      <button
+        type="button"
+        class="site-banner__dismiss"
+        data-banner-dismiss
+        aria-label="Dismiss announcement"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+          <path
+            d="M1 1 L13 13 M13 1 L1 13"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            fill="none"
+          />
+        </svg>
+      </button>
+    </div>
+  </aside>
+)}
+
+<style>
+  /* Anchor variables on the host so each variant can swap surface,
+     accent, and text color without rewriting layout rules. */
+  .site-banner {
+    --bn-surface: #18120a;
+    --bn-accent: var(--sn-gold);
+    --bn-text: var(--sn-ivory);
+    --bn-muted: rgba(248, 244, 234, 0.72);
+
+    position: relative;
+    z-index: 60; /* above SiteHeader (z:50) so it visibly stacks on top */
+    width: 100%;
+    background: var(--bn-surface);
+    color: var(--bn-text);
+    border-bottom: 1px solid var(--sn-gold-24);
+  }
+  .site-banner--gold {
+    --bn-surface: #18120a;
+    --bn-accent: var(--sn-gold);
+  }
+  .site-banner--champagne {
+    --bn-surface: #1a1612;
+    --bn-accent: var(--sn-champagne);
+  }
+  .site-banner--coral {
+    --bn-surface: #1a0f0d;
+    --bn-accent: #e89384; /* coral — local, not a brand token */
+    border-bottom-color: rgba(232, 147, 132, 0.32);
+  }
+
+  .site-banner__inner {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 10px clamp(20px, 4vw, 56px);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .site-banner__message {
+    flex: 1;
+    margin: 0;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    letter-spacing: 0.04em;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 14px;
+  }
+  .site-banner__text {
+    color: var(--bn-text);
+  }
+  .site-banner__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--bn-accent);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-size: 0.7rem;
+    transition: opacity 200ms ease;
+    text-decoration: none;
+  }
+  .site-banner__link:hover,
+  .site-banner__link:focus-visible {
+    opacity: 0.78;
+    outline: none;
+  }
+  .site-banner__arrow {
+    transition: transform 200ms ease;
+  }
+  .site-banner__link:hover .site-banner__arrow,
+  .site-banner__link:focus-visible .site-banner__arrow {
+    transform: translateX(2px);
+  }
+
+  .site-banner__dismiss {
+    flex-shrink: 0;
+    background: transparent;
+    border: 0;
+    color: var(--bn-muted);
+    padding: 6px;
+    border-radius: 999px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 200ms ease, background-color 200ms ease;
+  }
+  .site-banner__dismiss:hover,
+  .site-banner__dismiss:focus-visible {
+    color: var(--bn-text);
+    background: rgba(255, 255, 255, 0.06);
+    outline: none;
+  }
+
+  /* When the inline script hides the banner, we still want the layout to
+     collapse cleanly — display:none, no transition (the user already
+     dismissed it once; we're just restoring that decision on next load). */
+  .site-banner[hidden] {
+    display: none !important;
+  }
+</style>
+
+<script is:inline>
+  // Dismiss + persistence + CSS variable for the fixed SiteHeader offset.
+  // Inline (not type=module) so it runs before hydration and doesn't flash
+  // the banner for returning visitors who already dismissed this exact
+  // content.
+  (function () {
+    var STORAGE_KEY = "sn-banner-dismissed";
+    var banner = document.querySelector("[data-banner-hash]");
+    if (!banner) return;
+
+    var currentHash = banner.getAttribute("data-banner-hash");
+    var hideBanner = function () {
+      banner.setAttribute("hidden", "");
+      document.documentElement.style.setProperty("--sn-banner-height", "0px");
+    };
+    var publishHeight = function () {
+      // Expose the actual rendered height so the fixed SiteHeader can
+      // offset itself via top: var(--sn-banner-height). Measured rather
+      // than hard-coded so message wrapping on narrow screens doesn't
+      // overlap the header.
+      var h = banner.getBoundingClientRect().height;
+      document.documentElement.style.setProperty("--sn-banner-height", h + "px");
+    };
+
+    try {
+      var dismissed = localStorage.getItem(STORAGE_KEY);
+      if (dismissed === currentHash) {
+        hideBanner();
+        return;
+      }
+    } catch (_) {
+      // localStorage blocked (Safari private mode etc.) — degrade to
+      // "always show, dismissals don't persist." Better than a hard error.
+    }
+
+    publishHeight();
+    window.addEventListener("resize", publishHeight, { passive: true });
+
+    var btn = banner.querySelector("[data-banner-dismiss]");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      hideBanner();
+      try {
+        localStorage.setItem(STORAGE_KEY, currentHash);
+      } catch (_) {
+        // No persistence available; the banner is still hidden for this
+        // session because we set the `hidden` attribute above.
+      }
+    });
+  })();
+</script>

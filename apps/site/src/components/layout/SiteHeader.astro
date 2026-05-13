@@ -55,7 +55,11 @@ const isActive = (href: string) =>
 <style>
   .site-header {
     position: fixed;
-    top: 0; left: 0; right: 0;
+    /* --sn-banner-height is set by SiteBanner's inline script when the
+       site-wide announcement banner is visible. Defaults to 0 when no
+       banner is rendered, so the header sits flush at the top as before. */
+    top: var(--sn-banner-height, 0px);
+    left: 0; right: 0;
     z-index: 50;
     display: flex;
     justify-content: space-between;
@@ -65,7 +69,8 @@ const isActive = (href: string) =>
       background-color 280ms ease,
       backdrop-filter 280ms ease,
       border-color 280ms ease,
-      padding 280ms ease;
+      padding 280ms ease,
+      top 200ms ease;
     border-bottom: 1px solid transparent;
   }
   .site-header.is-scrolled {

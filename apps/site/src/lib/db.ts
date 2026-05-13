@@ -181,6 +181,21 @@ export function bootstrapSchema(db: Database.Database): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_bi_inquiry ON builder_invites(inquiry_id);
+
+    -- Site-wide key/value store for small admin-managed configuration.
+    -- Currently holds the announcement banner state (single row keyed
+    -- "banner") but the table is intentionally generic so future single-flag
+    -- toggles (maintenance mode, intake pause, etc.) can ride the same
+    -- schema without another migration.
+    --
+    -- value is opaque JSON, parsed and validated by the consumer; updated_at
+    -- gets refreshed on every write so the admin UI can show "last updated"
+    -- without us tracking per-field timestamps.
+    CREATE TABLE IF NOT EXISTS site_settings (
+      key        TEXT    PRIMARY KEY,
+      value      TEXT    NOT NULL,
+      updated_at TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   migratePortfolioToMultiCollection(db);

@@ -49,6 +49,10 @@ const counts = inquiryCounts();
         <span class="qk-title">Testimonials</span>
         <span class="qk-sub">Add or feature client quotes</span>
       </a>
+      <a href="/admin/site-banner" class="quick-link">
+        <span class="qk-title">Site Banner</span>
+        <span class="qk-sub">Flip on a sale or announcement, sitewide</span>
+      </a>
     </div>
   </section>
 </AdminLayout>
@@ -120,7 +124,9 @@ const counts = inquiryCounts();
     gap: 10px;
   }
   @media (min-width: 700px) {
-    .links { grid-template-columns: repeat(3, 1fr); }
+    /* auto-fit lets the grid breathe as we add quick links over time
+       without needing to bump the column count by hand. */
+    .links { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
   }
   .quick-link {
     background: var(--sn-soft-black);
