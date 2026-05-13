@@ -1,0 +1,479 @@
+---
+/**
+ * /admin/site-banner — manage the site-wide announcement banner.
+ *
+ * Single-record form. Server reads the current state from site_settings
+ * and pre-fills the form; the live preview block reflects the form as the
+ * operator types so they can sanity-check tone before publishing. A "Reset
+ * dismissals" hint reminds the operator that changing the message
+ * automatically re-shows the banner to everyone (content-hashed keys), so
+ * they don't need to manually nudge anyone.
+ */
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { getBannerSettings } from "@/lib/site-settings";
+
+const banner = getBannerSettings();
+---
+
+<AdminLayout title="Site Banner" section="site-banner">
+  <header class="head">
+    <p class="eyebrow">— admin · site banner —</p>
+    <h1 class="font-deco">a single line, everywhere.</h1>
+    <p class="head-sub">
+      Run a sale, announce a date, point people somewhere new. The banner
+      shows above every page (including the package builder) until you turn
+      it off. Changing the message automatically re-shows it to visitors
+      who dismissed the previous one.
+    </p>
+  </header>
+
+  <section class="grid">
+    <div class="form-block" aria-labelledby="form-heading">
+      <h2 id="form-heading">Banner configuration</h2>
+      <form id="banner-form" novalidate>
+        <label class="toggle-row">
+          <input
+            type="checkbox"
+            name="enabled"
+            checked={banner.enabled}
+          />
+          <span class="toggle-label">
+            <span class="toggle-title">Banner enabled</span>
+            <span class="toggle-sub">Off keeps the form filled out for next time.</span>
+          </span>
+        </label>
+
+        <label class="sn-field-wrap">
+          <span class="sn-field-label">Message *</span>
+          <textarea
+            name="message"
+            rows="2"
+            maxlength="240"
+            placeholder="Spring booking window now open — 15% off Aurora additions through March."
+          >{banner.message}</textarea>
+          <span class="sn-underline"></span>
+          <span class="char-counter" data-counter aria-live="polite">
+            {banner.message.length} / 240
+          </span>
+        </label>
+
+        <div class="link-row">
+          <label class="sn-field-wrap">
+            <span class="sn-field-label">CTA link URL (optional)</span>
+            <input
+              type="text"
+              name="linkUrl"
+              maxlength="500"
+              placeholder="/collections or https://…"
+              value={banner.linkUrl ?? ""}
+            />
+            <span class="sn-underline"></span>
+          </label>
+
+          <label class="sn-field-wrap">
+            <span class="sn-field-label">CTA link label (optional)</span>
+            <input
+              type="text"
+              name="linkLabel"
+              maxlength="40"
+              placeholder="Explore"
+              value={banner.linkLabel ?? ""}
+            />
+            <span class="sn-underline"></span>
+          </label>
+        </div>
+
+        <fieldset class="variant-row">
+          <legend class="sn-field-label">Visual variant</legend>
+          <label class={`variant variant--gold${banner.variant === "gold" ? " is-on" : ""}`}>
+            <input type="radio" name="variant" value="gold" checked={banner.variant === "gold"} />
+            <span>Gold</span>
+            <small>Announcement · calm</small>
+          </label>
+          <label class={`variant variant--champagne${banner.variant === "champagne" ? " is-on" : ""}`}>
+            <input type="radio" name="variant" value="champagne" checked={banner.variant === "champagne"} />
+            <span>Champagne</span>
+            <small>Sale · warm</small>
+          </label>
+          <label class={`variant variant--coral${banner.variant === "coral" ? " is-on" : ""}`}>
+            <input type="radio" name="variant" value="coral" checked={banner.variant === "coral"} />
+            <span>Coral</span>
+            <small>Urgent · limited window</small>
+          </label>
+        </fieldset>
+
+        <div class="form-actions">
+          <button type="submit" class="btn-gold submit-btn">Save banner</button>
+          <span class="save-status" aria-live="polite"></span>
+        </div>
+      </form>
+    </div>
+
+    <aside class="preview-block" aria-label="Banner preview">
+      <h2>Live preview</h2>
+      <p class="preview-note">
+        Updates as you type. Visitors who dismissed the previous banner
+        will see this one as soon as the message changes.
+      </p>
+      <div class="preview-frame">
+        <div
+          id="preview-banner"
+          class={`pv pv--${banner.variant}`}
+          data-empty={banner.message.trim().length === 0 ? "true" : "false"}
+        >
+          <p class="pv__message">
+            <span class="pv__text" data-preview-text>
+              {banner.message || "(your message will appear here)"}
+            </span>
+            <a
+              class="pv__link"
+              href={banner.linkUrl ?? "#"}
+              data-preview-link
+              hidden={!banner.linkUrl || !banner.linkLabel}
+            >
+              <span data-preview-link-label>{banner.linkLabel ?? ""}</span>
+              <span aria-hidden="true">→</span>
+            </a>
+          </p>
+          <span class="pv__close" aria-hidden="true">×</span>
+        </div>
+      </div>
+    </aside>
+  </section>
+</AdminLayout>
+
+<script>
+  const form = document.getElementById("banner-form") as HTMLFormElement | null;
+  const saveStatus = form?.querySelector<HTMLElement>(".save-status") ?? null;
+  const submitBtn = form?.querySelector<HTMLButtonElement>(".submit-btn") ?? null;
+  const counter = form?.querySelector<HTMLElement>("[data-counter]") ?? null;
+  const previewBanner = document.getElementById("preview-banner");
+  const previewText = document.querySelector<HTMLElement>("[data-preview-text]");
+  const previewLink = document.querySelector<HTMLAnchorElement>("[data-preview-link]");
+  const previewLinkLabel = document.querySelector<HTMLElement>("[data-preview-link-label]");
+
+  function setStatus(msg: string, ok: boolean) {
+    if (!saveStatus) return;
+    saveStatus.textContent = msg;
+    saveStatus.style.color = ok ? "var(--sn-gold)" : "var(--sn-amber)";
+  }
+
+  function updatePreview() {
+    if (!form) return;
+    const fd = new FormData(form);
+    const message = String(fd.get("message") ?? "").trim();
+    const linkUrl = String(fd.get("linkUrl") ?? "").trim();
+    const linkLabel = String(fd.get("linkLabel") ?? "").trim();
+    const variant = String(fd.get("variant") ?? "gold");
+
+    if (previewText) {
+      previewText.textContent = message || "(your message will appear here)";
+    }
+    if (previewBanner) {
+      previewBanner.className = `pv pv--${variant}`;
+      previewBanner.dataset.empty = message.length === 0 ? "true" : "false";
+    }
+    if (previewLink && previewLinkLabel) {
+      const hasLink = linkUrl.length > 0 && linkLabel.length > 0;
+      previewLink.hidden = !hasLink;
+      previewLink.href = hasLink ? linkUrl : "#";
+      previewLinkLabel.textContent = linkLabel;
+    }
+    if (counter) {
+      counter.textContent = `${message.length} / 240`;
+    }
+
+    // Mirror the radio-button visual active state.
+    form.querySelectorAll<HTMLLabelElement>(".variant").forEach((el) => {
+      const input = el.querySelector<HTMLInputElement>('input[type="radio"]');
+      el.classList.toggle("is-on", !!input?.checked);
+    });
+  }
+
+  form?.addEventListener("input", updatePreview);
+  form?.addEventListener("change", updatePreview);
+
+  form?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    setStatus("", true);
+    if (!form) return;
+
+    const fd = new FormData(form);
+    const linkUrl = String(fd.get("linkUrl") ?? "").trim();
+    const linkLabel = String(fd.get("linkLabel") ?? "").trim();
+
+    const payload = {
+      enabled: fd.get("enabled") === "on",
+      message: String(fd.get("message") ?? "").trim(),
+      linkUrl: linkUrl.length > 0 ? linkUrl : null,
+      linkLabel: linkLabel.length > 0 ? linkLabel : null,
+      variant: String(fd.get("variant") ?? "gold"),
+    };
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Saving…";
+    }
+
+    try {
+      const res = await fetch("/api/admin/site-banner", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const detail =
+          data.details && typeof data.details === "object"
+            ? " — " + Object.values(data.details).join("; ")
+            : "";
+        throw new Error((data.error || `Server responded ${res.status}`) + detail);
+      }
+      setStatus("Saved · live on the public site.", true);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Save failed", false);
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Save banner";
+      }
+    }
+  });
+</script>
+
+<style>
+  .head { margin-bottom: 32px; }
+  .head .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .head h1 {
+    font-weight: 400;
+    font-size: clamp(28px, 3.8vw, 44px);
+    color: var(--sn-ivory);
+    margin: 8px 0 12px;
+    line-height: 1.05;
+  }
+  .head-sub {
+    color: var(--sn-muted-stone);
+    font-size: 0.95rem;
+    margin: 0;
+    max-width: 64ch;
+    line-height: 1.6;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  @media (min-width: 900px) {
+    .grid {
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    }
+  }
+
+  .form-block,
+  .preview-block {
+    padding: 24px;
+    background: var(--sn-soft-black);
+    border: 1px solid var(--sn-gold-24);
+  }
+  h2 {
+    color: var(--sn-gold);
+    font-family: var(--font-body);
+    font-size: 0.72rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin: 0 0 22px;
+  }
+
+  .toggle-row {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    margin-bottom: 22px;
+    cursor: pointer;
+  }
+  .toggle-row input {
+    margin-top: 4px;
+    accent-color: var(--sn-gold);
+    width: 18px;
+    height: 18px;
+  }
+  .toggle-title {
+    display: block;
+    color: var(--sn-ivory);
+    font-size: 1rem;
+    margin-bottom: 2px;
+  }
+  .toggle-sub {
+    display: block;
+    color: var(--sn-muted-stone);
+    font-size: 0.82rem;
+  }
+
+  .sn-field-wrap {
+    display: block;
+    margin-bottom: 18px;
+    position: relative;
+  }
+  .sn-field-label {
+    display: block;
+    color: var(--sn-muted-stone);
+    font-size: 0.68rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .sn-field-wrap textarea,
+  .sn-field-wrap input {
+    width: 100%;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--sn-gold-24);
+    padding: 8px 0;
+    color: var(--sn-ivory);
+    font-family: var(--font-body);
+    font-size: 1rem;
+  }
+  .sn-field-wrap textarea {
+    resize: vertical;
+    min-height: 64px;
+  }
+  .sn-field-wrap textarea:focus,
+  .sn-field-wrap input:focus {
+    outline: none;
+    border-bottom-color: var(--sn-gold);
+  }
+  .char-counter {
+    position: absolute;
+    bottom: -18px;
+    right: 0;
+    font-size: 0.7rem;
+    color: var(--sn-muted-stone);
+    letter-spacing: 0.08em;
+  }
+
+  .link-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 18px;
+    margin-bottom: 18px;
+  }
+  @media (min-width: 600px) {
+    .link-row { grid-template-columns: 1fr 1fr; }
+  }
+
+  .variant-row {
+    border: 0;
+    padding: 0;
+    margin: 14px 0 24px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  @media (min-width: 600px) {
+    .variant-row { grid-template-columns: repeat(3, 1fr); }
+  }
+  .variant-row legend {
+    padding: 0;
+    margin-bottom: 8px;
+  }
+  .variant {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 12px 14px;
+    border: 1px solid var(--sn-gold-24);
+    cursor: pointer;
+    transition: border-color 200ms ease, background-color 200ms ease;
+  }
+  .variant input { display: none; }
+  .variant span {
+    color: var(--sn-ivory);
+    font-size: 0.92rem;
+  }
+  .variant small {
+    color: var(--sn-muted-stone);
+    font-size: 0.74rem;
+  }
+  .variant:hover { border-color: var(--sn-gold-40); }
+  .variant.is-on {
+    border-color: var(--sn-gold);
+    background: rgba(212, 175, 55, 0.06);
+  }
+  .variant--gold.is-on { box-shadow: 0 0 16px var(--sn-amber-20); }
+  .variant--champagne.is-on { box-shadow: 0 0 16px rgba(246, 231, 200, 0.18); }
+  .variant--coral.is-on { box-shadow: 0 0 16px rgba(232, 147, 132, 0.22); border-color: #e89384; }
+
+  .form-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .save-status {
+    font-size: 0.82rem;
+  }
+
+  /* --- Preview --- */
+  .preview-note {
+    color: var(--sn-muted-stone);
+    font-size: 0.82rem;
+    line-height: 1.55;
+    margin: 0 0 16px;
+  }
+  .preview-frame {
+    border: 1px dashed var(--sn-gold-24);
+    padding: 18px;
+    background: var(--sn-black);
+  }
+  .pv {
+    --pv-surface: #18120a;
+    --pv-accent: var(--sn-gold);
+    --pv-text: var(--sn-ivory);
+    background: var(--pv-surface);
+    color: var(--pv-text);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--sn-gold-24);
+  }
+  .pv--gold { --pv-surface: #18120a; --pv-accent: var(--sn-gold); }
+  .pv--champagne { --pv-surface: #1a1612; --pv-accent: var(--sn-champagne); }
+  .pv--coral { --pv-surface: #1a0f0d; --pv-accent: #e89384; }
+  .pv[data-empty="true"] .pv__text {
+    color: var(--sn-muted-stone);
+    font-style: italic;
+  }
+  .pv__message {
+    flex: 1;
+    margin: 0;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 14px;
+  }
+  .pv__link {
+    color: var(--pv-accent);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-size: 0.7rem;
+    text-decoration: none;
+  }
+  .pv__close {
+    color: var(--sn-muted-stone);
+    font-size: 1.2rem;
+    line-height: 1;
+  }
+</style>

@@ -18,7 +18,8 @@ interface Props {
     | "inquiries"
     | "package-builder"
     | "portfolio"
-    | "testimonials";
+    | "testimonials"
+    | "site-banner";
 }
 const { title, section } = Astro.props;
 
@@ -28,6 +29,7 @@ const NAV = [
   { href: "/admin/package-builder",  label: "Package Builder",  key: "package-builder" },
   { href: "/admin/portfolio",        label: "Video Portfolio",  key: "portfolio"       },
   { href: "/admin/testimonials",     label: "Testimonials",     key: "testimonials"    },
+  { href: "/admin/site-banner",      label: "Site Banner",      key: "site-banner"     },
 ] as const;
 ---
 

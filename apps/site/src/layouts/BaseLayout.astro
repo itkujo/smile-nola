@@ -1,9 +1,11 @@
 ---
 /**
- * BaseLayout — every page extends this. Loads brand tokens, fonts, scroll
- * reveal observer, and the default open-graph + favicon metadata.
+ * BaseLayout — every public page extends this. Loads brand tokens, fonts,
+ * scroll reveal observer, the site-wide announcement banner, and the
+ * default open-graph + favicon metadata.
  */
 import "@/styles/globals.css";
+import SiteBanner from "@/components/layout/SiteBanner.astro";
 
 interface Props {
   title: string;
@@ -89,6 +91,12 @@ const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? "htt
   </head>
   <body class={bodyClass}>
     <a class="skip-link" href="#main">Skip to content</a>
+    {/*
+      Site-wide announcement banner. Rendered conditionally inside the
+      component itself — when disabled, no markup is emitted, so there's
+      zero impact on pages when no announcement is active.
+    */}
+    <SiteBanner />
     <slot />
 
     {reveal && (
