@@ -71,7 +71,9 @@ COPY --from=build --chown=app:app /app/public         ./public
 # VSCO Workspace config — resolved studio IDs from the bootstrap script.
 # The push layer reads this file via process.cwd()+"/vsco-config.json".
 # Non-secret (just ULIDs); the actual API key lives in VSCO_API_KEY env.
-COPY --from=build --chown=app:app /app/apps/site/vsco-config.json ./vsco-config.json
+# Build context is apps/site/ (Coolify per-app build), so the file lives
+# at /app/vsco-config.json in the build stage — not /app/apps/site/.
+COPY --from=build --chown=app:app /app/vsco-config.json ./vsco-config.json
 
 # The SQLite leads database lives at /data inside the container, mounted from
 # the host (see docker-compose.yml). Tell the app to look there.
