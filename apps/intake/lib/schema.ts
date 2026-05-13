@@ -84,6 +84,16 @@ export const LeadSchema = z.object({
     .min(1, "Pick a date")
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a valid date"),
   venueName: optionalTrimmed(160),
+  // Optional structured venue address — populated when the iPad user
+  // picked the venue from Google Places autocomplete. All nullable so
+  // older payloads (no autocomplete) still validate.
+  venueStreetAddress: optionalTrimmed(200),
+  venueCity:          optionalTrimmed(80),
+  venueState:         optionalTrimmed(40),
+  venuePostalCode:    optionalTrimmed(20),
+  venueCountry:       optionalTrimmed(2),
+  venueLatitude:  z.coerce.number().min(-90).max(90).optional(),
+  venueLongitude: z.coerce.number().min(-180).max(180).optional(),
 
   // Vision
   setting: z.enum(SETTINGS, {
@@ -110,6 +120,13 @@ export interface LeadRow {
   partner2_name: string | null;
   event_date: string;
   venue_name: string | null;
+  venue_street_address: string | null;
+  venue_city: string | null;
+  venue_state: string | null;
+  venue_postal_code: string | null;
+  venue_country: string | null;
+  venue_latitude: number | null;
+  venue_longitude: number | null;
   setting: string;
   collections_interested: string; // JSON array
   notes: string | null;
@@ -130,6 +147,13 @@ export interface HydratedLead {
   partner2Name: string | null;
   eventDate: string;
   venueName: string | null;
+  venueStreetAddress: string | null;
+  venueCity: string | null;
+  venueState: string | null;
+  venuePostalCode: string | null;
+  venueCountry: string | null;
+  venueLatitude: number | null;
+  venueLongitude: number | null;
   setting: string;
   collectionsInterested: CollectionId[];
   notes: string | null;
@@ -157,6 +181,13 @@ export function hydrate(row: LeadRow): HydratedLead {
     partner2Name: row.partner2_name,
     eventDate: row.event_date,
     venueName: row.venue_name,
+    venueStreetAddress: row.venue_street_address,
+    venueCity: row.venue_city,
+    venueState: row.venue_state,
+    venuePostalCode: row.venue_postal_code,
+    venueCountry: row.venue_country,
+    venueLatitude: row.venue_latitude,
+    venueLongitude: row.venue_longitude,
     setting: row.setting,
     collectionsInterested: collections,
     notes: row.notes,
