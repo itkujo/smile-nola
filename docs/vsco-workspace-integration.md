@@ -42,6 +42,24 @@ Builder submission (qualified inquiry only)
   is the handoff point. After that, both systems are kept in sync via
   fire-and-forget push calls from API routes.
 
+## Job Type / Workflow routing (Model B)
+
+VSCO Job Types represent **service lines**, not event kinds:
+
+| Job Type | Workflow attached | Routed when |
+| --- | --- | --- |
+| Videography | Wedding Videography Workflow | inquiry has `visionary` in collections_interested |
+| Photo Booth | Photo Booth Workflow | inquiry has `smile` (and no `visionary`) |
+| Production | Production Workflow | anything else (Aurora-only, Digital-Atelier-only, Resonance-only, fallback) |
+
+The "what kind of event" (Wedding, Corporate, Gala, etc.) is captured in
+the `event-occasion` custom field instead — see `inquiry.event_type` →
+`eventOccasionForType()` in mappings.ts.
+
+When inquiryToJobWorksheet creates a Job it sets both `jobTypeId` AND
+`workflowId` explicitly. The Job Type's `workflowId` default would also
+apply, but being explicit is defensive against UI drift in the studio.
+
 ## What lives where
 
 | Layer | File | Purpose |
@@ -188,18 +206,44 @@ SELECT * FROM vsco_pushes
    trigger anything on our side. The integration is one-way (us → VSCO).
 4. **PUT not PATCH** — every update is a full-document write. The push
    layer does read-modify-write to preserve fields it doesn't know about.
-5. **Money is integer minor units** — `1850000` = $18,500.00. The
-   catalog's `priceCents` values flow through unchanged.
-6. **No idempotency-key header** — we use `externalMappings[].id` with
+5. **Money is integer minor units (cents) for Order.total / OrderItem
+   .pricePerUnit** — `1850000` = $18,500.00. The catalog's `priceCents`
+   values flow through unchanged for these fields.
+6. **`Job.leadMaxBudget` is in DOLLARS, not cents.** VSCO multiplies by
+   100 internally. Use `budgetCentsToDollars()` to convert before sending.
+   Verified live 2026-05-13.
+7. **No idempotency-key header** — we use `externalMappings[].id` with
    the inquiry's `external_uuid` for de-dup. The push layer also checks
    `vsco_entities` before creating anything, so duplicate creation
    shouldn't happen even on retry.
+8. **No workflow CRUD endpoints** — workflows attach to Job Types via
+   `JobType.workflowId`. You manage workflow definitions in the
+   Workspace UI; the bootstrap script discovers their ULIDs.
+9. **Worksheet response contacts[] may be reordered** — VSCO does not
+   preserve the order you sent contacts in. `collectEntitiesFromWorksheet`
+   classifies by `contact.kind` + `jobRoles` rather than position.
+10. **Order line items with children[] don't sum** — `Order.total` only
+    includes top-level items. Builder mapping emits ALL items (packages
+    + addons) flat at the top level, no nesting.
+
+## Spec-vs-reality bugs discovered during smoke testing
+
+Documented here so the next person doesn't have to relearn them:
+
+| # | Bug | Fix |
+| --- | --- | --- |
+| 1 | Worksheet response is FLAT, not `{ job, contacts, events }` | `JobWorksheetResponse extends JobRead` |
+| 2 | `contacts[i].id` is the JobContact join id, not the Contact id | Read `contacts[i].contact.id` |
+| 3 | `/job-contact?jobId=` LIST has different shape than worksheet (flat `contactId`, no nested `contact`, no `kind`) | Self-heal walks roles only |
+| 4 | OrderItem.children[] don't get summed into Order.total | Emit flat top-level items |
+| 5 | `Job.leadMaxBudget` is dollars, not cents | `budgetCentsToDollars()` helper |
+| 6 | Worksheet response contacts[] order doesn't match send order | Content-based classification |
 
 ## Testing
 
 ```sh
 cd apps/site
-pnpm test                                                  # 188 tests including all VSCO units
+pnpm test                                                  # 201 tests, all VSCO units included
 pnpm vitest run src/lib/vsco/                              # VSCO-only
 pnpm vitest run src/lib/vsco/__tests__/push.test.ts        # push layer integration
 ```
@@ -207,3 +251,13 @@ pnpm vitest run src/lib/vsco/__tests__/push.test.ts        # push layer integrat
 The push tests use a temp `SMILE_NOLA_DB_DIR` and mock `globalThis.fetch`
 so they never touch the real API. The bootstrap script's behavior on the
 live API is verified manually via `pnpm vsco:bootstrap:dry`.
+
+For live shape verification (read-only, won't write any data):
+
+```sh
+cd apps/site
+node --experimental-strip-types scripts/vsco-shape-probe.ts
+```
+
+Probes 14 endpoints and reports response shapes — useful when VSCO
+ships an API change.
