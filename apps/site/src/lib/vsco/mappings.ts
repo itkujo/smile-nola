@@ -140,30 +140,58 @@ export function leadSourceKeyForInquiry(source: string | null | undefined): Lead
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Event type → jobTypeKey mapping
+// Collection interest → Job Type (Model B)
+//
+// Routing rules (highest priority wins):
+//   1. interested in 'visionary' → 'videography' (and the videography workflow)
+//   2. else interested in 'smile' → 'photo-booth' (and the photo-booth workflow)
+//   3. else                       → 'production' (Aurora-only / Digital-
+//                                   Atelier-only / Resonance-only / fallback)
+//
+// Videography is the priority service: any inquiry mentioning visionary
+// gets routed through Videography even if they also picked smile/aurora.
+// The interested-* custom field checkboxes still capture every collection,
+// so nothing is lost.
 // ──────────────────────────────────────────────────────────────────────
 
-const EVENT_TYPE_PATTERNS: Array<[RegExp, JobTypeKey]> = [
-  [/wedding/i, 'wedding'],
-  [/reception/i, 'reception'],
-  [/engagement|rehearsal/i, 'engagement-rehearsal'],
-  [/corporate/i, 'corporate'],
-  [/gala/i, 'gala'],
-  [/milestone/i, 'milestone'],
-  [/anniversary/i, 'anniversary'],
-  [/birthday/i, 'birthday'],
-  [/bar.?bat|mitzvah/i, 'bar-bat-mitzvah'],
-  [/charity/i, 'charity'],
-  [/graduation/i, 'graduation'],
-  [/holiday/i, 'holiday'],
+export function jobTypeKeyForCollections(
+  collectionsInterested: string[] | null | undefined,
+): JobTypeKey {
+  const set = new Set(collectionsInterested ?? [])
+  if (set.has('visionary')) return 'videography'
+  if (set.has('smile')) return 'photo-booth'
+  return 'production'
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Event type → Event Occasion DropDown value
+//
+// Maps free-form inquiry.event_type strings to one of the DropDown
+// choices in the 'event-occasion' custom field. Unknown values fall
+// back to 'Other Event'.
+// ──────────────────────────────────────────────────────────────────────
+
+const EVENT_OCCASION_CHOICES: Array<[RegExp, string]> = [
+  [/wedding/i, 'Wedding'],
+  [/reception/i, 'Reception'],
+  [/engagement|rehearsal/i, 'Engagement / Rehearsal'],
+  [/corporate/i, 'Corporate Event'],
+  [/gala/i, 'Gala'],
+  [/milestone/i, 'Milestone Celebration'],
+  [/anniversary/i, 'Anniversary'],
+  [/birthday/i, 'Birthday'],
+  [/bar.?bat|mitzvah/i, 'Bar / Bat Mitzvah'],
+  [/charity/i, 'Charity Event'],
+  [/graduation/i, 'Graduation'],
+  [/holiday/i, 'Holiday Party'],
 ]
 
-export function jobTypeKeyForInquiry(eventType: string | null | undefined): JobTypeKey {
-  if (!eventType) return 'other'
-  for (const [re, key] of EVENT_TYPE_PATTERNS) {
-    if (re.test(eventType)) return key
+export function eventOccasionForType(eventType: string | null | undefined): string {
+  if (!eventType) return 'Other Event'
+  for (const [re, label] of EVENT_OCCASION_CHOICES) {
+    if (re.test(eventType)) return label
   }
-  return 'other'
+  return 'Other Event'
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -326,7 +354,6 @@ export function inquiryToJobWorksheet(
   const { config, siteBase } = ctx
 
   // ---- Basic Job fields ----
-  const jobTypeKey = jobTypeKeyForInquiry(inquiry.event_type)
   const leadSourceKey = leadSourceKeyForInquiry(inquiry.source)
   const externalMappings: ExternalMapping[] = []
   if (inquiry.external_uuid) {
@@ -336,10 +363,17 @@ export function inquiryToJobWorksheet(
     })
   }
 
-  // ---- Custom fields ----
+  // Parse collections_interested early — needed for both custom fields
+  // AND the Job Type routing decision.
   const interested = (parseJsonArray(inquiry.collections_interested) ?? []).filter(
     (x): x is string => typeof x === 'string',
   )
+
+  // Model B routing: collections drive the Job Type + Workflow.
+  // 'visionary' wins over 'smile' wins over anything else.
+  const jobTypeKey = jobTypeKeyForCollections(interested)
+
+  // ---- Custom fields ----
   const fields = parseJsonObject(inquiry.collection_fields_json)
   const smileFields = fields?.smile as Record<string, unknown> | undefined
   const reservedSlug =
@@ -348,6 +382,10 @@ export function inquiryToJobWorksheet(
 
   const customFields: CustomFieldValue[] = [
     ...buildInterestedCheckboxes(config, interested),
+    // Event occasion captures the KIND of event (Wedding, Corporate, etc.)
+    // since Job Type now carries the service line. Always set so the
+    // custom field has a value (DropDown choices include 'Other Event').
+    cfv(config, 'event-occasion', eventOccasionForType(inquiry.event_type)),
   ]
   if (reservedDisplay) {
     customFields.push(cfv(config, 'reserved-package', reservedDisplay))
@@ -470,6 +508,11 @@ export function inquiryToJobWorksheet(
     stage: 'lead',
     webLead: true,
     jobTypeId: config.jobTypes[jobTypeKey],
+    // Set workflowId explicitly. JobType.workflowId default would also
+    // apply this, but being explicit is defensive: if the Job Type's
+    // default ever drifts in the UI, our code still attaches the
+    // correct workflow.
+    workflowId: config.workflows[jobTypeKey],
     leadSourceId: config.leadSources[leadSourceKey],
     leadStatusId: config.leadStatuses.new,
     brandId: config.studioBrandId,
@@ -525,6 +568,14 @@ export function builderToJobUpdate(
     )
   }
 
+  // Refresh event-occasion from the builder's event.type, in case the
+  // client updated it in the builder (the builder form lets them pick
+  // 'Wedding', 'Corporate', etc. independently of what the original
+  // inquiry said).
+  if (sub.event_type) {
+    customFields.push(cfv(config, 'event-occasion', eventOccasionForType(sub.event_type)))
+  }
+
   const patch: Partial<JobWrite> = {
     eventDate: sub.event_date || null,
     guestCount: sub.guest_count ?? null,
@@ -532,9 +583,12 @@ export function builderToJobUpdate(
     customFields,
   }
 
-  if (sub.event_type) {
-    patch.jobTypeId = config.jobTypes[jobTypeKeyForInquiry(sub.event_type)]
-  }
+  // NOTE: we intentionally DO NOT change Job.jobTypeId or Job.workflowId
+  // in the builder push. The service line (Photo Booth / Videography /
+  // Production) was determined at qualify time from collections_interested
+  // and shouldn't shift mid-pipeline. The builder may add/drop a
+  // collection in selections, but the workflow that's been running
+  // since qualify stays put.
 
   return patch
 }

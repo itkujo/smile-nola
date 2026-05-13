@@ -7,7 +7,8 @@ import {
   builderToJobUpdate,
   builderToOrder,
   parseBudgetRangeToCents,
-  jobTypeKeyForInquiry,
+  jobTypeKeyForCollections,
+  eventOccasionForType,
   leadSourceKeyForInquiry,
   reservedPackageDisplay,
   noEmailPlaceholder,
@@ -41,19 +42,14 @@ const cfg: VscoConfig = {
     stale: 'ST_STALE',
   },
   jobTypes: {
-    wedding: 'JT_WEDDING',
-    reception: 'JT_RECEPTION',
-    'engagement-rehearsal': 'JT_ENG',
-    corporate: 'JT_CORP',
-    gala: 'JT_GALA',
-    milestone: 'JT_MILESTONE',
-    anniversary: 'JT_ANNIV',
-    birthday: 'JT_BDAY',
-    'bar-bat-mitzvah': 'JT_BBM',
-    charity: 'JT_CHARITY',
-    graduation: 'JT_GRAD',
-    holiday: 'JT_HOLIDAY',
-    other: 'JT_OTHER',
+    'photo-booth': 'JT_PHOTO_BOOTH',
+    videography: 'JT_VIDEOGRAPHY',
+    production: 'JT_PRODUCTION',
+  },
+  workflows: {
+    'photo-booth': 'WF_PHOTO_BOOTH',
+    videography: 'WF_VIDEOGRAPHY',
+    production: 'WF_PRODUCTION',
   },
   eventTypes: {
     ceremony: 'ET_CEREMONY',
@@ -88,6 +84,7 @@ const cfg: VscoConfig = {
     'event-setting': 'CF_EVENT_SETTING',
     'consultation-preference': 'CF_CONSULT_PREF',
     'builder-submission-link': 'CF_BUILDER_LINK',
+    'event-occasion': 'CF_EVENT_OCCASION',
   },
 }
 
@@ -153,24 +150,59 @@ describe('parseBudgetRangeToCents', () => {
   })
 })
 
-describe('jobTypeKeyForInquiry', () => {
+describe('jobTypeKeyForCollections (Model B routing)', () => {
   it.each([
-    ['Wedding', 'wedding'],
-    ['Reception', 'reception'],
-    ['Engagement / Rehearsal', 'engagement-rehearsal'],
-    ['Engagement/Rehearsal', 'engagement-rehearsal'],
-    ['Corporate', 'corporate'],
-    ['Gala', 'gala'],
-    ['Milestone', 'milestone'],
-    ['Other', 'other'],
-    [null, 'other'],
-    ['unknown weird string', 'other'],
-  ])('%s → %s', (input, expected) => {
-    expect(jobTypeKeyForInquiry(input)).toBe(expected)
+    [['visionary'], 'videography'],
+    [['smile'], 'photo-booth'],
+    [['aurora'], 'production'],
+    [['digital-atelier'], 'production'],
+    [['resonance'], 'production'],
+    [[], 'production'],
+    [null, 'production'],
+    [undefined, 'production'],
+  ] as Array<[string[] | null | undefined, string]>)('%j → %s', (input, expected) => {
+    expect(jobTypeKeyForCollections(input)).toBe(expected)
   })
 
-  it('booth event_type "wedding" maps to wedding', () => {
-    expect(jobTypeKeyForInquiry('wedding')).toBe('wedding')
+  it('visionary wins over smile when both are interested', () => {
+    expect(jobTypeKeyForCollections(['smile', 'visionary'])).toBe('videography')
+    expect(jobTypeKeyForCollections(['visionary', 'smile'])).toBe('videography')
+  })
+
+  it('visionary wins over everything', () => {
+    expect(
+      jobTypeKeyForCollections(['aurora', 'visionary', 'smile', 'resonance']),
+    ).toBe('videography')
+  })
+
+  it('smile wins over aurora/digital-atelier/resonance when no visionary', () => {
+    expect(jobTypeKeyForCollections(['aurora', 'smile'])).toBe('photo-booth')
+    expect(jobTypeKeyForCollections(['smile', 'digital-atelier'])).toBe('photo-booth')
+  })
+
+  it('multi-non-priority falls to production', () => {
+    expect(jobTypeKeyForCollections(['aurora', 'resonance'])).toBe('production')
+    expect(jobTypeKeyForCollections(['digital-atelier', 'aurora', 'resonance'])).toBe(
+      'production',
+    )
+  })
+})
+
+describe('eventOccasionForType', () => {
+  it.each([
+    ['Wedding', 'Wedding'],
+    ['Reception', 'Reception'],
+    ['Engagement / Rehearsal', 'Engagement / Rehearsal'],
+    ['Engagement/Rehearsal', 'Engagement / Rehearsal'],
+    ['Corporate', 'Corporate Event'],
+    ['Gala', 'Gala'],
+    ['Milestone', 'Milestone Celebration'],
+    ['Other', 'Other Event'],
+    [null, 'Other Event'],
+    ['unknown weird string', 'Other Event'],
+    ['wedding', 'Wedding'],
+  ])('%s → %s', (input, expected) => {
+    expect(eventOccasionForType(input)).toBe(expected)
   })
 })
 
@@ -227,13 +259,15 @@ describe('noEmailPlaceholder', () => {
 
 describe('inquiryToJobWorksheet', () => {
   it('maps a basic /contact inquiry to a worksheet with one client contact', () => {
+    // Default inquiry has no collections_interested set → falls to production
     const inquiry = makeInquiry({ external_uuid: 'uuid-contact-1' })
     const ws = inquiryToJobWorksheet(inquiry, { config: cfg, siteBase })
 
     expect(ws.stage).toBe('lead')
     expect(ws.webLead).toBe(true)
     expect(ws.leadSourceId).toBe('LS_WEB_CONTACT')
-    expect(ws.jobTypeId).toBe('JT_WEDDING')
+    expect(ws.jobTypeId).toBe('JT_PRODUCTION')
+    expect(ws.workflowId).toBe('WF_PRODUCTION')
     expect(ws.leadStatusId).toBe('ST_NEW')
     expect(ws.eventDate).toBe('2026-10-12')
     expect(ws.guestCount).toBe(140)
@@ -302,7 +336,9 @@ describe('inquiryToJobWorksheet', () => {
     const ws = inquiryToJobWorksheet(inquiry, { config: cfg, siteBase })
 
     expect(ws.leadSourceId).toBe('LS_BOOTH')
-    expect(ws.jobTypeId).toBe('JT_WEDDING')
+    // Collections include 'smile' (no 'visionary'), so → photo-booth jobType
+    expect(ws.jobTypeId).toBe('JT_PHOTO_BOOTH')
+    expect(ws.workflowId).toBe('WF_PHOTO_BOOTH')
 
     const poc = ws.contacts.find((c) => c.contact.kind === 'person' && c.contact.email === 'pam@plans.com')
     expect(poc).toBeDefined()
@@ -313,6 +349,8 @@ describe('inquiryToJobWorksheet', () => {
     expect(cfMap['CF_INT_SMILE']).toBe('true')
     expect(cfMap['CF_INT_AURORA']).toBe('true')
     expect(cfMap['CF_INT_VISIONARY']).toBe('false')
+    // Event occasion captured (since event_type='wedding')
+    expect(cfMap['CF_EVENT_OCCASION']).toBe('Wedding')
   })
 
   it('booth: partner1+partner2 both distinct from POC create 3 contacts', () => {

@@ -42,19 +42,14 @@ const minimalConfig = {
     stale: 'ST_S',
   },
   jobTypes: {
-    wedding: 'JT_W',
-    reception: 'JT_REC',
-    'engagement-rehearsal': 'JT_E',
-    corporate: 'JT_CORP',
-    gala: 'JT_GAL',
-    milestone: 'JT_M',
-    anniversary: 'JT_AN',
-    birthday: 'JT_B',
-    'bar-bat-mitzvah': 'JT_BBM',
-    charity: 'JT_CH',
-    graduation: 'JT_G',
-    holiday: 'JT_H',
-    other: 'JT_O',
+    'photo-booth': 'JT_PB',
+    videography: 'JT_VID',
+    production: 'JT_PROD',
+  },
+  workflows: {
+    'photo-booth': 'WF_PB',
+    videography: 'WF_VID',
+    production: 'WF_PROD',
   },
   eventTypes: {
     ceremony: 'ET_C',
@@ -89,6 +84,7 @@ const minimalConfig = {
     'event-setting': 'CF_ES',
     'consultation-preference': 'CF_CP',
     'builder-submission-link': 'CF_BL',
+    'event-occasion': 'CF_OCC',
   },
 }
 

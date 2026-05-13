@@ -42,22 +42,41 @@ export const LEAD_STATUS_KEYS = [
 ] as const
 export type LeadStatusKey = (typeof LEAD_STATUS_KEYS)[number]
 
+/**
+ * Job Type keys map to the 3 service-line Job Types in the studio:
+ * Photo Booth, Videography, Production. Each pairs with its own workflow
+ * (see WORKFLOW_KEYS below — they share the same key namespace because
+ * the workflow is intrinsic to the Job Type).
+ *
+ * Routing rules live in mappings.ts (inquiryToJobWorksheet); summary:
+ *   - inquiry interested in 'visionary' (videography) → 'videography'
+ *   - else inquiry interested in 'smile' (photo booth) → 'photo-booth'
+ *   - else → 'production' (Aurora / Digital Atelier / Resonance / fallback)
+ *
+ * The 13 event-type Job Types from the original bootstrap (Wedding,
+ * Anniversary, etc.) are intentionally NOT in this list. They still
+ * exist in the studio attached to historical jobs, but new inquiries
+ * route through these 3 service Job Types and capture event type in
+ * the 'event-occasion' custom field instead.
+ */
 export const JOB_TYPE_KEYS = [
-  'wedding',
-  'reception',
-  'engagement-rehearsal',
-  'corporate',
-  'gala',
-  'milestone',
-  'anniversary',
-  'birthday',
-  'bar-bat-mitzvah',
-  'charity',
-  'graduation',
-  'holiday',
-  'other',
+  'photo-booth',
+  'videography',
+  'production',
 ] as const
 export type JobTypeKey = (typeof JOB_TYPE_KEYS)[number]
+
+/**
+ * Workflow keys mirror JOB_TYPE_KEYS — each Job Type has exactly one
+ * default workflow attached to it. The bootstrap script auto-discovers
+ * the workflow ULIDs from JobType.workflowId; no UI matching needed.
+ *
+ * inquiryToJobWorksheet sets Job.workflowId explicitly (redundant with
+ * the JobType default, but defensive — guarantees the right workflow
+ * even if a Job Type's default was misconfigured).
+ */
+export const WORKFLOW_KEYS = JOB_TYPE_KEYS
+export type WorkflowKey = JobTypeKey
 
 export const EVENT_TYPE_KEYS = [
   'ceremony',
@@ -96,6 +115,10 @@ export const CUSTOM_FIELD_KEYS = [
   'event-setting',
   'consultation-preference',
   'builder-submission-link',
+  // Added in Model B: Job Type now captures the service line (Photo
+  // Booth / Videography / Production), so the kind of event (Wedding,
+  // Corporate, etc.) lives in this custom field instead.
+  'event-occasion',
 ] as const
 export type CustomFieldKey = (typeof CUSTOM_FIELD_KEYS)[number]
 
@@ -109,6 +132,7 @@ export interface VscoConfig {
   leadSources: Record<LeadSourceKey, string>
   leadStatuses: Record<LeadStatusKey, string>
   jobTypes: Record<JobTypeKey, string>
+  workflows: Record<WorkflowKey, string>
   eventTypes: Record<EventTypeKey, string>
   jobRoles: Record<JobRoleKey, string>
   customFields: Record<CustomFieldKey, string>
@@ -196,6 +220,7 @@ function validate(parsed: unknown, path: string): VscoConfig {
     LEAD_STATUS_KEYS,
   )
   const jobTypes = requireKeyedRecord(obj.jobTypes, 'jobTypes', JOB_TYPE_KEYS)
+  const workflows = requireKeyedRecord(obj.workflows, 'workflows', WORKFLOW_KEYS)
   const eventTypes = requireKeyedRecord(
     obj.eventTypes,
     'eventTypes',
@@ -214,6 +239,7 @@ function validate(parsed: unknown, path: string): VscoConfig {
     leadSources,
     leadStatuses,
     jobTypes,
+    workflows,
     eventTypes,
     jobRoles,
     customFields,
@@ -254,6 +280,9 @@ export function leadStatusId(cfg: VscoConfig, key: LeadStatusKey): string {
 }
 export function jobTypeId(cfg: VscoConfig, key: JobTypeKey): string {
   return cfg.jobTypes[key]
+}
+export function workflowId(cfg: VscoConfig, key: WorkflowKey): string {
+  return cfg.workflows[key]
 }
 export function eventTypeId(cfg: VscoConfig, key: EventTypeKey): string {
   return cfg.eventTypes[key]

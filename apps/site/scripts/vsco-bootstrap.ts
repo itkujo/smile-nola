@@ -97,32 +97,42 @@ const DESIRED_LEAD_SOURCES: DesiredLeadSource[] = [
 ];
 
 /**
- * Job type reconciliation: rename any existing entry from `renameFrom` to
- * `name`, otherwise create with `name`. We reuse existing IDs whenever
- * possible so historical jobs aren't orphaned.
+ * Job Types (Model B): one per service line. Each pairs with its own
+ * Workflow which gets auto-attached when a Job of that type is created.
+ *
+ * The studio owner creates these three Job Types + Workflows in the VSCO
+ * UI (Settings → Lists → Job Types, Settings → Workflows). The bootstrap
+ * script then matches by name to auto-discover the ULIDs.
+ *
+ * Routing priority (in inquiryToJobWorksheet — see mappings.ts):
+ *   1. Inquiry interested in 'visionary' (videography)      → Videography
+ *   2. Else inquiry interested in 'smile' (photo booth)     → Photo Booth
+ *   3. Else                                                   → Production
+ *      (Aurora-only, Digital-Atelier-only, Resonance-only,
+ *       multi-non-priority, or nothing checked)
+ *
+ * The 13 event-type-named Job Types from the original bootstrap (Wedding,
+ * Anniversary, Bar/Bat Mitzvah, etc.) are intentionally NOT reconciled
+ * here. They stay attached to historical client jobs and remain available
+ * in the UI dropdown for any manually-created records. New website /
+ * booth inquiries route through one of the 3 service Job Types below.
  */
-interface DesiredJobType {
-  key: string;
-  name: string;
-  /** Names to rename TO `name`. Match is case-insensitive. */
-  renameFrom?: string[];
-}
+const DESIRED_JOB_TYPE_NAMES: Readonly<Record<string, string>> = {
+  'photo-booth': 'Photo Booth',
+  'videography': 'Videography',
+  'production':  'Production',
+} as const;
 
-const DESIRED_JOB_TYPES: DesiredJobType[] = [
-  { key: 'wedding',              name: 'Wedding',                        renameFrom: ['Wedding Photo Booth'] },
-  { key: 'reception',            name: 'Reception' },
-  { key: 'engagement-rehearsal', name: 'Engagement / Rehearsal',         renameFrom: ['Engagement Party Photo Booth'] },
-  { key: 'corporate',            name: 'Corporate Event',                renameFrom: ['Corporate Event Photo Booth'] },
-  { key: 'gala',                 name: 'Gala',                           renameFrom: ['Gala Dinner Photo Booth'] },
-  { key: 'milestone',            name: 'Milestone Celebration' },
-  { key: 'anniversary',          name: 'Anniversary',                    renameFrom: ['Anniversary Party Photo Booth'] },
-  { key: 'birthday',             name: 'Birthday',                       renameFrom: ['Birthday Party Photo Booth'] },
-  { key: 'bar-bat-mitzvah',      name: 'Bar / Bat Mitzvah',              renameFrom: ['Bar/Bat Mitzvah Photo Booth'] },
-  { key: 'charity',              name: 'Charity Event',                  renameFrom: ['Charity Event Photo Booth'] },
-  { key: 'graduation',           name: 'Graduation',                     renameFrom: ['Graduation Party Photo Booth'] },
-  { key: 'holiday',              name: 'Holiday Party',                  renameFrom: ['Holiday Party Photo Booth'] },
-  { key: 'other',                name: 'Other Event' },
-];
+/**
+ * Workflows are discovered automatically: for each Job Type above, we
+ * read its `workflowId` and record it under the same key. No UI list
+ * matching needed — the relationship is intrinsic to the Job Type.
+ *
+ * If any Job Type has a NULL workflowId, the corresponding workflow key
+ * gets recorded as null in the config; the mapping layer falls back to
+ * the Job Type's default at create time (which will be null too — fine,
+ * just means no workflow attaches).
+ */
 
 /**
  * Lead Statuses, Event Types, and Job Roles are MATCH-ONLY: we look up by
@@ -183,6 +193,26 @@ const DESIRED_CUSTOM_FIELDS: DesiredCustomField[] = [
   { key: 'consultation-preference',    spec: { canApplyTo: 'Job', kind: 'DropDown', name: 'Consultation Preference',
     choices: ['Video', 'In-Person', 'None'] } },
   { key: 'builder-submission-link',    spec: { canApplyTo: 'Job', kind: 'TextField', name: 'Builder Submission Link' } },
+  /* Event occasion — now that Job Type carries the service line (Photo Booth /
+     Videography / Production), we need a separate field to capture WHAT KIND
+     OF EVENT the booking is (Wedding / Reception / Corporate / etc.). The
+     mapping layer reads inquiry.event_type and writes it here. */
+  { key: 'event-occasion',             spec: { canApplyTo: 'Job', kind: 'DropDown', name: 'Event Occasion',
+    choices: [
+      'Wedding',
+      'Reception',
+      'Engagement / Rehearsal',
+      'Corporate Event',
+      'Gala',
+      'Milestone Celebration',
+      'Anniversary',
+      'Birthday',
+      'Bar / Bat Mitzvah',
+      'Charity Event',
+      'Graduation',
+      'Holiday Party',
+      'Other Event',
+    ] } },
 ];
 
 /* ============================================================================
@@ -199,6 +229,8 @@ interface ConfigShape {
   leadSources: Record<string, string | null>;
   leadStatuses: Record<string, string | null>;
   jobTypes: Record<string, string | null>;
+  /** Workflow ULIDs auto-discovered from JobType.workflowId. Keys mirror jobTypes. */
+  workflows: Record<string, string | null>;
   eventTypes: Record<string, string | null>;
   jobRoles: Record<string, string | null>;
   customFields: Record<string, string | null>;
@@ -356,57 +388,44 @@ async function reconcileLeadSources(
   }
 }
 
+/**
+ * Match-only: the 3 service Job Types must already exist in the studio
+ * (the owner creates them in the VSCO UI alongside their workflows).
+ * We never auto-create here because we need the workflow attachment to
+ * be done by the human in the UI; auto-creating a Job Type with no
+ * workflow would leave new inquiries with no automation.
+ *
+ * After matching, we also auto-discover the workflow ULID from each
+ * Job Type's `workflowId` field and populate cfg.workflows[key].
+ */
 async function reconcileJobTypes(
   client: VscoClient,
   cfg: ConfigShape,
 ): Promise<void> {
-  header('Job Types');
+  header('Job Types (service-typed, match-only)');
   const existing = await listAll<JobType>(client, '/job-type');
   const byName = new Map(existing.map((e) => [e.name.toLowerCase(), e]));
 
-  for (const desired of DESIRED_JOB_TYPES) {
-    const exact = byName.get(desired.name.toLowerCase());
-    if (exact) {
-      cfg.jobTypes[desired.key] = exact.id;
-      log('OK', desired.key, exact.id);
-      continue;
-    }
+  for (const [key, desiredName] of Object.entries(DESIRED_JOB_TYPE_NAMES)) {
+    const found = byName.get(desiredName.toLowerCase());
+    if (found) {
+      cfg.jobTypes[key] = found.id;
+      log('OK', key, `${found.id}  "${found.name}"`);
 
-    // Look for a renameFrom match.
-    const renameTarget = (desired.renameFrom ?? [])
-      .map((n) => byName.get(n.toLowerCase()))
-      .find((x): x is JobType => Boolean(x));
-
-    if (renameTarget) {
-      if (DRY_RUN) {
-        log('RENAME', desired.key, `(dry-run) would rename "${renameTarget.name}" → "${desired.name}"`);
-        cfg.jobTypes[desired.key] = renameTarget.id;
-        continue;
+      // Auto-discover workflow ULID
+      // The JobType type doesn't declare workflowId in our types.ts, but
+      // the live API returns it. Cast through unknown to read it.
+      const wfId = (found as unknown as { workflowId?: string | null }).workflowId ?? null;
+      cfg.workflows[key] = wfId;
+      if (wfId) {
+        log('OK', `${key}.workflow`, wfId);
+      } else {
+        log('WARN', `${key}.workflow`, 'no workflow attached to this Job Type — attach one in Workspace UI');
       }
-      try {
-        const updated = await client.put<JobType>(`/job-type/${renameTarget.id}`, {
-          ...renameTarget,
-          name: desired.name,
-        });
-        cfg.jobTypes[desired.key] = updated.id;
-        log('RENAME', desired.key, `${updated.id}  "${renameTarget.name}" → "${desired.name}"`);
-      } catch (err) {
-        handleCreateError('job-type (rename)', desired.key, err);
-      }
-      continue;
-    }
-
-    // Create new.
-    if (DRY_RUN) {
-      log('CREATE', desired.key, `(dry-run) would create "${desired.name}"`);
-      continue;
-    }
-    try {
-      const created = await client.post<JobType>('/job-type', { name: desired.name });
-      cfg.jobTypes[desired.key] = created.id;
-      log('CREATE', desired.key, `${created.id}  "${desired.name}"`);
-    } catch (err) {
-      handleCreateError('job-type', desired.key, err);
+    } else {
+      cfg.jobTypes[key] = null;
+      cfg.workflows[key] = null;
+      log('MISS', key, `no Job Type named "${desiredName}" — create it in Workspace UI with the appropriate workflow attached`);
     }
   }
 }
@@ -527,7 +546,8 @@ async function main(): Promise<void> {
     studioBrandId: null,
     leadSources: Object.fromEntries(DESIRED_LEAD_SOURCES.map((d) => [d.key, null])),
     leadStatuses: Object.fromEntries(Object.keys(MATCH_LEAD_STATUSES).map((k) => [k, null])),
-    jobTypes: Object.fromEntries(DESIRED_JOB_TYPES.map((d) => [d.key, null])),
+    jobTypes: Object.fromEntries(Object.keys(DESIRED_JOB_TYPE_NAMES).map((k) => [k, null])),
+    workflows: Object.fromEntries(Object.keys(DESIRED_JOB_TYPE_NAMES).map((k) => [k, null])),
     eventTypes: Object.fromEntries(Object.keys(MATCH_EVENT_TYPES).map((k) => [k, null])),
     jobRoles: Object.fromEntries(Object.keys(MATCH_JOB_ROLES).map((k) => [k, null])),
     customFields: Object.fromEntries(DESIRED_CUSTOM_FIELDS.map((d) => [d.key, null])),
@@ -560,6 +580,7 @@ async function main(): Promise<void> {
   console.log(`  lead sources:  ${countResolved(cfg.leadSources)} / ${Object.keys(cfg.leadSources).length}`);
   console.log(`  lead statuses: ${countResolved(cfg.leadStatuses)} / ${Object.keys(cfg.leadStatuses).length}`);
   console.log(`  job types:     ${countResolved(cfg.jobTypes)} / ${Object.keys(cfg.jobTypes).length}`);
+  console.log(`  workflows:     ${countResolved(cfg.workflows)} / ${Object.keys(cfg.workflows).length}`);
   console.log(`  event types:   ${countResolved(cfg.eventTypes)} / ${Object.keys(cfg.eventTypes).length}`);
   console.log(`  job roles:     ${countResolved(cfg.jobRoles)} / ${Object.keys(cfg.jobRoles).length}`);
   console.log(`  custom fields: ${countResolved(cfg.customFields)} / ${Object.keys(cfg.customFields).length}`);
@@ -589,7 +610,7 @@ function countResolved(o: Record<string, string | null>): number {
 function countMissing(cfg: ConfigShape): number {
   let n = 0;
   if (!cfg.studioBrandId) n++;
-  for (const r of [cfg.leadSources, cfg.leadStatuses, cfg.jobTypes, cfg.eventTypes, cfg.jobRoles, cfg.customFields]) {
+  for (const r of [cfg.leadSources, cfg.leadStatuses, cfg.jobTypes, cfg.workflows, cfg.eventTypes, cfg.jobRoles, cfg.customFields]) {
     n += Object.values(r).filter((v) => v === null).length;
   }
   return n;

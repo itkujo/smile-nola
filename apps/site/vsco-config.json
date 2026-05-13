@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-13T04:24:24.260Z",
+  "generatedAt": "2026-05-13T06:46:03.399Z",
   "studioBrandId": "01hwgjjz6nyy2tmnjk1mg9c583",
   "leadSources": {
     "website-contact": "01krfs7her54z193s57m1g9xfy",
@@ -22,19 +22,14 @@
     "stale": "01hwgjjz6q7anm6rdqs4x07ma4"
   },
   "jobTypes": {
-    "wedding": "01hwgjk41q7rjhd61b068499g7",
-    "reception": "01krfs7keeg29mrp6bkxtr6aaz",
-    "engagement-rehearsal": "01hwgjk41v6xxxgxw213v7rx79",
-    "corporate": "01hwgjk41v6xxxgxw213v7rx78",
-    "gala": "01hwgjk41wz1mfwgs45hdejhe9",
-    "milestone": "01krfs7mb864f2je7s41fxt44n",
-    "anniversary": "01hwgjk41s89y2angry68fzjc9",
-    "birthday": "01hwgjk41s89y2angry68fzjca",
-    "bar-bat-mitzvah": "01hwgjk41r052x5yhdgfazhkm1",
-    "charity": "01hwgjk41tphqs6pkz8jxd71wy",
-    "graduation": "01hwgjk41x6ajyt0ykk2076faw",
-    "holiday": "01hwgjk41ym77ypsydnt9nfpcy",
-    "other": "01krfs7nyh1h61vtdc9emq4rk0"
+    "photo-booth": "01krg0yx94kc0ht3a4e9k0t48f",
+    "videography": "01krfyfvhyqrc5kchrtmxzvmq8",
+    "production": "01krg155awka5xetd537zmkt8r"
+  },
+  "workflows": {
+    "photo-booth": "01hwgjk42bn0223xt5vthrhhja",
+    "videography": "01k9nx517xnvygry0z8t2egedb",
+    "production": "01k9qwfn3tvfmmg14x2fzn7073"
   },
   "eventTypes": {
     "ceremony": "01hwgjk41erhdwca3k4fy7cxd4",
@@ -68,6 +63,7 @@
     "reserved-package": "01krfs7qjm4jvvdmqkm4kpm7cp",
     "event-setting": "01krfs7qqqds6y8eyrtgbetz21",
     "consultation-preference": "01krfs7qvhhq9fj9hfk9ajbhk0",
-    "builder-submission-link": "01krfs7r17bv8s8dxsp720xqqv"
+    "builder-submission-link": "01krfs7r17bv8s8dxsp720xqqv",
+    "event-occasion": "01krg1br3e6c6q3whqz0gvy3sn"
   }
 }

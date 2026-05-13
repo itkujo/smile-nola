@@ -32,19 +32,14 @@ const validConfig: VscoConfig = {
     stale: '01st0007',
   },
   jobTypes: {
-    wedding: '01jt0001',
-    reception: '01jt0002',
-    'engagement-rehearsal': '01jt0003',
-    corporate: '01jt0004',
-    gala: '01jt0005',
-    milestone: '01jt0006',
-    anniversary: '01jt0007',
-    birthday: '01jt0008',
-    'bar-bat-mitzvah': '01jt0009',
-    charity: '01jt0010',
-    graduation: '01jt0011',
-    holiday: '01jt0012',
-    other: '01jt0013',
+    'photo-booth': '01jt0001',
+    videography: '01jt0002',
+    production: '01jt0003',
+  },
+  workflows: {
+    'photo-booth': '01wf0001',
+    videography: '01wf0002',
+    production: '01wf0003',
   },
   eventTypes: {
     ceremony: '01et0001',
@@ -79,6 +74,7 @@ const validConfig: VscoConfig = {
     'event-setting': '01cf0007',
     'consultation-preference': '01cf0008',
     'builder-submission-link': '01cf0009',
+    'event-occasion': '01cf0010',
   },
 }
 
