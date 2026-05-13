@@ -221,12 +221,15 @@ export async function pushInquiryToVsco(
  *   [1..2]   Partner A and/or Partner B (only when name differs from POC)
  *   [last]   Venue (location, only when inquiry.venue is set)
  *
- * The VSCO worksheet response returns `contacts[]` in the same order it
- * received them, so we walk positionally and use the kind of each
- * worksheet contact + its role set to assign the entity kind.
+ * VSCO's worksheet response returns `contacts[]` as JobContact join
+ * records, NOT raw Contacts. The actual Contact (Person/Location/Company)
+ * is nested under `contact`. Verified live on 2026-05-13: the top-level
+ * `id` is the JobContact's id; `contact.id` is the Contact's id.
  *
- * We pass `config` so we can look up specific role IDs without leaking
- * details out of the mapping layer.
+ * For our `vsco_entities` table we want the **Contact** id (the thing we
+ * pass as `recipientId` when creating an Order), not the JobContact id.
+ * Reading respContact.id directly leads to a 400 reference-does-not-exist
+ * on the next Order create.
  */
 function collectEntitiesFromWorksheet(
   ws: ConcreteJobWorksheet,
@@ -245,26 +248,34 @@ function collectEntitiesFromWorksheet(
 
   for (let i = 0; i < ws.contacts.length; i++) {
     const wsEntry = ws.contacts[i]!
-    const respContact = contacts[i]
-    if (!respContact) break
+    const jobContact = contacts[i] as unknown as
+      | { contact?: { id?: string }; id?: string }
+      | undefined
+    if (!jobContact) break
+
+    // The actual Contact id lives one level deeper in the worksheet
+    // response shape. Fall back to the top-level id only if `contact.id`
+    // is missing (shouldn't happen, but defensive).
+    const contactId = jobContact.contact?.id ?? jobContact.id
+    if (!contactId) continue
 
     const c = wsEntry.contact
     if (c.kind === 'location') {
-      entities.push({ kind: 'venue', vscoId: respContact.id })
+      entities.push({ kind: 'venue', vscoId: contactId })
       continue
     }
     if (c.kind === 'person') {
       const roles = new Set(wsEntry.jobRoles ?? [])
       if (roles.has(primaryContactId)) {
         // POC. Has primary-contact role (and possibly partner-a too).
-        entities.push({ kind: 'contact-poc', vscoId: respContact.id })
+        entities.push({ kind: 'contact-poc', vscoId: contactId })
       } else if (roles.has(partnerAId)) {
-        entities.push({ kind: 'contact-partner-a', vscoId: respContact.id })
+        entities.push({ kind: 'contact-partner-a', vscoId: contactId })
       } else if (roles.has(partnerBId)) {
-        entities.push({ kind: 'contact-partner-b', vscoId: respContact.id })
+        entities.push({ kind: 'contact-partner-b', vscoId: contactId })
       } else {
         // Unknown person — record as POC by default (preserves data; never lose IDs).
-        entities.push({ kind: 'contact-poc', vscoId: respContact.id })
+        entities.push({ kind: 'contact-poc', vscoId: contactId })
       }
     }
   }

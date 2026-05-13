@@ -212,14 +212,36 @@ describe('pushInquiryToVsco — happy path (create)', () => {
       if (url.includes('/job/-/worksheet') && init?.method === 'POST') {
         return new Response(
           JSON.stringify({
-            // Flat shape: Job fields at top level + nested contacts/events
+            // Flat shape: Job fields at top level. The `contacts` array
+            // contains JobContact join records, NOT raw Contacts — the
+            // actual Contact entity (with its id) is nested under
+            // `contact`. Verified live on 2026-05-13.
             id: 'JOB_001',
             created: '',
             modified: '',
             title: 'X',
             contacts: [
-              { id: 'CONT_POC', kind: 'person', created: '', modified: '' },
-              { id: 'CONT_VENUE', kind: 'location', name: 'Ace Hotel', created: '', modified: '' },
+              {
+                id: 'JOBCONT_POC', // JobContact join record id
+                client: true,
+                roleKinds: ['client'],
+                contact: {
+                  id: 'CONT_POC', // <-- the actual Contact id we want
+                  kind: 'person',
+                  firstName: 'Sarah',
+                  lastName: 'Beaumont',
+                  email: 'sarah@example.com',
+                },
+              },
+              {
+                id: 'JOBCONT_VENUE',
+                roleKinds: ['venue'],
+                contact: {
+                  id: 'CONT_VENUE',
+                  kind: 'location',
+                  name: 'Ace Hotel',
+                },
+              },
             ],
             events: [{ id: 'EVT_001' }],
           }),
@@ -238,7 +260,9 @@ describe('pushInquiryToVsco — happy path (create)', () => {
     expect(pushes[0]!.verdict).toBe('ok')
     expect(pushes[0]!.duration_ms).toBeGreaterThanOrEqual(0)
 
-    // Entities recorded
+    // Entities recorded — these MUST be the nested contact.id values
+    // (the Contact entity id), NOT the top-level JobContact id.
+    // recipientId on Order requires a Contact id, not a JobContact id.
     expect(dbMod.getVscoEntityId(externalUuid, 'job')).toBe('JOB_001')
     expect(dbMod.getVscoEntityId(externalUuid, 'contact-poc')).toBe('CONT_POC')
     expect(dbMod.getVscoEntityId(externalUuid, 'venue')).toBe('CONT_VENUE')
