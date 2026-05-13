@@ -540,6 +540,13 @@ function makeBuilder(overrides: Partial<PackageBuilderSubmissionRow> = {}): Pack
     custom_quoted_json: null,
     warnings_json: null,
     notes: null,
+    venue_street_address: null,
+    venue_city: null,
+    venue_state: null,
+    venue_postal_code: null,
+    venue_country: null,
+    venue_latitude: null,
+    venue_longitude: null,
     ...overrides,
   }
 }

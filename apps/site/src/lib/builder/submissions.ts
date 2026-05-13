@@ -42,6 +42,15 @@ export interface PackageBuilderSubmissionRow {
   warnings_json: string | null;
 
   notes: string | null;
+
+  /** Structured venue address (from Google Places autocomplete). */
+  venue_street_address: string | null;
+  venue_city: string | null;
+  venue_state: string | null;
+  venue_postal_code: string | null;
+  venue_country: string | null;
+  venue_latitude: number | null;
+  venue_longitude: number | null;
 }
 
 /**
@@ -71,6 +80,15 @@ export interface PackageBuilderSubmissionInput {
   fixed_subtotal_cents: number;
   custom_quoted_json: string | null;
   warnings_json: string | null;
+
+  /** Optional venue address fields (from Places autocomplete). */
+  venue_street_address?: string | null;
+  venue_city?: string | null;
+  venue_state?: string | null;
+  venue_postal_code?: string | null;
+  venue_country?: string | null;
+  venue_latitude?: number | null;
+  venue_longitude?: number | null;
 }
 
 export function insertSubmission(
@@ -86,7 +104,9 @@ export function insertSubmission(
         event_date, event_type, venue, guest_count,
         consultation_pref, client_note,
         selections_json, fixed_subtotal_cents,
-        custom_quoted_json, warnings_json
+        custom_quoted_json, warnings_json,
+        venue_street_address, venue_city, venue_state, venue_postal_code,
+        venue_country, venue_latitude, venue_longitude
       ) VALUES (
         @source,
         @first_name, @last_name, @email, @phone,
@@ -94,10 +114,21 @@ export function insertSubmission(
         @event_date, @event_type, @venue, @guest_count,
         @consultation_pref, @client_note,
         @selections_json, @fixed_subtotal_cents,
-        @custom_quoted_json, @warnings_json
+        @custom_quoted_json, @warnings_json,
+        @venue_street_address, @venue_city, @venue_state, @venue_postal_code,
+        @venue_country, @venue_latitude, @venue_longitude
       )`,
     )
-    .run(input);
+    .run({
+      ...input,
+      venue_street_address: input.venue_street_address ?? null,
+      venue_city: input.venue_city ?? null,
+      venue_state: input.venue_state ?? null,
+      venue_postal_code: input.venue_postal_code ?? null,
+      venue_country: input.venue_country ?? null,
+      venue_latitude: input.venue_latitude ?? null,
+      venue_longitude: input.venue_longitude ?? null,
+    });
 
   const id = Number(result.lastInsertRowid);
   const row = db

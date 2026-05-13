@@ -134,6 +134,13 @@ export const POST: APIRoute = async ({ request }) => {
       warnings_json: computed.warnings.length > 0
         ? JSON.stringify(computed.warnings)
         : null,
+      venue_street_address: data.event.venue_street_address,
+      venue_city:           data.event.venue_city,
+      venue_state:          data.event.venue_state,
+      venue_postal_code:    data.event.venue_postal_code,
+      venue_country:        data.event.venue_country,
+      venue_latitude:       data.event.venue_latitude,
+      venue_longitude:      data.event.venue_longitude,
     });
   } catch (err) {
     console.error("[/api/package-builder] DB insert failed:", err);
