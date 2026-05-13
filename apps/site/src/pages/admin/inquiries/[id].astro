@@ -193,7 +193,32 @@ const jobEntity = vscoEntities.find((e) => e.kind === "job");
     <dl class="kv">
       <div><dt>Date</dt><dd>{inquiry.event_date || "—"}</dd></div>
       <div><dt>Type</dt><dd>{inquiry.event_type || "—"}</dd></div>
-      <div><dt>Venue</dt><dd>{inquiry.venue || "—"}</dd></div>
+      <div>
+        <dt>Venue</dt>
+        <dd>
+          {inquiry.venue || "—"}
+          {(inquiry.venue_street_address || inquiry.venue_city) && (
+            <div class="venue-detail">
+              {[
+                inquiry.venue_street_address,
+                inquiry.venue_city,
+                inquiry.venue_state,
+                inquiry.venue_postal_code,
+              ].filter(Boolean).join(", ")}
+            </div>
+          )}
+          {inquiry.venue_latitude != null && inquiry.venue_longitude != null && (
+            <a
+              class="venue-map-link"
+              href={`https://www.google.com/maps?q=${inquiry.venue_latitude},${inquiry.venue_longitude}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View on map ↗
+            </a>
+          )}
+        </dd>
+      </div>
       <div><dt>Guest count</dt><dd>{inquiry.guest_count ?? "—"}</dd></div>
       <div><dt>Start</dt><dd>{inquiry.event_start || "—"}</dd></div>
       <div><dt>End</dt><dd>{inquiry.event_end || "—"}</dd></div>
@@ -413,6 +438,26 @@ const jobEntity = vscoEntities.find((e) => e.kind === "job");
     transition: color 200ms ease;
   }
   .back-link a:hover { color: var(--sn-gold); }
+
+  .venue-detail {
+    margin-top: 2px;
+    font-size: 0.85em;
+    color: var(--sn-muted-stone);
+    opacity: 0.85;
+  }
+  .venue-map-link {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 0.78em;
+    letter-spacing: 0.08em;
+    color: var(--sn-gold);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--sn-gold-40);
+  }
+  .venue-map-link:hover {
+    color: var(--sn-gold);
+    border-bottom-color: var(--sn-gold);
+  }
 
   .head {
     display: flex;
