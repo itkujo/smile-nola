@@ -609,6 +609,34 @@ function addonToLineItem(
   }
 }
 
+/**
+ * Build the Order body from a builder submission.
+ *
+ * IMPORTANT (verified live on 2026-05-13): VSCO's Order.total computation
+ * EXCLUDES the pricePerUnit of line items that have children. A parent
+ * with children acts as a presentational container, not a billed line —
+ * only the children contribute to the total. This bit us in the first
+ * smoke test: the order total was $1,775 instead of $2,670 because the
+ * $895 Mirror Me parent (which had a $275 Audio Guest Book child) was
+ * silently dropped from the total. Children were billed; parent wasn't.
+ *
+ * Solution: emit every package and every add-on as a TOP-LEVEL line
+ * item. No nesting. This matches what existing real orders in the
+ * studio look like (verified by inspecting a half-dozen completed
+ * wedding orders). Mild downside: invoices won't visually group
+ * add-ons under their parent package, but they'll be priced correctly,
+ * which is what actually matters.
+ *
+ * Order of line items: for each collection (in selection order), all
+ * its packages first, then all its add-ons. Aurora-style collections
+ * with no packages just emit their add-ons.
+ *
+ * Custom-priced items (priceType: 'custom') keep pricePerUnit=0 with
+ * a name suffix explaining the line will be quoted separately.
+ *
+ * Starting-priced items (priceType: 'starting') ship at their listed
+ * starting cents with a name suffix so the operator knows to revise.
+ */
 export function builderToOrder(
   sub: PackageBuilderSubmissionRow,
   ctx: BuilderToOrderContext,
@@ -622,34 +650,17 @@ export function builderToOrder(
     const collection = getCollection(group.collectionId)
     if (!collection) continue
 
-    const pkgIds = group.packageIds
-    const addonItems = group.addons
-      .map((a) => addonToLineItem(group.collectionId, a.addonId, a.qty))
-      .filter((x): x is OrderItemWrite => x !== null)
-
-    if (pkgIds.length === 0) {
-      // No package in this collection (Aurora flow, or addons-only).
-      // Drop addons as top-level line items.
-      for (const item of addonItems) lineItems.push(item)
-      continue
-    }
-
-    for (let i = 0; i < pkgIds.length; i++) {
-      const pkgId = pkgIds[i]!
+    // 1. Packages first (each as its own top-level line item)
+    for (const pkgId of group.packageIds) {
       const pkg = getPackage(group.collectionId, pkgId)
       if (!pkg) continue
       const isStarting = pkg.priceType === 'starting'
       const name = isStarting
         ? `${pkg.name} (starting price — final TBD)`
         : pkg.name
-
       const description = pkg.description
         ? `<p>${escapeHtml(pkg.description)}</p>`
         : null
-
-      // Only attach addons to the FIRST package (when allowMultiplePackages,
-      // addons live under the first package; simpler than splitting them).
-      const children = i === 0 ? addonItems : []
 
       lineItems.push({
         name,
@@ -659,8 +670,14 @@ export function builderToOrder(
         taxable: true,
         selectability: 'required',
         selected: true,
-        children: children.length > 0 ? children : undefined,
       })
+    }
+
+    // 2. Add-ons next (each as its own top-level line item).
+    //    Aurora flow (packageIds = []) hits this directly.
+    for (const a of group.addons) {
+      const item = addonToLineItem(group.collectionId, a.addonId, a.qty)
+      if (item) lineItems.push(item)
     }
   }
 

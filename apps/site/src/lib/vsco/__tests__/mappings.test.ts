@@ -536,18 +536,29 @@ describe('builderToOrder', () => {
       siteBase,
     })
 
+    // VSCO doesn't sum parents with children — everything ships FLAT so
+    // every package and add-on contributes to the order total. Verified
+    // live against multiple existing real orders in the studio.
     expect(order.recipientId).toBe(recipientId)
-    expect(order.lineItems).toHaveLength(1)
-    const pkg = order.lineItems[0]!
-    expect(pkg.name).toContain('Mirror Me Experience')
+    expect(order.lineItems).toHaveLength(3)
+
+    const pkg = order.lineItems.find((li) => li.name.includes('Mirror Me Experience'))!
+    expect(pkg).toBeDefined()
     expect(pkg.pricePerUnit).toBe(89500)
     expect(pkg.units).toBe(1)
     expect(pkg.selectability).toBe('required')
     expect(pkg.selected).toBe(true)
-    expect(pkg.children).toHaveLength(2)
-    const ahour = pkg.children!.find((c) => c.name.includes('Additional Service Time'))
-    expect(ahour?.units).toBe(2)
-    expect(ahour?.pricePerUnit).toBe(15000)
+    expect(pkg.children).toBeUndefined()
+
+    const audioGuestBook = order.lineItems.find((li) => li.name.includes('Audio Guest Book'))!
+    expect(audioGuestBook).toBeDefined()
+    expect(audioGuestBook.pricePerUnit).toBe(27500)
+    expect(audioGuestBook.selectability).toBe('optional')
+
+    const ahour = order.lineItems.find((li) => li.name.includes('Additional Service Time'))!
+    expect(ahour).toBeDefined()
+    expect(ahour.units).toBe(2)
+    expect(ahour.pricePerUnit).toBe(15000)
   })
 
   it('places Aurora addons (no packages) as top-level line items', () => {
@@ -585,10 +596,11 @@ describe('builderToOrder', () => {
       config: cfg,
       siteBase,
     })
-    const pkg = order.lineItems[0]!
-    const travel = pkg.children!.find((c) => c.name.includes('Travel'))
-    expect(travel?.pricePerUnit).toBe(0)
-    expect(travel?.name).toContain('quoted separately')
+    // Travel fee is a top-level line item (flat shape, no children).
+    const travel = order.lineItems.find((li) => li.name.includes('Travel'))!
+    expect(travel).toBeDefined()
+    expect(travel.pricePerUnit).toBe(0)
+    expect(travel.name).toContain('quoted separately')
   })
 
   it('sets dueDate = created_at + 14 days (writeOnly: auto-creates invoice)', () => {
@@ -601,8 +613,9 @@ describe('builderToOrder', () => {
     expect(order.dueDate).toBe('2026-05-27')
   })
 
-  it('skips addons whose collection has no package selected, when package was required', () => {
-    // resonance with only pa-package + ceremony-speaker exception
+  it('emits package + addons as flat top-level line items', () => {
+    // resonance with pa-package + ceremony-speaker. Both are TOP-LEVEL
+    // line items (no nesting). Two items total, no children.
     const sub = makeBuilder({
       selections_json: JSON.stringify({
         collections: ['resonance'],
@@ -615,9 +628,16 @@ describe('builderToOrder', () => {
       config: cfg,
       siteBase,
     })
-    expect(order.lineItems).toHaveLength(1)
-    const pkg = order.lineItems[0]!
-    expect(pkg.name).toContain('PA')
-    expect(pkg.children).toHaveLength(1)
+    expect(order.lineItems).toHaveLength(2)
+    expect(order.lineItems.every((li) => !li.children)).toBe(true)
+
+    const pkg = order.lineItems.find((li) => li.name.includes('PA'))!
+    expect(pkg).toBeDefined()
+    expect(pkg.selectability).toBe('required')
+
+    const addon = order.lineItems.find((li) => li.name.includes('Ceremony Speaker'))!
+    expect(addon).toBeDefined()
+    expect(addon.selectability).toBe('optional')
+    expect(addon.pricePerUnit).toBe(35000)
   })
 })
