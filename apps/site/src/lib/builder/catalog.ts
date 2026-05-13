@@ -32,6 +32,15 @@ export interface PackageConfig {
   id: string;
   name: string;
   priceCents: number;
+  /**
+   * "fixed" (default) — the price is final as published; the gold rail
+   *   shows it verbatim.
+   * "starting" — the package's real price is a conversation (e.g. the
+   *   Concert Package, where line array / monitor / engineering all vary).
+   *   The card renders "Starts at $X" and the gold rail still includes
+   *   priceCents as the floor.
+   */
+  priceType?: "fixed" | "starting";
   duration?: string;
   description?: string;
   includes?: string[];
@@ -60,13 +69,32 @@ export interface CollectionConfig {
   rules: {
     /** Smile / Visionary: must pick exactly one base package. */
     requireOneBasePackage?: boolean;
-    /** Digital Atelier: may pick one or more services as "packages". */
+    /** Digital Atelier / Resonance: may pick one or more services as "packages". */
     allowMultiplePackages?: boolean;
-    /** Aurora: 200_000 cents = $2,000 project minimum, evaluated against TOTAL spend. */
+    /**
+     * Aurora and Resonance: 200_000 cents = $2,000 project minimum,
+     * evaluated against TOTAL fixed subtotal (across all collections).
+     * Triggers a soft warning if not met.
+     */
     projectMinimumCents?: number;
-    /** Resonance: the $2,000 minimum has a single exception (ceremony speaker). */
+    /**
+     * Resonance: addons that bypass the project minimum entirely. When the
+     * only Resonance items selected are exception addons (e.g. a ceremony
+     * speaker) and no Resonance package is picked, the minimum warning is
+     * suppressed because we genuinely want to serve the "just a speaker
+     * for the outdoor ceremony" client without forcing a $2k floor.
+     */
     minimumExceptionAddonIds?: string[];
   };
+  /**
+   * Heading rendered above the addon list inside this collection's section.
+   * Defaults to "Add-ons" — appropriate when the items are accessories
+   * (e.g. Smile's backdrops, Visionary's Travel Fee). Set to "Additional
+   * Packages" on Aurora and Resonance, where the items are standalone
+   * production services (LED wall, ceremony speaker) that read more like
+   * packages than accessories.
+   */
+  addonsSectionLabel?: string;
   packages: PackageConfig[];
   addons: AddonConfig[];
 }
@@ -259,6 +287,10 @@ export const COLLECTIONS: CollectionConfig[] = [
       "Lighting, LED video walls, staging, and luminous atmosphere. Requires a $2,000 total Smile NOLA project minimum.",
     displayOrder: 4,
     rules: { projectMinimumCents: 200000 },
+    // The Aurora line items are standalone production services (LED walls,
+    // moving heads, staging), not accessories — read more naturally as
+    // "Additional Packages" than "Add-ons".
+    addonsSectionLabel: "Additional Packages",
     packages: [],
     addons: [
       // LED wall
@@ -297,19 +329,53 @@ export const COLLECTIONS: CollectionConfig[] = [
   // ============================================================
   // 5. THE RESONANCE SERIES — concert-grade sound
   // ============================================================
+  //
+  // Resonance is package-led, but the packages and add-on services all read
+  // as standalone offerings. PA Package is a complete service on its own
+  // ($600 fixed) — appropriate when a couple just needs clean amplification
+  // for a ceremony or smaller event. Concert Package starts at $2,000 and
+  // is a real configuration conversation (line array size, monitors,
+  // engineering scope), so its card shows "Starts at $2,000" while the gold
+  // rail still includes the floor.
+  //
+  // The $2,000 project minimum applies when either package is selected, or
+  // when any non-exception addon is added. The ceremony-speaker /
+  // ceremony-wireless-mic addons are exception items that may be ordered
+  // standalone (a $350 ceremony speaker shouldn't force a $2k floor).
   {
     id: "resonance",
     displayName: "The Resonance Series",
     tagline: "Sound",
     shortDescription:
-      "Concert-grade sound for celebrations. Every Resonance proposal begins with a planning conversation; pricing starts at $2,000 except the ceremony-speaker exception.",
+      "Concert-grade sound for celebrations. PA for clean coverage, or a full concert build for events that should sound like a production.",
     displayOrder: 5,
-    rules: { minimumExceptionAddonIds: ["ceremony-speaker", "ceremony-wireless-mic"] },
-    packages: [],
+    rules: {
+      allowMultiplePackages: true,
+      projectMinimumCents: 200000,
+      minimumExceptionAddonIds: ["ceremony-speaker", "ceremony-wireless-mic"],
+    },
+    addonsSectionLabel: "Additional Packages",
+    packages: [
+      {
+        id: "pa-package",
+        name: "PA Package",
+        priceCents: 60000,
+        priceType: "fixed",
+        description:
+          "Clean, reliable amplification for ceremonies, toasts, and smaller events that need to be heard without staging a show.",
+      },
+      {
+        id: "concert-package",
+        name: "Concert Package",
+        priceCents: 200000,
+        priceType: "starting",
+        description:
+          "A full concert-grade build — line array, monitors, engineering — for events that should sound like a production, not a reception. Final configuration shaped during the planning conversation.",
+      },
+    ],
     addons: [
-      { id: "resonance-minimum",       name: "Resonance Minimum Spend",                                 priceCents: 200000, priceType: "fixed", note: "starting point · planning conversation required" },
-      { id: "ceremony-speaker",        name: "Ceremony Speaker À La Carte",                             priceCents: 35000,  priceType: "fixed", note: "the only Resonance item available below the $2,000 minimum" },
-      { id: "ceremony-wireless-mic",   name: "Optional wireless microphone",                            priceCents: 15000,  priceType: "fixed", qty: true, note: "add-on to Ceremony Speaker · per mic" },
+      { id: "ceremony-speaker",      name: "Ceremony Speaker À La Carte",  priceCents: 35000, priceType: "fixed", note: "available standalone — no $2,000 project minimum required" },
+      { id: "ceremony-wireless-mic", name: "Optional wireless microphone", priceCents: 15000, priceType: "fixed", qty: true, note: "add-on to Ceremony Speaker · per mic" },
     ],
   },
 ];

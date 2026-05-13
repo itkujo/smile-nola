@@ -100,7 +100,9 @@ export function CollectionSection({
 
       {visibleAddons.length > 0 && (
         <div className="cs__addons">
-          <h3 className="cs__addons-label">Add-ons</h3>
+          <h3 className="cs__addons-label">
+            {collection.addonsSectionLabel ?? "Add-ons"}
+          </h3>
           {visibleAddons.map((addon) => {
             const sel = selectedAddons.find((a) => a.addonId === addon.id);
             return (

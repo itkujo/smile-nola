@@ -14,6 +14,17 @@ function formatDollars(cents: number): string {
   return `$${dollars.toLocaleString("en-US")}`;
 }
 
+/**
+ * Render the price label on a package card. "starting" packages (e.g.
+ * Resonance Concert Package) read as "Starts at $X" because the real
+ * price is a configuration conversation; the gold number alone would
+ * misleadingly imply finality.
+ */
+function packagePriceLabel(pkg: PackageConfig): string {
+  const cents = formatDollars(pkg.priceCents);
+  return pkg.priceType === "starting" ? `Starts at ${cents}` : cents;
+}
+
 export function PackageCard({
   pkg,
   selected,
@@ -39,7 +50,7 @@ export function PackageCard({
       <div className="pc__body">
         <div className="pc__row">
           <span className="pc__name">{pkg.name}</span>
-          <span className="pc__price">{formatDollars(pkg.priceCents)}</span>
+          <span className="pc__price">{packagePriceLabel(pkg)}</span>
         </div>
         {pkg.duration && <span className="pc__duration">{pkg.duration}</span>}
         {pkg.description && <p className="pc__desc">{pkg.description}</p>}
