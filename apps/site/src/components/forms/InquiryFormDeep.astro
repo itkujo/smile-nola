@@ -224,11 +224,38 @@ const BUDGET_RANGES = [
             <span class="sn-underline-glow"></span>
           </label>
 
-          <label class="sn-field-wrap span-2">
+          <label class="sn-field-wrap span-2" data-venue-ac>
             <span class="sn-field-label">Venue (name or location)</span>
-            <input type="text" name="venue" placeholder="e.g. The Sugar Mill · New Orleans, LA" />
+            <input
+              type="text"
+              name="venue"
+              id="deep-venue"
+              placeholder="e.g. The Sugar Mill · New Orleans, LA"
+              autocomplete="off"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded="false"
+              aria-controls="deep-venue-listbox"
+              data-venue-input
+            />
             <span class="sn-underline"></span>
             <span class="sn-underline-glow"></span>
+            <ul
+              id="deep-venue-listbox"
+              role="listbox"
+              class="venue-ac__listbox"
+              hidden
+              data-venue-listbox
+            ></ul>
+            <!-- Hidden fields populated when the user picks a Google Places
+                 suggestion. Stay empty for free-text venue entries. -->
+            <input type="hidden" name="venue_street_address" data-venue-field="streetAddress" />
+            <input type="hidden" name="venue_city" data-venue-field="city" />
+            <input type="hidden" name="venue_state" data-venue-field="state" />
+            <input type="hidden" name="venue_postal_code" data-venue-field="postalCode" />
+            <input type="hidden" name="venue_country" data-venue-field="country" />
+            <input type="hidden" name="venue_latitude" data-venue-field="latitude" />
+            <input type="hidden" name="venue_longitude" data-venue-field="longitude" />
           </label>
 
           <label class="sn-field-wrap">
@@ -637,6 +664,50 @@ const BUDGET_RANGES = [
     opacity: 0;
     pointer-events: none;
   }
+
+  /* ============ Venue autocomplete dropdown ============ */
+  /* The combobox listbox renders absolutely-positioned below the input,
+     attached to the .sn-field-wrap that wraps the venue input. */
+  [data-venue-ac] {
+    position: relative;
+  }
+  .venue-ac__listbox {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin: 8px 0 0;
+    padding: 4px 0;
+    list-style: none;
+    background: var(--sn-color-surface, #fff);
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.16);
+    max-height: 320px;
+    overflow-y: auto;
+    z-index: 50;
+    color: var(--sn-color-text, #1a1a1a);
+  }
+  .venue-ac__opt {
+    padding: 10px 14px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .venue-ac__opt:hover,
+  .venue-ac__opt.is-active {
+    background: rgba(0, 0, 0, 0.06);
+  }
+  .venue-ac__opt-main {
+    font-weight: 500;
+    line-height: 1.3;
+  }
+  .venue-ac__opt-sec {
+    font-size: 0.85em;
+    color: rgba(0, 0, 0, 0.6);
+    line-height: 1.3;
+  }
 </style>
 
 <script>
@@ -785,4 +856,202 @@ const BUDGET_RANGES = [
       }
     });
   }
+
+  // ============ Venue autocomplete (Google Places) ============
+  // Attaches to elements marked with [data-venue-ac]. Calls our /api/places
+  // proxy (server-side, key never reaches browser). Free-text fallback when
+  // the proxy is down or the user types but doesn't pick.
+  type Suggestion = { placeId: string; mainText: string; secondaryText: string };
+  type ParsedPlace = {
+    name: string;
+    streetAddress: string | null;
+    city: string | null;
+    state: string | null;
+    postalCode: string | null;
+    country: string | null;
+    latitude: number;
+    longitude: number;
+  };
+  const VENUE_FIELDS: Array<Exclude<keyof ParsedPlace, "name">> = [
+    "streetAddress",
+    "city",
+    "state",
+    "postalCode",
+    "country",
+    "latitude",
+    "longitude",
+  ];
+
+  function debounceVenue<T extends (...a: any[]) => void>(fn: T, ms: number): T {
+    let h: ReturnType<typeof setTimeout> | null = null;
+    return ((...args: any[]) => {
+      if (h) clearTimeout(h);
+      h = setTimeout(() => fn(...args), ms);
+    }) as T;
+  }
+
+  function initVenueAc(root: HTMLElement) {
+    const input = root.querySelector<HTMLInputElement>("[data-venue-input]");
+    const listbox = root.querySelector<HTMLUListElement>("[data-venue-listbox]");
+    if (!input || !listbox) return;
+    const fields = new Map<string, HTMLInputElement>();
+    root.querySelectorAll<HTMLInputElement>("[data-venue-field]").forEach((el) => {
+      fields.set(el.dataset.venueField as string, el);
+    });
+
+    let suggestions: Suggestion[] = [];
+    let activeIndex = -1;
+    let isPicked = false;
+
+    function clearAddressFields() {
+      for (const key of VENUE_FIELDS) {
+        const el = fields.get(key);
+        if (el) el.value = "";
+      }
+    }
+
+    function applyPicked(p: ParsedPlace) {
+      input!.value = p.name;
+      for (const key of VENUE_FIELDS) {
+        const el = fields.get(key);
+        if (!el) continue;
+        const v = p[key];
+        el.value = v == null ? "" : String(v);
+      }
+      isPicked = true;
+      closeList();
+    }
+
+    function renderList() {
+      listbox!.innerHTML = "";
+      activeIndex = -1;
+      if (suggestions.length === 0) {
+        closeList();
+        return;
+      }
+      suggestions.forEach((s, i) => {
+        const li = document.createElement("li");
+        li.id = `${input!.id}-opt-${i}`;
+        li.setAttribute("role", "option");
+        li.setAttribute("aria-selected", "false");
+        li.className = "venue-ac__opt";
+        const main = document.createElement("span");
+        main.className = "venue-ac__opt-main";
+        main.textContent = s.mainText;
+        const sec = document.createElement("span");
+        sec.className = "venue-ac__opt-sec";
+        sec.textContent = s.secondaryText;
+        li.appendChild(main);
+        if (s.secondaryText) li.appendChild(sec);
+        li.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          pick(i);
+        });
+        listbox!.appendChild(li);
+      });
+      openList();
+    }
+
+    function openList() {
+      listbox!.hidden = false;
+      input!.setAttribute("aria-expanded", "true");
+    }
+
+    function closeList() {
+      listbox!.hidden = true;
+      input!.setAttribute("aria-expanded", "false");
+      input!.removeAttribute("aria-activedescendant");
+    }
+
+    function setActive(i: number) {
+      const opts = Array.from(listbox!.querySelectorAll<HTMLLIElement>("[role='option']"));
+      opts.forEach((el, idx) => {
+        el.setAttribute("aria-selected", idx === i ? "true" : "false");
+        el.classList.toggle("is-active", idx === i);
+      });
+      activeIndex = i;
+      if (i >= 0 && opts[i]) {
+        input!.setAttribute("aria-activedescendant", opts[i].id);
+      } else {
+        input!.removeAttribute("aria-activedescendant");
+      }
+    }
+
+    async function pick(i: number) {
+      const s = suggestions[i];
+      if (!s) return;
+      try {
+        const res = await fetch(`/api/places/details?id=${encodeURIComponent(s.placeId)}`);
+        if (!res.ok) {
+          input!.value = s.mainText;
+          clearAddressFields();
+          closeList();
+          return;
+        }
+        const data = (await res.json()) as ParsedPlace;
+        applyPicked(data);
+      } catch {
+        input!.value = s.mainText;
+        clearAddressFields();
+        closeList();
+      }
+    }
+
+    async function search(q: string) {
+      if (!q || q.length < 2) {
+        suggestions = [];
+        renderList();
+        return;
+      }
+      try {
+        const res = await fetch(`/api/places/autocomplete?q=${encodeURIComponent(q)}`);
+        if (!res.ok) {
+          suggestions = [];
+          renderList();
+          return;
+        }
+        const data = (await res.json()) as { suggestions: Suggestion[] };
+        suggestions = data.suggestions ?? [];
+        renderList();
+      } catch {
+        suggestions = [];
+        renderList();
+      }
+    }
+
+    const debouncedSearch = debounceVenue(search, 250);
+
+    input.addEventListener("input", () => {
+      if (isPicked) {
+        clearAddressFields();
+        isPicked = false;
+      }
+      debouncedSearch(input.value.trim());
+    });
+
+    input.addEventListener("keydown", (e) => {
+      if (listbox.hidden || suggestions.length === 0) return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActive((activeIndex + 1) % suggestions.length);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActive(activeIndex <= 0 ? suggestions.length - 1 : activeIndex - 1);
+      } else if (e.key === "Enter" && activeIndex >= 0) {
+        e.preventDefault();
+        pick(activeIndex);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        closeList();
+      }
+    });
+
+    input.addEventListener("blur", () => {
+      setTimeout(closeList, 150);
+    });
+  }
+
+  document
+    .querySelectorAll<HTMLElement>("[data-venue-ac]")
+    .forEach(initVenueAc);
 </script>
