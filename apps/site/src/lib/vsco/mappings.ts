@@ -513,7 +513,10 @@ export function inquiryToJobWorksheet(
         kind: 'location',
         name: inquiry.venue.trim(),
         ...(hasAddress && {
-          mailingAddress: {
+          // Location contacts use `address`, not `mailingAddress` (which is
+          // a Person/Company field). VSCO silently no-ops mailingAddress on
+          // a Location. Verified live 2026-05-13.
+          address: {
             streetAddress: inquiry.venue_street_address || null,
             city: inquiry.venue_city || null,
             state: inquiry.venue_state || null,

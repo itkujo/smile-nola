@@ -324,7 +324,7 @@ describe('inquiryToJobWorksheet', () => {
     expect(ws.contacts).toHaveLength(1)
   })
 
-  it('Location contact carries mailingAddress when venue address fields are set', () => {
+  it('Location contact carries address when venue address fields are set', () => {
     const inquiry = makeInquiry({
       venue: 'Saenger Theatre',
       venue_street_address: '1111 Canal St',
@@ -340,7 +340,8 @@ describe('inquiryToJobWorksheet', () => {
     expect(venue).toBeDefined()
     if (venue && venue.contact.kind === 'location') {
       expect(venue.contact.name).toBe('Saenger Theatre')
-      expect(venue.contact.mailingAddress).toEqual({
+      // Location contacts use `address`, not `mailingAddress` (Person field).
+      expect(venue.contact.address).toEqual({
         streetAddress: '1111 Canal St',
         city: 'New Orleans',
         state: 'LA',
@@ -350,18 +351,18 @@ describe('inquiryToJobWorksheet', () => {
     }
   })
 
-  it('Location contact has no mailingAddress when only venue name is set (free text)', () => {
+  it('Location contact has no address when only venue name is set (free text)', () => {
     const inquiry = makeInquiry({ venue: 'Backyard' })
     const ws = inquiryToJobWorksheet(inquiry, { config: cfg, siteBase })
     const venue = ws.contacts.find((c) => c.contact.kind === 'location')
     expect(venue).toBeDefined()
     if (venue && venue.contact.kind === 'location') {
       expect(venue.contact.name).toBe('Backyard')
-      expect(venue.contact.mailingAddress).toBeUndefined()
+      expect(venue.contact.address).toBeUndefined()
     }
   })
 
-  it('Location contact carries partial mailingAddress when only some address fields are set', () => {
+  it('Location contact carries partial address when only some address fields are set', () => {
     // Edge case: Google returns a place with no postal_code (small business
     // or rural address). We pass through whatever we have.
     const inquiry = makeInquiry({
@@ -374,7 +375,7 @@ describe('inquiryToJobWorksheet', () => {
     const venue = ws.contacts.find((c) => c.contact.kind === 'location')
     expect(venue).toBeDefined()
     if (venue && venue.contact.kind === 'location') {
-      expect(venue.contact.mailingAddress).toEqual({
+      expect(venue.contact.address).toEqual({
         streetAddress: null,
         city: 'Madisonville',
         state: 'LA',

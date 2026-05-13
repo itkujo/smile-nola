@@ -197,7 +197,17 @@ export interface LocationWrite extends ContactBase {
   /** Required by API for locations. We use it for venue name. */
   name: string;
   phone?: Phone | null;
-  mailingAddress?: Address | null;
+  /**
+   * LOCATION-specific. Note this differs from Person/Company which use
+   * `mailingAddress`. Verified live 2026-05-13: PUT-ing mailingAddress
+   * on a Location contact silently no-ops; only `address` is honored.
+   * The spec doesn't document this asymmetry.
+   *
+   * Also note: `latitude`, `longitude`, and `googlePlaceId` are readOnly
+   * on this endpoint — VSCO geocodes server-side from the textual
+   * fields. We only send the 5 textual address components.
+   */
+  address?: Address | null;
 }
 
 export type ContactWrite = PersonWrite | CompanyWrite | LocationWrite;
