@@ -164,9 +164,9 @@ Today's healthcheck hits `/` — but `/` is a static-ish render that passes even
 | `INTAKE_SYNC_INTERVAL` | no | `30000` | ms between sync attempts. `0` disables auto-drain (manual flush only) |
 | `PORT` | no | `3000` | Internal container port |
 | `SMILE_NOLA_DB_DIR` | no | `/data` | Where to put `booth.db`. Mounted from a volume |
-| `BOOTH_ID` | no | auto-generated UUID stored in `/data/booth-id` | Identifies this physical booth in sync payloads |
+| `BOOTH_ID` | no | auto-generated UUID stored in `/data/booth-id`, logged at startup | Operator-visible identifier for this physical booth (printed in logs and admin UI); NOT currently sent on the wire (server doesn't accept it yet) |
 
-`BOOTH_ID` is new. The hosted expo doesn't need it (one deployment, no ambiguity). A fleet of portable booths does — without it, the main site can't tell which physical machine sent which leads, which matters if you ever run two booths at the same event.
+`BOOTH_ID` is new. The hosted expo doesn't need it (one deployment, no ambiguity). A fleet of portable booths does — without it, you can't tell at a glance which physical machine an operator is sitting at. For now it's a local operator-facing identifier only (visible in logs and the admin UI footer); when the server side learns to accept it on the wire, the booth will start sending it too. Backward-compatible by design: the server ignores unknown fields today.
 
 If `INTAKE_SYNC_TOKEN` is missing, the booth runs fully — it just queues leads forever in the local DB. Valid mode for "completely offline event, I'll sync later from a different machine that has the token."
 
@@ -193,7 +193,7 @@ The file is renamed from `leads.db` to `booth.db` to remove a footgun: the main 
 
 ### Sync protocol contract
 
-Documented in the new repo's `docs/sync-protocol.md` so the main site team (i.e. future-you maintaining `smile-nola/`) has a written contract for what the booth promises to send.
+The booth posts the same wire format the existing `apps/intake/lib/sync.ts` already posts. Documented in the new repo's `docs/sync-protocol.md` so the contract is captured in writing, not implied by code:
 
 ```
 POST /api/sync/inquiries HTTP/1.1
@@ -202,25 +202,40 @@ Authorization: Bearer <INTAKE_SYNC_TOKEN>
 Content-Type: application/json
 
 {
-  "source": "booth-standalone",
-  "booth_id": "<UUID assigned once per install>",
-  "rows": [
+  "inquiries": [
     {
-      "client_id": "<row UUID local to this booth>",
-      "captured_at": "<ISO 8601>",
-      // ...all current Inquiry fields...
+      "external_uuid": "<UUID v4 generated at capture time>",
+      "created_at": "<ISO 8601>",
+      "first_name": "<string>",
+      "last_name": "<string>",          // may be ""
+      "email": "<string>",
+      "phone": "<string>",
+      "preferred_contact": "<string|null>",
+      "event_date":       "<string|null>",
+      "venue":            "<string|null>",
+      "collections_interested": "<JSON-string|null>",
+      "notes":            "<string|null>",
+      "partner1_name":    "<string|null>",
+      "partner2_name":    "<string|null>",
+      "event_setting":    "<string|null>",
+      "poc_relationship": "<string|null>"
     }
   ]
 }
 
 → 200 OK
 {
-  "accepted": ["<client_id>", ...],
-  "rejected": [{ "client_id": "...", "reason": "validation: ..." }, ...]
+  "ok": true,
+  "results": [
+    { "external_uuid": "...", "inserted": true,  "id": 123 },
+    { "external_uuid": "...", "inserted": false, "id": 122 }  // already present (dedup)
+  ]
 }
 ```
 
-**What changes on the main site side:** the existing `/api/sync/inquiries` endpoint already accepts the booth posting with this token. The only adjustment needed is the `source` validator accepting `"booth-standalone"` in addition to `"booth-expo"`. That is the *entire* main-site code change.
+The server side (`apps/site/src/pages/api/sync/inquiries.ts`) hardcodes `source = 'booth-expo'` for every accepted row. The standalone booth's captures will therefore appear in the main site as `source='booth-expo'` — indistinguishable from hosted captures in the database. That's an acceptable starting point. **Future improvement (not in this rollout):** accept a `source` field in the wire payload so the standalone booth can stamp `'booth-standalone'` and the hosted one can keep `'booth-expo'`. Tracked as a follow-up; not blocking.
+
+**What changes on the main site side for this rollout: nothing.** The endpoint already accepts the wire format the standalone booth will send. Zero code changes to `smile-nola/`.
 
 ### Machine-specific launchers (NOT part of the repo)
 
