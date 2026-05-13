@@ -1,4 +1,8 @@
 import type { EventDetailsValue } from "./useBuilderState";
+import {
+  VenueAutocompleteReact,
+  type VenueValue,
+} from "@/components/forms/VenueAutocompleteReact";
 
 interface Props {
   value: EventDetailsValue;
@@ -55,17 +59,38 @@ export function EventDetails({ value, onChange }: Props) {
           </div>
         </fieldset>
 
-        <label className="sn-field-wrap ed__span2">
-          <span className="sn-field-label">Venue or location</span>
-          <input
-            type="text"
-            value={value.venue}
-            onChange={(e) => onChange({ venue: e.target.value })}
-            autoComplete="off"
+        <div className="ed__span2">
+          <span className="sn-field-label" style={{ display: "block", marginBottom: 4 }}>
+            Venue or location
+          </span>
+          <VenueAutocompleteReact
+            id="builder-venue"
+            label=""
+            placeholder="Start typing a venue name…"
+            value={{
+              name: value.venue,
+              streetAddress: value.venueStreetAddress,
+              city: value.venueCity,
+              state: value.venueState,
+              postalCode: value.venuePostalCode,
+              country: value.venueCountry,
+              latitude: value.venueLatitude,
+              longitude: value.venueLongitude,
+            } satisfies VenueValue}
+            onChange={(v) =>
+              onChange({
+                venue: v.name,
+                venueStreetAddress: v.streetAddress,
+                venueCity: v.city,
+                venueState: v.state,
+                venuePostalCode: v.postalCode,
+                venueCountry: v.country,
+                venueLatitude: v.latitude,
+                venueLongitude: v.longitude,
+              })
+            }
           />
-          <span className="sn-underline" />
-          <span className="sn-underline-glow" />
-        </label>
+        </div>
 
         <label className="sn-field-wrap">
           <span className="sn-field-label">Estimated guest count</span>
