@@ -1,11 +1,12 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useFormContext } from "react-hook-form";
+import { useFormContext, useWatch } from "react-hook-form";
 import { TextField } from "@/components/form/fields/TextField";
 import { DateField } from "@/components/form/fields/DateField";
 import { StepHeader } from "@/components/form/StepHeader";
 import { StepActions } from "@/components/form/StepActions";
+import { VenueAutocomplete, type VenueValue } from "@/components/form/VenueAutocomplete";
 import { fieldStaggerContainer, fieldStaggerItem } from "@/lib/motion";
 import type { Lead } from "@/lib/schema";
 
@@ -25,8 +26,43 @@ export function StepCelebration({ onBack, onNext }: Props) {
   const {
     register,
     trigger,
+    control,
+    setValue,
     formState: { errors },
   } = useFormContext<Lead>();
+
+  // Watch all venue fields so the autocomplete value stays in sync if the
+  // user navigates back to this step.
+  const venueName = useWatch({ control, name: "venueName" }) ?? "";
+  const venueStreetAddress = useWatch({ control, name: "venueStreetAddress" }) ?? null;
+  const venueCity = useWatch({ control, name: "venueCity" }) ?? null;
+  const venueState = useWatch({ control, name: "venueState" }) ?? null;
+  const venuePostalCode = useWatch({ control, name: "venuePostalCode" }) ?? null;
+  const venueCountry = useWatch({ control, name: "venueCountry" }) ?? null;
+  const venueLatitude = useWatch({ control, name: "venueLatitude" }) ?? null;
+  const venueLongitude = useWatch({ control, name: "venueLongitude" }) ?? null;
+
+  const venueValue: VenueValue = {
+    name: venueName,
+    streetAddress: venueStreetAddress,
+    city: venueCity,
+    state: venueState,
+    postalCode: venuePostalCode,
+    country: venueCountry,
+    latitude: venueLatitude,
+    longitude: venueLongitude,
+  };
+
+  function onVenueChange(v: VenueValue) {
+    setValue("venueName", v.name, { shouldValidate: false, shouldDirty: true });
+    setValue("venueStreetAddress", v.streetAddress ?? undefined);
+    setValue("venueCity", v.city ?? undefined);
+    setValue("venueState", v.state ?? undefined);
+    setValue("venuePostalCode", v.postalCode ?? undefined);
+    setValue("venueCountry", v.country ?? undefined);
+    setValue("venueLatitude", v.latitude ?? undefined);
+    setValue("venueLongitude", v.longitude ?? undefined);
+  }
 
   const handleNext = async () => {
     const valid = await trigger([...FIELDS_THIS_STEP], { shouldFocus: true });
@@ -84,12 +120,13 @@ export function StepCelebration({ onBack, onNext }: Props) {
         </motion.div>
 
         <motion.div variants={fieldStaggerItem}>
-          <TextField
+          <VenueAutocomplete
+            id="venue-name"
             label="Venue"
-            placeholder="Venue name or 'TBD'"
-            helper="Optional — many couples haven't booked a venue yet."
-            error={errors.venueName?.message}
-            {...register("venueName")}
+            placeholder="Start typing a venue name…"
+            helper="Optional — pick from suggestions or type 'TBD' if undecided."
+            value={venueValue}
+            onChange={onVenueChange}
           />
         </motion.div>
       </motion.div>
