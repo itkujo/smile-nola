@@ -78,6 +78,108 @@ function isoDateOnly(d: string | Date): string {
 }
 
 /**
+ * Coerce a free-text time-of-day input into VSCO's expected HH:MM
+ * 24-hour format, OR return null if we can't be confident about the
+ * conversion.
+ *
+ * VSCO's Event schema rejects ambiguous strings like "4:30" or "9"
+ * (which our inquiry forms allow because the field is just an
+ * optional 40-char free-text input). When VSCO rejects a worksheet
+ * POST it bubbles up a vague "contacts.0.contact ... matched none"
+ * error — the actual problem can be a sibling field entirely.
+ *
+ * The "ambiguity zone" problem: a bare "4:30" or "9" without AM/PM is
+ * catastrophically ambiguous (4:30 AM vs PM is a 12-hour wedding-day
+ * scheduling mistake). We reject anything that could be misread; daniel
+ * sets the correct value in VSCO directly when the inquiry form was
+ * sloppy. Better to drop the field than guess wrong.
+ *
+ * What's accepted:
+ *   - AM/PM markers in any common form  → parsed confidently
+ *   - Compact HHMM (e.g. "1630")        → 24-hour, accepted
+ *   - HH:MM where the hour is              ↘
+ *       explicit leading zero (04:30) OR    → 24-hour, accepted
+ *       definitively > 12 (16:30) OR        → 24-hour, accepted
+ *       exactly 12 or 00                    → 24-hour, accepted
+ *   - Anything else                     → null
+ */
+export function normalizeTimeOfDay(input: string | null | undefined): string | null {
+  if (!input) return null
+  const trimmed = input.trim()
+  if (!trimmed) return null
+
+  // Capture an AM/PM marker if present (case-insensitive, with or
+  // without periods or spaces: "PM", "p.m.", "pm", "p", " PM", "4:30pm").
+  // The marker must appear at end-of-string (anchored by `$`) so we don't
+  // mistakenly match an `a` or `p` inside a venue name etc. We don't use
+  // \b at the start because "4:30pm" has no word-boundary before p
+  // (digit→letter is contiguous).
+  const ampmMatch = trimmed.match(/([ap])\.?\s*m?\.?\s*$/i)
+  const ampm = ampmMatch ? ampmMatch[1].toLowerCase() : null
+
+  // Strip the AM/PM marker and any extra whitespace for digit extraction.
+  const noMarker = ampm
+    ? trimmed.replace(/\s*[ap]\.?\s*m?\.?\s*$/i, '').trim()
+    : trimmed
+
+  // Parse to {hours, minutes, hourLiteral}. The `hourLiteral` preserves
+  // the user's exact spelling of the hour digits — we use it to decide
+  // whether a colon-format value is unambiguously 24-hour.
+  let hours = -1
+  let minutes = 0
+  let hourLiteral = ''
+  const colonMatch = noMarker.match(/^(\d{1,2}):(\d{2})$/)
+  if (colonMatch) {
+    hourLiteral = colonMatch[1]
+    hours = parseInt(hourLiteral, 10)
+    minutes = parseInt(colonMatch[2], 10)
+  } else if (/^\d{4}$/.test(noMarker)) {
+    hourLiteral = noMarker.slice(0, 2)
+    hours = parseInt(hourLiteral, 10)
+    minutes = parseInt(noMarker.slice(2), 10)
+  } else if (ampm && /^\d{1,2}$/.test(noMarker)) {
+    // "9 PM" — with AM/PM we can interpret a bare hour confidently.
+    hourLiteral = noMarker
+    hours = parseInt(noMarker, 10)
+    minutes = 0
+  } else {
+    // Bare "9" or "4:30" without AM/PM — too ambiguous to commit to.
+    return null
+  }
+
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null
+  if (minutes < 0 || minutes > 59) return null
+
+  if (ampm) {
+    // 12-hour clock: 12 AM = 00:xx, 12 PM = 12:xx, otherwise apply +12 for PM.
+    if (hours < 1 || hours > 12) return null
+    if (ampm === 'a' && hours === 12) hours = 0
+    if (ampm === 'p' && hours !== 12) hours += 12
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+  }
+
+  // No AM/PM marker. Must be unambiguously 24-hour:
+  //   - hour > 12 → definitely 24-hour (16:30, 21:00)
+  //   - hour === 0 or 12 → only one interpretation
+  //   - hourLiteral has 2 digits with a leading zero (04:30) → user
+  //     explicitly opted into 24-hour notation; respect their choice
+  //   - HHMM compact format (length 4) → always 24-hour by convention
+  // Anything else (1-11 written as a single digit with no marker) is
+  // ambiguous — reject.
+  if (hours < 0 || hours > 23) return null
+  const isCompactFormat = !colonMatch // came from the HHMM branch
+  const hasLeadingZero = hourLiteral.length === 2 && hourLiteral[0] === '0'
+  const isUnambiguous24h =
+    hours > 12 ||
+    hours === 0 ||
+    hours === 12 ||
+    isCompactFormat ||
+    hasLeadingZero
+  if (!isUnambiguous24h) return null
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+}
+
+/**
  * Coerce a free-text phone number into strict E.164 format that VSCO's
  * worksheet schema will accept.
  *
@@ -588,8 +690,13 @@ export function inquiryToJobWorksheet(
       name: 'Main Event',
       typeId: config.eventTypes['main-event'],
       startDate: inquiry.event_date,
-      startTime: inquiry.event_start || null,
-      endTime: inquiry.event_end || null,
+      // Inquiry form lets users type free text like "4:30" or "9 PM" \u2014
+      // VSCO's schema rejects ambiguous values. normalizeTimeOfDay
+      // returns null for anything we can't confidently convert; daniel
+      // sets the correct time in VSCO directly when null. Better than
+      // pushing 4:30 AM for what was meant as a 4:30 PM ceremony.
+      startTime: normalizeTimeOfDay(inquiry.event_start),
+      endTime: normalizeTimeOfDay(inquiry.event_end),
     })
   }
 

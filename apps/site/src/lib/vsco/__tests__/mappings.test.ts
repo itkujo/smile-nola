@@ -13,6 +13,7 @@ import {
   reservedPackageDisplay,
   noEmailPlaceholder,
   normalizeE164,
+  normalizeTimeOfDay,
 } from '../mappings.ts'
 
 // ──────────────────────────────────────────────────────────────────────
@@ -296,6 +297,71 @@ describe('normalizeE164', () => {
   })
 })
 
+describe('normalizeTimeOfDay', () => {
+  it('returns null for empty / null / whitespace', () => {
+    expect(normalizeTimeOfDay(null)).toBeNull()
+    expect(normalizeTimeOfDay(undefined)).toBeNull()
+    expect(normalizeTimeOfDay('')).toBeNull()
+    expect(normalizeTimeOfDay('   ')).toBeNull()
+  })
+
+  it('passes through valid 24-hour HH:MM', () => {
+    expect(normalizeTimeOfDay('16:30')).toBe('16:30')
+    expect(normalizeTimeOfDay('00:00')).toBe('00:00')
+    expect(normalizeTimeOfDay('23:59')).toBe('23:59')
+  })
+
+  it('accepts explicit 24-hour notation with leading-zero hours', () => {
+    expect(normalizeTimeOfDay('04:30')).toBe('04:30') // leading 0 → user opted in
+    expect(normalizeTimeOfDay('09:00')).toBe('09:00')
+  })
+
+  it('REJECTS single-digit hours without AM/PM (ambiguous)', () => {
+    expect(normalizeTimeOfDay('9:00')).toBeNull() // 9 AM or 9 PM?
+    expect(normalizeTimeOfDay('4:30')).toBeNull() // 4:30 AM or PM?
+  })
+
+  it('parses AM/PM markers across formats', () => {
+    expect(normalizeTimeOfDay('4:30 PM')).toBe('16:30')
+    expect(normalizeTimeOfDay('4:30pm')).toBe('16:30')
+    expect(normalizeTimeOfDay('4:30 p.m.')).toBe('16:30')
+    expect(normalizeTimeOfDay('4:30 p')).toBe('16:30')
+    expect(normalizeTimeOfDay('9:00 AM')).toBe('09:00')
+    expect(normalizeTimeOfDay('9 AM')).toBe('09:00')
+    expect(normalizeTimeOfDay('9 PM')).toBe('21:00')
+  })
+
+  it('handles 12 AM / 12 PM correctly', () => {
+    expect(normalizeTimeOfDay('12:00 AM')).toBe('00:00')
+    expect(normalizeTimeOfDay('12:00 PM')).toBe('12:00')
+    expect(normalizeTimeOfDay('12:30 PM')).toBe('12:30')
+    expect(normalizeTimeOfDay('12:30 AM')).toBe('00:30')
+  })
+
+  it('accepts HHMM compact format', () => {
+    expect(normalizeTimeOfDay('1630')).toBe('16:30')
+    expect(normalizeTimeOfDay('0900')).toBe('09:00')
+  })
+
+  it('REJECTS ambiguous bare numbers without AM/PM', () => {
+    // The Kopp scenario: he entered "4:30" and "9" as event start/end.
+    // VSCO rejects these as malformed times; we now reject them too,
+    // returning null so the field gets omitted (better than guessing
+    // wrong on a 12-hour ambiguity).
+    expect(normalizeTimeOfDay('9')).toBeNull()
+    expect(normalizeTimeOfDay('4:30')).toBeNull()
+    expect(normalizeTimeOfDay('11')).toBeNull()
+  })
+
+  it('rejects nonsense', () => {
+    expect(normalizeTimeOfDay('soon')).toBeNull()
+    expect(normalizeTimeOfDay('25:00')).toBeNull() // hour out of range
+    expect(normalizeTimeOfDay('12:60')).toBeNull() // minute out of range
+    expect(normalizeTimeOfDay('-1:00')).toBeNull()
+    expect(normalizeTimeOfDay('13:00 PM')).toBeNull() // 13 with PM marker is invalid
+  })
+})
+
 describe('noEmailPlaceholder', () => {
   it('builds a deterministic placeholder using the external_uuid', () => {
     expect(noEmailPlaceholder('abc-123')).toBe(
@@ -410,6 +476,26 @@ describe('inquiryToJobWorksheet', () => {
       expect(venue.contact.name).toBe('Backyard')
       expect(venue.contact.address).toBeUndefined()
     }
+  })
+
+  it('event start/end times are normalized; ambiguous values become null', () => {
+    // Regression: Kopp had event_start="4:30" and event_end="9" stored
+    // verbatim from his form submission. Both get rejected by VSCO's
+    // Event schema. normalizeTimeOfDay returns null for those (rather
+    // than guessing AM vs PM); the event payload still posts but with
+    // null times \u2014 daniel fills them in in VSCO directly.
+    const inquiry = makeInquiry({ event_start: '4:30', event_end: '9' })
+    const ws = inquiryToJobWorksheet(inquiry, { config: cfg, siteBase })
+    expect(ws.events).toHaveLength(1)
+    expect(ws.events![0].startTime).toBeNull()
+    expect(ws.events![0].endTime).toBeNull()
+  })
+
+  it('event start/end times pass through when given with AM/PM markers', () => {
+    const inquiry = makeInquiry({ event_start: '4:30 PM', event_end: '9 PM' })
+    const ws = inquiryToJobWorksheet(inquiry, { config: cfg, siteBase })
+    expect(ws.events![0].startTime).toBe('16:30')
+    expect(ws.events![0].endTime).toBe('21:00')
   })
 
   it('POC phone is normalized to strict E.164 before VSCO sees it', () => {
