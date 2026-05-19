@@ -28,7 +28,12 @@ import type {
   BuilderWarning,
   CustomQuotedItem,
 } from "@/lib/builder/compute";
-import { getDb, getInquiry } from "@/lib/db";
+import {
+  getDb,
+  getInquiry,
+  getVscoEntityId,
+  getVscoPushesForBuilder,
+} from "@/lib/db";
 import { builderProjectName } from "@/lib/project-name";
 
 const db = getDb();
@@ -43,6 +48,36 @@ if (!submission) {
 const linkedInquiry =
   submission.inquiry_id != null ? (getInquiry(submission.inquiry_id) ?? null) : null;
 const projectName = builderProjectName(submission, linkedInquiry);
+
+/* ============================================================================
+ * VSCO push state — what the side-block needs to render
+ * ========================================================================== */
+const vscoPushes = getVscoPushesForBuilder(submission.id);
+
+// Resolve the linked inquiry's VSCO Job + Order entities so the UI can
+// describe the current state precisely ("ready to push" vs "Order already
+// exists" vs "linked inquiry hasn't been qualified yet").
+const externalUuid = linkedInquiry?.external_uuid ?? null;
+const linkedJobId =
+  externalUuid != null ? getVscoEntityId(externalUuid, "job") : null;
+const linkedOrderId =
+  externalUuid != null ? getVscoEntityId(externalUuid, "order") : null;
+
+// Decide whether the manual-push button is meaningful right now.
+type VscoPushReadiness =
+  | { kind: "ready" }
+  | { kind: "no-inquiry" }
+  | { kind: "not-qualified" }
+  | { kind: "no-job" }
+  | { kind: "order-exists"; orderId: string };
+
+const vscoReadiness: VscoPushReadiness = (() => {
+  if (linkedOrderId) return { kind: "order-exists", orderId: linkedOrderId };
+  if (!linkedInquiry) return { kind: "no-inquiry" };
+  if (!linkedInquiry.qualified_at) return { kind: "not-qualified" };
+  if (!linkedJobId) return { kind: "no-job" };
+  return { kind: "ready" };
+})();
 
 // ----- POST handler: status flip --------------------------------------------
 // Auth: this route lives under /admin/* so the global middleware already
@@ -344,6 +379,119 @@ const groups: DisplayGroup[] = selections.collections.map((cid) => {
         )}
       </section>
 
+      {/* VSCO sync side-block. Mirrors the qualify-retry pattern on the
+          inquiry detail page: a primary action button when the push is
+          actionable, explanatory hint text when it isn't, and an
+          expandable history of past attempts so daniel can see why
+          previous pushes succeeded or failed. */}
+      <section class="side-block">
+        <h2>VSCO sync</h2>
+
+        {vscoReadiness.kind === "ready" && (
+          <>
+            <p class="muted vsco-hint">
+              Ready to push. Creates an Order on the linked Job in VSCO.
+            </p>
+            <form class="action-form" data-vsco-push-form data-submission-id={submission.id}>
+              <button type="submit" class="btn-gold full vsco-push-btn">
+                Push to VSCO
+              </button>
+              <span class="vsco-push-status" aria-live="polite"></span>
+            </form>
+          </>
+        )}
+
+        {vscoReadiness.kind === "order-exists" && (
+          <>
+            <p class="muted vsco-hint">
+              An Order already exists on VSCO for this submission. Re-pushing
+              is a no-op (idempotent skip), but useful to confirm the link
+              if something looks off.
+            </p>
+            <p class="vsco-existing-order">
+              Order id <code>{vscoReadiness.orderId}</code>
+            </p>
+            <form class="action-form" data-vsco-push-form data-submission-id={submission.id}>
+              <button type="submit" class="btn-ghost full vsco-push-btn">
+                Re-check sync state
+              </button>
+              <span class="vsco-push-status" aria-live="polite"></span>
+            </form>
+          </>
+        )}
+
+        {vscoReadiness.kind === "no-inquiry" && (
+          <p class="muted vsco-hint">
+            This submission isn't linked to an inquiry, so the VSCO push
+            can't fire. Cold-flow submissions don't have a Job to attach
+            an Order to.
+          </p>
+        )}
+
+        {vscoReadiness.kind === "not-qualified" && submission.inquiry_id !== null && (
+          <p class="muted vsco-hint">
+            The linked inquiry isn't qualified yet.
+            {' '}
+            <a href={`/admin/inquiries/${submission.inquiry_id}`}>
+              Open the inquiry to mark it qualified
+            </a>
+            {' '}
+            and trigger the Job push first.
+          </p>
+        )}
+
+        {vscoReadiness.kind === "no-job" && submission.inquiry_id !== null && (
+          <p class="muted vsco-hint">
+            The linked inquiry is qualified but no Job exists in VSCO yet
+            (the qualify push may have failed).
+            {' '}
+            <a href={`/admin/inquiries/${submission.inquiry_id}`}>
+              Open the inquiry to retry that push
+            </a>
+            {' '}
+            first, then come back here.
+          </p>
+        )}
+
+        {vscoPushes.length > 0 && (
+          <details class="vsco-history">
+            <summary>Sync history ({vscoPushes.length})</summary>
+            <ul class="vsco-history-list">
+              {vscoPushes.slice(0, 20).map((p) => {
+                let prettyError: string | null = null;
+                if (p.verdict === "failed" && p.error_body) {
+                  try {
+                    prettyError = JSON.stringify(JSON.parse(p.error_body), null, 2);
+                  } catch {
+                    prettyError = p.error_body;
+                  }
+                }
+                return (
+                  <li class={`vsco-push is-${p.verdict}`}>
+                    <div class="vsco-push-row">
+                      <span class="vsco-when muted">{p.created_at}</span>
+                      <span class={`vsco-verdict is-${p.verdict}`}>{p.verdict}</span>
+                      <span class="muted">·</span>
+                      <span class="vsco-trigger">{p.trigger}</span>
+                      {p.http_status !== null && (
+                        <span class="muted">· HTTP {p.http_status}</span>
+                      )}
+                      {p.notes && <span class="muted">· {p.notes}</span>}
+                    </div>
+                    {prettyError && (
+                      <details class="vsco-error-detail">
+                        <summary>Show VSCO response body</summary>
+                        <pre class="vsco-error-body">{prettyError}</pre>
+                      </details>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
+        )}
+      </section>
+
       <section class="side-block">
         <h2>Metadata</h2>
         <dl class="kv side-kv">
@@ -414,6 +562,56 @@ const groups: DisplayGroup[] = selections.collections.map((cid) => {
       } catch {
         toast.textContent = "Copy failed.";
         toast.style.color = "var(--sn-amber)";
+      }
+    });
+  });
+
+  /**
+   * Manual VSCO push button. Fires the retry endpoint and reloads the
+   * page so the sync history shows the new audit row. Matches the
+   * fire-and-forget pattern of the inquiry-side qualify button: the
+   * server responds 200 as soon as it kicks off the push; we reload
+   * after a short delay so the audit log has time to be written.
+   */
+  document.querySelectorAll<HTMLFormElement>("[data-vsco-push-form]").forEach((form) => {
+    const button = form.querySelector<HTMLButtonElement>(".vsco-push-btn");
+    const status = form.querySelector<HTMLSpanElement>(".vsco-push-status");
+    const submissionId = form.dataset.submissionId;
+    if (!button || !submissionId) return;
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      button.disabled = true;
+      const originalText = button.textContent;
+      button.textContent = "Pushing…";
+      if (status) {
+        status.textContent = "";
+        status.style.color = "";
+      }
+      try {
+        const res = await fetch(
+          `/api/admin/package-builder/${submissionId}/push-vsco`,
+          { method: "POST" },
+        );
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`);
+        }
+        if (status) {
+          status.textContent = "Sent. Reloading…";
+          status.style.color = "var(--sn-gold)";
+        }
+        // The push is fire-and-forget on the server side. Give it ~1.5s
+        // to write the audit row before we reload so the history shows
+        // the new entry immediately.
+        setTimeout(() => window.location.reload(), 1500);
+      } catch (err) {
+        button.disabled = false;
+        button.textContent = originalText;
+        if (status) {
+          status.textContent = err instanceof Error ? err.message : "Push failed";
+          status.style.color = "var(--sn-amber)";
+        }
       }
     });
   });
@@ -679,5 +877,101 @@ const groups: DisplayGroup[] = selections.collections.map((cid) => {
     font-size: 0.78rem;
     letter-spacing: 0.04em;
     min-height: 1em;
+  }
+
+  /* ── VSCO sync block ───────────────────────────────────────────── */
+  .vsco-hint {
+    font-size: 0.82rem;
+    line-height: 1.5;
+    margin: 0.6rem 0 0.8rem;
+  }
+  .vsco-hint a {
+    color: var(--sn-gold);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .vsco-existing-order {
+    margin: 0.4rem 0 0.8rem;
+    font-size: 0.82rem;
+  }
+  .vsco-existing-order code {
+    font-family: ui-monospace, monospace;
+    font-size: 0.78rem;
+    background: rgba(212, 175, 55, 0.06);
+    border: 1px solid var(--sn-gold-12);
+    border-radius: 3px;
+    padding: 1px 6px;
+  }
+  .vsco-push-status {
+    display: inline-block;
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    min-height: 1em;
+    margin-top: 0.5rem;
+  }
+
+  /* Sync history list (mirrors the styles on /admin/inquiries/[id]). */
+  .vsco-history {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed rgba(212, 175, 55, 0.18);
+  }
+  .vsco-history summary {
+    cursor: pointer;
+    color: var(--sn-muted-stone);
+    font-size: 0.82rem;
+  }
+  .vsco-history-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.6rem 0 0;
+    font-size: 0.8rem;
+    line-height: 1.45;
+  }
+  .vsco-push {
+    padding: 0.25rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+  .vsco-push-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: baseline;
+  }
+  .vsco-when { font-family: ui-monospace, monospace; font-size: 0.74rem; }
+  .vsco-verdict {
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    padding: 0.05em 0.45em;
+    border-radius: 4px;
+  }
+  .vsco-verdict.is-ok       { color: var(--sn-gold);        border: 1px solid var(--sn-gold-40); background: rgba(212, 175, 55, 0.08); }
+  .vsco-verdict.is-failed   { color: var(--sn-amber);       border: 1px solid var(--sn-amber);  background: rgba(255, 178, 63, 0.08); }
+  .vsco-verdict.is-skipped  { color: var(--sn-muted-stone); border: 1px solid var(--sn-muted-stone); background: rgba(184, 178, 165, 0.06); }
+  .vsco-trigger { font-family: ui-monospace, monospace; font-size: 0.74rem; }
+
+  .vsco-error-detail { margin: 0.35rem 0 0.4rem 0.8rem; }
+  .vsco-error-detail summary {
+    cursor: pointer;
+    color: var(--sn-amber);
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.15rem 0;
+  }
+  .vsco-error-body {
+    font-family: ui-monospace, monospace;
+    font-size: 0.74rem;
+    line-height: 1.4;
+    color: var(--sn-champagne);
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 178, 63, 0.18);
+    border-radius: 4px;
+    padding: 0.5rem 0.7rem;
+    margin: 0.25rem 0 0;
+    overflow-x: auto;
+    white-space: pre;
+    max-height: 320px;
   }
 </style>

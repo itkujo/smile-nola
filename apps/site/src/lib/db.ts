@@ -1176,6 +1176,19 @@ export function getVscoPushesForInquiry(inquiryId: number): VscoPushRow[] {
 }
 
 /**
+ * Push audit history scoped to a specific builder submission. Used by the
+ * builder admin detail page to show retry attempts inline. Mirrors
+ * getVscoPushesForInquiry() in shape.
+ */
+export function getVscoPushesForBuilder(submissionId: number): VscoPushRow[] {
+  return getDb()
+    .prepare<[number], VscoPushRow>(
+      "SELECT * FROM vsco_pushes WHERE builder_id = ? ORDER BY created_at DESC, id DESC",
+    )
+    .all(submissionId) as VscoPushRow[];
+}
+
+/**
  * Set `qualified_at = CURRENT_TIMESTAMP` on an inquiry. Returns the new
  * timestamp on success, or null when the row doesn't exist or was already
  * qualified.

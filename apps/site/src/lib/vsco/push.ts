@@ -437,9 +437,13 @@ function mergeCustomFields<
  */
 export async function pushBuilderToVsco(
   submission: PackageBuilderSubmissionRow,
+  options: { trigger?: VscoPushTrigger } = {},
 ): Promise<{ ok: boolean; orderId?: string; reason?: string }> {
   const ctx: AuditCtx = {
-    trigger: 'builder-create',
+    // Default is the original submission-time trigger; admin-initiated
+    // retries should pass `{ trigger: 'manual' }` so the audit log
+    // distinguishes the two cleanly.
+    trigger: options.trigger ?? 'builder-create',
     builderId: submission.id,
     inquiryId: submission.inquiry_id ?? null,
   }
