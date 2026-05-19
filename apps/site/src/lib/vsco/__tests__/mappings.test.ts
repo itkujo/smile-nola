@@ -12,6 +12,7 @@ import {
   leadSourceKeyForInquiry,
   reservedPackageDisplay,
   noEmailPlaceholder,
+  normalizeE164,
 } from '../mappings.ts'
 
 // ──────────────────────────────────────────────────────────────────────
@@ -246,6 +247,55 @@ describe('reservedPackageDisplay', () => {
   })
 })
 
+describe('normalizeE164', () => {
+  it('returns null for empty/whitespace input', () => {
+    expect(normalizeE164(null)).toBeNull()
+    expect(normalizeE164(undefined)).toBeNull()
+    expect(normalizeE164('')).toBeNull()
+    expect(normalizeE164('   ')).toBeNull()
+  })
+
+  it('returns null when no digits are present', () => {
+    expect(normalizeE164('---')).toBeNull()
+    expect(normalizeE164('()')).toBeNull()
+  })
+
+  it('handles US formats without a country code prefix', () => {
+    expect(normalizeE164('(504) 555-0100')).toBe('+15045550100')
+    expect(normalizeE164('504-555-0100')).toBe('+15045550100')
+    expect(normalizeE164('504.555.0100')).toBe('+15045550100')
+    expect(normalizeE164('5045550100')).toBe('+15045550100')
+    expect(normalizeE164('504 555 0100')).toBe('+15045550100')
+  })
+
+  it('handles US formats with a 1 prefix but no plus', () => {
+    expect(normalizeE164('1-504-555-0100')).toBe('+15045550100')
+    expect(normalizeE164('15045550100')).toBe('+15045550100')
+  })
+
+  it('passes through pre-normalized E.164 numbers', () => {
+    expect(normalizeE164('+15045550100')).toBe('+15045550100')
+    expect(normalizeE164('+442079460958')).toBe('+442079460958')
+  })
+
+  it('strips formatting from international numbers that include a +', () => {
+    expect(normalizeE164('+1 504 555 0100')).toBe('+15045550100')
+    expect(normalizeE164('+44 20 7946 0958')).toBe('+442079460958')
+    expect(normalizeE164('+1-(504)-555-0100')).toBe('+15045550100')
+  })
+
+  it('rejects ambiguous numbers without a + prefix and an unrecognized digit count', () => {
+    // 7-digit local number (no area code) — unsafe to guess country code
+    expect(normalizeE164('555-0100')).toBeNull()
+    // 12 digits with no + — could be anything; reject rather than guess
+    expect(normalizeE164('122334455667')).toBeNull()
+  })
+
+  it('rejects too-short numbers even with a plus', () => {
+    expect(normalizeE164('+123')).toBeNull()
+  })
+})
+
 describe('noEmailPlaceholder', () => {
   it('builds a deterministic placeholder using the external_uuid', () => {
     expect(noEmailPlaceholder('abc-123')).toBe(
@@ -359,6 +409,30 @@ describe('inquiryToJobWorksheet', () => {
     if (venue && venue.contact.kind === 'location') {
       expect(venue.contact.name).toBe('Backyard')
       expect(venue.contact.address).toBeUndefined()
+    }
+  })
+
+  it('POC phone is normalized to strict E.164 before VSCO sees it', () => {
+    // Regression: VSCO rejects unnormalized phones with a 400 on
+    // /job/-/worksheet (contacts.0.contact union mismatch). Real users
+    // type phones with parens/dashes/spaces; normalizeE164 has to
+    // sanitize them before the payload is built.
+    const inquiry = makeInquiry({ phone: '(504) 555-1234' })
+    const ws = inquiryToJobWorksheet(inquiry, { config: cfg, siteBase })
+    const poc = ws.contacts.find((c) => c.contact.kind === 'person')
+    expect(poc).toBeDefined()
+    if (poc && poc.contact.kind === 'person') {
+      expect(poc.contact.cellPhone).toEqual({ e164: '+15045551234' })
+    }
+  })
+
+  it('omits cellPhone entirely when phone is un-rescue-able', () => {
+    // Better to send no phone than a garbage value VSCO will reject.
+    const inquiry = makeInquiry({ phone: 'call me maybe' })
+    const ws = inquiryToJobWorksheet(inquiry, { config: cfg, siteBase })
+    const poc = ws.contacts.find((c) => c.contact.kind === 'person')
+    if (poc && poc.contact.kind === 'person') {
+      expect(poc.contact.cellPhone).toBeNull()
     }
   })
 

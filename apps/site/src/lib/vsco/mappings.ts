@@ -77,6 +77,54 @@ function isoDateOnly(d: string | Date): string {
   return d.toISOString().slice(0, 10)
 }
 
+/**
+ * Coerce a free-text phone number into strict E.164 format that VSCO's
+ * worksheet schema will accept.
+ *
+ * VSCO requires `cellPhone.e164` to be a string of digits prefixed with
+ * `+` and a country code — no spaces, dashes, parentheses, or dots. Real
+ * inquiry forms collect phones in formats humans actually type:
+ *   "(504) 555-0100", "504-555-0100", "+1 504 555 0100", "504.555.0100"
+ * etc. All of those are valid US numbers semantically but fail VSCO's
+ * schema with a 400 "contacts.0.contact: ... matched none".
+ *
+ * Rules:
+ *   - Strip every non-digit character except a leading `+`
+ *   - If already starts with `+`, keep as-is (we trust the country code
+ *     the user supplied — Smile NOLA does occasionally book non-US clients)
+ *   - 10 digits and no `+` → assume US, prepend `+1`
+ *   - 11 digits starting with `1` → assume US with country code, prepend `+`
+ *   - Anything else → return null (VSCO would reject it anyway; better to
+ *     send no phone than a garbage one). The mappings layer treats null
+ *     cellPhone correctly by omitting the field.
+ */
+export function normalizeE164(input: string | null | undefined): string | null {
+  if (!input) return null
+  const trimmed = input.trim()
+  if (!trimmed) return null
+
+  // Preserve a leading `+` if present, strip every other non-digit.
+  const hasPlus = trimmed.startsWith('+')
+  const digits = trimmed.replace(/\D/g, '')
+
+  if (digits.length === 0) return null
+
+  if (hasPlus) {
+    // Caller explicitly supplied a country code. Trust it; just remove
+    // formatting characters. Reject pathologically short results.
+    if (digits.length < 7) return null
+    return `+${digits}`
+  }
+
+  // No `+` — try US heuristics.
+  if (digits.length === 10) return `+1${digits}` // bare US 10-digit
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}` // 1+10
+  // 7 digits = local number without area code; unsafe to guess US prefix
+  // anything > 11 with no `+` is ambiguous (might be international without
+  // the `+`). Reject rather than guess wrong.
+  return null
+}
+
 function addDays(isoDate: string, days: number): string {
   const d = new Date(`${isoDate}T00:00:00Z`)
   d.setUTCDate(d.getUTCDate() + days)
@@ -428,12 +476,17 @@ export function inquiryToJobWorksheet(
     }
   }
 
+  const normalizedPhone = normalizeE164(inquiry.phone)
   const pocPerson: PersonWrite = {
     kind: 'person',
     firstName: inquiry.first_name || null,
     lastName: inquiry.last_name || null,
     email: pocEmail,
-    cellPhone: inquiry.phone ? { e164: inquiry.phone } : null,
+    // VSCO's worksheet schema rejects unnormalized phones with a vague
+    // 400 ("contacts.0.contact ... matched none"). normalizeE164 returns
+    // null for un-rescue-able input, which is fine — omitting cellPhone
+    // is better than failing the whole worksheet POST.
+    cellPhone: normalizedPhone ? { e164: normalizedPhone } : null,
     contactPreference: normalizeContactPreference(inquiry.preferred_contact),
     externalMappings: inquiry.external_uuid
       ? [
