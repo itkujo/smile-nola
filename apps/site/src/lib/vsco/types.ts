@@ -435,6 +435,13 @@ export interface OrderWrite {
    * this order with the given due date. This is the only API knob for
    * invoice creation. Spec annotates this field as `writeOnly` and:
    *   "Auto create a single invoice for this order using this due date"
+   *
+   * NOTE for the Smile NOLA builder flow: we deliberately LEAVE THIS
+   * UNSET so the Order lands as a quote (booking proposal) rather than
+   * an invoice. Quotes accept contracts and questionnaires, invoices
+   * don't — and daniel's workflow requires both. The invoice is
+   * generated later in VSCO, from the accepted quote. See
+   * builderToOrder() in mappings.ts for the full reasoning.
    */
   dueDate?: IsoDate | null;
   lineItems?: OrderItemWrite[];

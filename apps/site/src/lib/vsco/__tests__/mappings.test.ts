@@ -719,14 +719,19 @@ describe('builderToOrder', () => {
     expect(travel.name).toContain('quoted separately')
   })
 
-  it('sets dueDate = created_at + 14 days (writeOnly: auto-creates invoice)', () => {
+  it('does NOT set dueDate so the Order is created as a quote, not an invoice', () => {
+    // Setting dueDate on order creation auto-generates an invoice (per
+    // VSCO spec — see OrderWrite.dueDate in types.ts). We deliberately
+    // skip it so the Order lands as a quote/booking proposal that can
+    // carry contracts + questionnaires. Invoice is generated later, in
+    // VSCO, from the accepted quote.
     const sub = makeBuilder({ created_at: '2026-05-13T10:00:00.000Z' })
     const order = builderToOrder(sub, {
       recipientId: 'X',
       config: cfg,
       siteBase,
     })
-    expect(order.dueDate).toBe('2026-05-27')
+    expect(order.dueDate).toBeUndefined()
   })
 
   it('emits package + addons as flat top-level line items', () => {

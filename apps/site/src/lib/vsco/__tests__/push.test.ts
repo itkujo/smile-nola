@@ -501,7 +501,10 @@ describe('pushBuilderToVsco', () => {
     expect(result.orderId).toBe('ORD_001')
     expect(postBody.recipientId).toBe('CONT_POC_AAA')
     expect(postBody.lineItems.length).toBeGreaterThan(0)
-    expect(postBody.dueDate).toBeDefined()
+    // Order is created as a quote, not an invoice: dueDate must NOT be
+    // sent. (Setting dueDate triggers VSCO's auto-invoice path, which is
+    // incompatible with attaching contracts/questionnaires.)
+    expect(postBody.dueDate).toBeUndefined()
 
     expect(dbMod.getVscoEntityId(externalUuid, 'order')).toBe('ORD_001')
   })
