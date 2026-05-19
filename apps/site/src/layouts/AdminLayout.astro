@@ -31,6 +31,25 @@ const NAV = [
   { href: "/admin/testimonials",     label: "Testimonials",     key: "testimonials"    },
   { href: "/admin/site-banner",      label: "Site Banner",      key: "site-banner"     },
 ] as const;
+
+/**
+ * Build identity — baked at image-build time from the Dockerfile via
+ * PUBLIC_GIT_SHA (sourced from Coolify's SOURCE_COMMIT) and
+ * PUBLIC_BUILD_TIME (stamped by `date` inside the build container).
+ *
+ * Falls back to 'dev' / 'local' for non-Coolify builds (local docker,
+ * CI, `pnpm dev`) so the layout never breaks. The full timestamp lives
+ * in the title attribute; the bar shows a compact "sha · short date".
+ */
+const rawSha = import.meta.env.PUBLIC_GIT_SHA ?? 'dev';
+const buildSha = rawSha.slice(0, 7); // short SHA, mirrors `git log --oneline`
+const buildTime = import.meta.env.PUBLIC_BUILD_TIME ?? 'local';
+// Compact display: "May 19" if we have a real ISO timestamp, else
+// the fallback verbatim.
+const buildTimeShort = buildTime !== 'local' && !Number.isNaN(Date.parse(buildTime))
+  ? new Date(buildTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  : buildTime;
+const buildTooltip = `build ${rawSha}\n${buildTime}`;
 ---
 
 <!doctype html>
@@ -65,7 +84,22 @@ const NAV = [
         </ul>
       </nav>
 
-      <button class="logout-btn" data-logout aria-label="Log out">Log out</button>
+      <div class="admin-bar-right">
+        <button
+          type="button"
+          class="build-pill"
+          title={buildTooltip}
+          data-build-pill
+          data-sha={rawSha}
+          aria-label={`Build ${rawSha}, ${buildTime}. Click to copy SHA.`}
+        >
+          <span class="build-pill__sha">{buildSha}</span>
+          <span class="build-pill__sep" aria-hidden="true">·</span>
+          <span class="build-pill__time">{buildTimeShort}</span>
+        </button>
+
+        <button class="logout-btn" data-logout aria-label="Log out">Log out</button>
+      </div>
     </header>
 
     <main id="admin-main" class="admin-main">
@@ -80,6 +114,30 @@ const NAV = [
             await fetch("/api/admin/logout", { method: "POST" });
           } catch { /* ignore */ }
           window.location.href = "/admin/login";
+        });
+      });
+
+      // Build pill: click copies the full SHA to clipboard, flashes
+      // "copied!" briefly. The tooltip already shows the full info on
+      // hover — this just makes pasting it into a chat / commit message
+      // a one-click affair.
+      document.querySelectorAll<HTMLButtonElement>("[data-build-pill]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const sha = btn.dataset.sha;
+          if (!sha) return;
+          try {
+            await navigator.clipboard.writeText(sha);
+            const original = btn.innerHTML;
+            btn.innerHTML = '<span class="build-pill__copied">copied</span>';
+            btn.classList.add("is-copied");
+            setTimeout(() => {
+              btn.innerHTML = original;
+              btn.classList.remove("is-copied");
+            }, 1200);
+          } catch {
+            // Clipboard blocked (e.g. http context, denied permission) —
+            // the tooltip still works as a fallback for reading the SHA.
+          }
         });
       });
     </script>
@@ -138,6 +196,53 @@ const NAV = [
         border-bottom-color: var(--sn-gold);
       }
 
+      .admin-bar-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .build-pill {
+        background: transparent;
+        color: var(--sn-muted-stone);
+        border: 1px solid var(--sn-gold-12);
+        font-family: var(--font-body);
+        /* Tabular-style numerals so the SHA looks even */
+        font-variant-numeric: tabular-nums;
+        font-size: 0.66rem;
+        letter-spacing: 0.06em;
+        padding: 6px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+        line-height: 1;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: color 200ms ease, border-color 200ms ease, background-color 200ms ease;
+      }
+      .build-pill:hover,
+      .build-pill:focus-visible {
+        color: var(--sn-ivory);
+        border-color: var(--sn-gold-24);
+        outline: none;
+      }
+      .build-pill.is-copied {
+        color: var(--sn-gold);
+        border-color: var(--sn-gold-40);
+        background: rgba(212, 175, 55, 0.06);
+      }
+      .build-pill__sha {
+        color: var(--sn-ivory);
+        font-weight: 500;
+      }
+      .build-pill__sep {
+        opacity: 0.45;
+      }
+      .build-pill__copied {
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
       .logout-btn {
         background: transparent;
         color: var(--sn-muted-stone);
@@ -172,6 +277,12 @@ const NAV = [
         }
         .admin-nav { order: 3; flex-basis: 100%; }
         .admin-nav ul { gap: 14px; flex-wrap: wrap; }
+        /* Drop the date half of the build pill on narrow screens; the
+           SHA alone is plenty (the tooltip still has the full info). */
+        .build-pill__sep,
+        .build-pill__time {
+          display: none;
+        }
       }
     </style>
   </body>

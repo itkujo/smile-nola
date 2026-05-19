@@ -46,8 +46,25 @@ RUN corepack enable
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-ENV NODE_ENV=production
-RUN pnpm build
+# Build identity exposed to the SSR app so the admin UI can display
+# "what build am I running?" — useful when verifying that a deploy
+# actually landed and matches the git ref you pushed.
+#
+# GIT_SHA is fed in by Coolify via the predefined SOURCE_COMMIT variable
+# (requires "Include Source Commit in Build" enabled in the app's General
+# settings) — set GIT_SHA=$SOURCE_COMMIT in Coolify's Environment Variables.
+# Builds outside Coolify (local docker build, CI, etc.) without this arg
+# get 'dev' as a sentinel; the admin UI handles the fallback gracefully.
+#
+# BUILD_TIME is stamped inside the build itself so we always have a real
+# timestamp without needing to wire anything from outside.
+ARG GIT_SHA=dev
+ENV PUBLIC_GIT_SHA=${GIT_SHA}
+RUN PUBLIC_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+ && echo "PUBLIC_BUILD_TIME=${PUBLIC_BUILD_TIME}" \
+ && echo "PUBLIC_GIT_SHA=${PUBLIC_GIT_SHA}" \
+ && export PUBLIC_BUILD_TIME \
+ && NODE_ENV=production pnpm build
 
 # Prune devDependencies so the runtime image stays small.
 RUN pnpm prune --prod
