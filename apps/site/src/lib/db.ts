@@ -205,6 +205,51 @@ export function bootstrapSchema(db: Database.Database): void {
   archiveLegacyLeadsTable(db);
   migrateAddVscoTables(db);
   migrateAddVenueAddressColumns(db);
+  backfillInquiryExternalUuids(db);
+}
+
+/**
+ * One-shot backfill: assign external_uuid to any inquiry row missing one.
+ *
+ * Why: external_uuid is the stable lookup key the VSCO integration uses
+ * for idempotency. Booth-origin rows always arrive with one (the booth
+ * generates it). Website-origin rows started getting one auto-assigned
+ * in commit 7dc7fd8 (the "wire builder push into POST /api/package-builder"
+ * commit). Anyone who submitted via the marketing site BEFORE that commit
+ * deployed has external_uuid = NULL, which makes the VSCO push paths
+ * silently skip with "inquiry missing external_uuid".
+ *
+ * This migration finds those rows and assigns a fresh UUIDv4 to each.
+ *
+ * Safe to run on every cold start:
+ *   - Selects only `external_uuid IS NULL` rows, so re-runs are zero-cost
+ *   - Assigns a fresh UUID per row (independent calls to crypto.randomUUID),
+ *     so the UNIQUE partial index on external_uuid won't be violated
+ *   - Logs the affected row count so deploy logs surface what happened
+ *
+ * Once every inquiry has a UUID (probably forever after the first run),
+ * this becomes a no-op.
+ */
+function backfillInquiryExternalUuids(db: Database.Database): void {
+  const nullRows = db
+    .prepare<[], { id: number }>(
+      "SELECT id FROM inquiries WHERE external_uuid IS NULL",
+    )
+    .all();
+  if (nullRows.length === 0) return;
+
+  const update = db.prepare("UPDATE inquiries SET external_uuid = ? WHERE id = ?");
+  const tx = db.transaction((rows: Array<{ id: number }>) => {
+    for (const row of rows) {
+      update.run(crypto.randomUUID(), row.id);
+    }
+  });
+  tx(nullRows);
+
+  // eslint-disable-next-line no-console
+  console.log(
+    `[db] backfillInquiryExternalUuids: assigned UUIDs to ${nullRows.length} inquiry row(s)`,
+  );
 }
 
 /**
