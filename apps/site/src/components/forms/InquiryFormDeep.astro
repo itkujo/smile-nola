@@ -62,6 +62,36 @@ const BUDGET_RANGES = [
   "$25,000+",
   "Let's talk through what's possible",
 ] as const;
+
+/**
+ * Event start/end time options — 48 half-hour slots across the full day.
+ *
+ * `value` is what gets POSTed (HH:MM in 24-hour for downstream consumers
+ * like the VSCO Event endpoint). `label` is what the human reads
+ * (12-hour AM/PM, which is how wedding planners actually talk about
+ * times). This decoupling lets us speak both languages without making
+ * either side do mental math.
+ *
+ * Why a dropdown not a free-text input: ambiguous values like "4:30"
+ * (4:30 AM or PM?) silently break the VSCO push at the worksheet stage
+ * with a vague 400 error. A dropdown eliminates the ambiguity at the
+ * source. See normalizeTimeOfDay() in lib/vsco/mappings.ts for the
+ * defensive-parse layer that still handles older free-text data.
+ */
+const TIME_OPTIONS: Array<{ value: string; label: string }> = (() => {
+  const out: Array<{ value: string; label: string }> = [];
+  for (let h = 0; h < 24; h++) {
+    for (const m of [0, 30]) {
+      const value = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+      // 12-hour conversion: 0 → 12 AM, 12 → 12 PM, 13-23 → 1-11 PM.
+      const period = h < 12 ? "AM" : "PM";
+      const hour12 = h % 12 === 0 ? 12 : h % 12;
+      const label = `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+      out.push({ value, label });
+    }
+  }
+  return out;
+})();
 ---
 
 <form
@@ -260,14 +290,24 @@ const BUDGET_RANGES = [
 
           <label class="sn-field-wrap">
             <span class="sn-field-label">Event start time</span>
-            <input type="text" name="event_start" placeholder="e.g. 5:00pm" />
+            <select name="event_start">
+              <option value="">— choose —</option>
+              {TIME_OPTIONS.map((t) => (
+                <option value={t.value}>{t.label}</option>
+              ))}
+            </select>
             <span class="sn-underline"></span>
             <span class="sn-underline-glow"></span>
           </label>
 
           <label class="sn-field-wrap">
             <span class="sn-field-label">Event end time</span>
-            <input type="text" name="event_end" placeholder="e.g. 11:00pm" />
+            <select name="event_end">
+              <option value="">— choose —</option>
+              {TIME_OPTIONS.map((t) => (
+                <option value={t.value}>{t.label}</option>
+              ))}
+            </select>
             <span class="sn-underline"></span>
             <span class="sn-underline-glow"></span>
           </label>
