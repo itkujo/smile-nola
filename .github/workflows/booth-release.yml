@@ -1,0 +1,109 @@
+# ============================================================================
+# Booth image release workflow
+#
+# Builds + publishes the multi-arch standalone booth image to GitHub
+# Container Registry (ghcr.io/itkujo/smile-nola-booth).
+#
+# TRIGGERS
+#   • push to main (when booth-relevant paths change)  → publish :edge
+#   • push of a v* tag                                  → publish :X.Y.Z,
+#                                                         :X.Y, :X, :latest
+#   • manual workflow_dispatch                          → publish :edge for
+#                                                         debugging
+#
+# Build context is apps/intake/ (the booth source lives in the monorepo
+# under that path). The Dockerfile already handles better-sqlite3's
+# fcntl64-on-Alpine issue via a force-rebuild from source — see
+# apps/intake/Dockerfile for full notes.
+#
+# IMAGE NAME RATIONALE
+#   We publish as ghcr.io/itkujo/smile-nola-booth (NOT smile-nola/booth)
+#   so callers pulling the image don't need to know it's monorepo-sourced.
+#   The name reads as a standalone product.
+# ============================================================================
+
+name: Booth image release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - "apps/intake/**"
+      - ".github/workflows/booth-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  # Hardcoded image basename. NOT ${{ github.repository }} because that
+  # would yield ghcr.io/itkujo/smile-nola which collides with the main-site
+  # image namespace. Booth lives at its own /smile-nola-booth slot.
+  IMAGE_NAME: itkujo/smile-nola-booth
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU (for arm64 emulation on amd64 runners)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # Tag pushes produce semver tags and `latest`.
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            # main branch pushes produce :edge (unstable rolling).
+            type=raw,value=edge,enable={{is_default_branch}}
+            # Always produce a sha tag for traceability.
+            type=sha,prefix=sha-,format=short
+          flavor: |
+            latest=auto
+
+      - name: Build and push (multi-arch)
+        uses: docker/build-push-action@v6
+        with:
+          # Build context = apps/intake/ (the booth source root).
+          context: ./apps/intake
+          file: ./apps/intake/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # GHA cache keeps subsequent builds fast (better-sqlite3 native
+          # compile is the slow part; caching keeps it ~30s after first run).
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          echo "## Published image" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Pull with:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
