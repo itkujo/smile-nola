@@ -12,6 +12,17 @@ export interface EventDetailsValue {
   date: string;        // yyyy-mm-dd or ""
   type: string;        // "wedding" | "corporate" | "private" | "other" | ""
   venue: string;
+  // Optional structured venue address (populated when the user picked the
+  // venue from Google Places autocomplete). NULL when the user typed
+  // free-text. Kept as a flat structure rather than a nested object so
+  // localStorage persistence stays simple.
+  venueStreetAddress: string | null;
+  venueCity: string | null;
+  venueState: string | null;
+  venuePostalCode: string | null;
+  venueCountry: string | null;
+  venueLatitude: number | null;
+  venueLongitude: number | null;
   guestCount: number | null;
   note: string;
 }
@@ -58,6 +69,15 @@ function emptyState(invite: BuilderProps["invite"]): BuilderStateShape {
       date: invite?.prefill.event.date ?? "",
       type: invite?.prefill.event.type ?? "",
       venue: invite?.prefill.event.venue ?? "",
+      // Address fields aren't part of the invite prefill yet; they start
+      // null and get populated only if the client uses the autocomplete.
+      venueStreetAddress: null,
+      venueCity: null,
+      venueState: null,
+      venuePostalCode: null,
+      venueCountry: null,
+      venueLatitude: null,
+      venueLongitude: null,
       guestCount: invite?.prefill.event.guestCount ?? null,
       note: "",
     },

@@ -53,6 +53,13 @@ interface PendingRow {
   partner2_name: string | null;
   event_setting: string | null;
   poc_relationship: string | null;
+  venue_street_address: string | null;
+  venue_city: string | null;
+  venue_state: string | null;
+  venue_postal_code: string | null;
+  venue_country: string | null;
+  venue_latitude: number | null;
+  venue_longitude: number | null;
 }
 
 export interface SyncRunResult {
@@ -118,7 +125,10 @@ export async function runSyncOnce(): Promise<SyncRunResult> {
                 first_name, last_name, email, phone,
                 preferred_contact, event_date, venue,
                 collections_interested, notes,
-                partner1_name, partner2_name, event_setting, poc_relationship
+                partner1_name, partner2_name, event_setting, poc_relationship,
+                venue_street_address, venue_city, venue_state,
+                venue_postal_code, venue_country,
+                venue_latitude, venue_longitude
          FROM inquiries
          WHERE source = 'booth-expo'
            AND external_uuid IS NOT NULL

@@ -45,6 +45,13 @@ function buildSubmission(
     fixed_subtotal_cents: 69500,
     custom_quoted_json: null,
     warnings_json: null,
+    venue_street_address: null,
+    venue_city: null,
+    venue_state: null,
+    venue_postal_code: null,
+    venue_country: null,
+    venue_latitude: null,
+    venue_longitude: null,
     notes: null,
     ...overrides,
   };
@@ -84,6 +91,14 @@ function buildLinkedInquiry(
     synced_at: "2026-05-10T00:01:00.000Z",
     source_legacy_id: null,
     deleted_at: null,
+    qualified_at: null,
+    venue_street_address: null,
+    venue_city: null,
+    venue_state: null,
+    venue_postal_code: null,
+    venue_country: null,
+    venue_latitude: null,
+    venue_longitude: null,
     ...overrides,
   };
 }

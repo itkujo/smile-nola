@@ -28,6 +28,7 @@ import { getInvite, markInviteConsumed } from "@/lib/builder/invites";
 import { sendBuilderSubmissionNotification } from "@/lib/email";
 import { clientIp, rateLimit } from "@/lib/auth";
 import { getDb, getInquiry } from "@/lib/db";
+import { pushBuilderToVsco } from "@/lib/vsco/push";
 
 export const prerender = false;
 
@@ -133,6 +134,13 @@ export const POST: APIRoute = async ({ request }) => {
       warnings_json: computed.warnings.length > 0
         ? JSON.stringify(computed.warnings)
         : null,
+      venue_street_address: data.event.venue_street_address,
+      venue_city:           data.event.venue_city,
+      venue_state:          data.event.venue_state,
+      venue_postal_code:    data.event.venue_postal_code,
+      venue_country:        data.event.venue_country,
+      venue_latitude:       data.event.venue_latitude,
+      venue_longitude:      data.event.venue_longitude,
     });
   } catch (err) {
     console.error("[/api/package-builder] DB insert failed:", err);
@@ -148,6 +156,10 @@ export const POST: APIRoute = async ({ request }) => {
   if (row) {
     const linkedInquiry = inquiryId != null ? (getInquiry(inquiryId) ?? null) : null;
     void sendBuilderSubmissionNotification(row, computed, linkedInquiry);
+    // Mirror to VSCO Workspace (no-op when VSCO_ENABLED=0 or the linked
+    // inquiry isn't qualified yet). Fire-and-forget — never blocks the
+    // response, never throws, always records an audit row.
+    void pushBuilderToVsco(row);
   }
 
   // ---- 8. Respond --------------------------------------------------------

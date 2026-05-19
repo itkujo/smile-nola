@@ -90,12 +90,43 @@ function open(): Database.Database {
       external_uuid          TEXT,
       synced_at              TEXT,
       source_legacy_id       INTEGER,
-      deleted_at             TEXT
+      deleted_at             TEXT,
+      venue_street_address   TEXT,
+      venue_city             TEXT,
+      venue_state            TEXT,
+      venue_postal_code      TEXT,
+      venue_country          TEXT,
+      venue_latitude         REAL,
+      venue_longitude        REAL
     );
     CREATE INDEX IF NOT EXISTS idx_inq_created_at ON inquiries(created_at);
     CREATE INDEX IF NOT EXISTS idx_inq_source     ON inquiries(source);
     CREATE INDEX IF NOT EXISTS idx_inq_deleted_at ON inquiries(deleted_at);
   `);
+
+  // Idempotent ALTER for older booth installs (CREATE TABLE above only
+  // runs on a fresh DB). Same pattern as the site's bootstrap.
+  type ColInfo = { name: string };
+  const cols = db
+    .prepare<[], ColInfo>("PRAGMA table_info(inquiries)")
+    .all() as ColInfo[];
+  const have = new Set(cols.map((c) => c.name));
+  for (const col of [
+    "venue_street_address",
+    "venue_city",
+    "venue_state",
+    "venue_postal_code",
+    "venue_country",
+  ]) {
+    if (!have.has(col)) {
+      db.exec(`ALTER TABLE inquiries ADD COLUMN ${col} TEXT;`);
+    }
+  }
+  for (const col of ["venue_latitude", "venue_longitude"]) {
+    if (!have.has(col)) {
+      db.exec(`ALTER TABLE inquiries ADD COLUMN ${col} REAL;`);
+    }
+  }
 
   return db;
 }
@@ -125,6 +156,13 @@ interface InquiryBoothRow {
   notes: string | null;
   source: string;
   deleted_at: string | null;
+  venue_street_address: string | null;
+  venue_city: string | null;
+  venue_state: string | null;
+  venue_postal_code: string | null;
+  venue_country: string | null;
+  venue_latitude: number | null;
+  venue_longitude: number | null;
 }
 
 function rowToHydratedLead(row: InquiryBoothRow): HydratedLead {
@@ -155,6 +193,13 @@ function rowToHydratedLead(row: InquiryBoothRow): HydratedLead {
     partner2Name: row.partner2_name,
     eventDate: row.event_date ?? "",
     venueName: row.venue,
+    venueStreetAddress: row.venue_street_address,
+    venueCity: row.venue_city,
+    venueState: row.venue_state,
+    venuePostalCode: row.venue_postal_code,
+    venueCountry: row.venue_country,
+    venueLatitude: row.venue_latitude,
+    venueLongitude: row.venue_longitude,
     setting: row.event_setting ?? "",
     collectionsInterested: collections,
     notes: row.notes,
@@ -171,14 +216,18 @@ const insertStmt = () =>
       preferred_contact, event_date, event_type, venue,
       collections_interested, notes,
       partner1_name, partner2_name, event_setting, poc_relationship,
-      external_uuid
+      external_uuid,
+      venue_street_address, venue_city, venue_state, venue_postal_code,
+      venue_country, venue_latitude, venue_longitude
     ) VALUES (
       @created_at, '${BOOTH_SOURCE}', 'new',
       @first_name, @last_name, @email, @phone,
       @preferred_contact, @event_date, 'wedding', @venue,
       @collections_interested, @notes,
       @partner1_name, @partner2_name, @event_setting, @poc_relationship,
-      @external_uuid
+      @external_uuid,
+      @venue_street_address, @venue_city, @venue_state, @venue_postal_code,
+      @venue_country, @venue_latitude, @venue_longitude
     )
   `);
 
@@ -220,6 +269,13 @@ export function insertLead(lead: Lead): { id: number; capturedAt: string } {
     event_setting: lead.setting,
     poc_relationship: lead.pocRelationship,
     external_uuid: crypto.randomUUID(),
+    venue_street_address: lead.venueStreetAddress ?? null,
+    venue_city: lead.venueCity ?? null,
+    venue_state: lead.venueState ?? null,
+    venue_postal_code: lead.venuePostalCode ?? null,
+    venue_country: lead.venueCountry ?? null,
+    venue_latitude: lead.venueLatitude ?? null,
+    venue_longitude: lead.venueLongitude ?? null,
   });
 
   // SOURCE_DEFAULT is kept exported for the existing UI strings ("New
@@ -241,7 +297,9 @@ export function getAllLeads({
       `SELECT id, created_at, first_name, last_name, email, phone,
               poc_relationship, preferred_contact,
               partner1_name, partner2_name, event_date, venue,
-              event_setting, collections_interested, notes, source, deleted_at
+              event_setting, collections_interested, notes, source, deleted_at,
+              venue_street_address, venue_city, venue_state,
+              venue_postal_code, venue_country, venue_latitude, venue_longitude
        FROM inquiries
        WHERE ${where}
        ORDER BY created_at DESC`,

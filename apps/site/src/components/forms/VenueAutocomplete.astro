@@ -1,0 +1,317 @@
+---
+/**
+ * Venue autocomplete combobox.
+ *
+ * Usage:
+ *   <VenueAutocomplete
+ *     id="contact-venue"
+ *     label="Venue (name or location)"
+ *     placeholder="e.g. Saenger Theatre, New Orleans"
+ *     initialValue={savedDraft?.venue ?? ''}
+ *   />
+ *
+ * Renders a visible text input + 7 hidden inputs that the form submits:
+ *   venue_street_address, venue_city, venue_state, venue_postal_code,
+ *   venue_country, venue_latitude, venue_longitude
+ *
+ * When the user picks a suggestion from the dropdown, the hidden fields
+ * get populated. When the user edits the visible input after a pick,
+ * the hidden fields clear (acts like fresh free-text entry).
+ *
+ * Free-text entry without picking is fully supported — the visible
+ * input always submits as `name="venue"`. Hidden fields stay empty.
+ *
+ * Server-side: the /api/places/* proxy handles the Google API key.
+ * If the proxy returns 5xx (key missing / Google down), the dropdown
+ * silently disappears and the user can still submit free text.
+ */
+
+interface Props {
+  id: string;
+  label: string;
+  name?: string;
+  placeholder?: string;
+  initialValue?: string;
+  required?: boolean;
+  inputClass?: string;
+}
+
+const {
+  id,
+  label,
+  name = 'venue',
+  placeholder = '',
+  initialValue = '',
+  required = false,
+  inputClass = '',
+} = Astro.props;
+---
+
+<label class="sn-field-label" for={id}>
+  <span>{label}{required ? ' *' : ''}</span>
+  <div class="venue-ac" data-venue-ac>
+    <input
+      type="text"
+      id={id}
+      name={name}
+      placeholder={placeholder}
+      value={initialValue}
+      autocomplete="off"
+      role="combobox"
+      aria-autocomplete="list"
+      aria-expanded="false"
+      aria-controls={`${id}-listbox`}
+      required={required}
+      class={inputClass}
+      data-venue-input
+    />
+    <ul
+      id={`${id}-listbox`}
+      role="listbox"
+      class="venue-ac__listbox"
+      hidden
+      data-venue-listbox
+    ></ul>
+    <input type="hidden" name="venue_street_address" data-venue-field="streetAddress" />
+    <input type="hidden" name="venue_city" data-venue-field="city" />
+    <input type="hidden" name="venue_state" data-venue-field="state" />
+    <input type="hidden" name="venue_postal_code" data-venue-field="postalCode" />
+    <input type="hidden" name="venue_country" data-venue-field="country" />
+    <input type="hidden" name="venue_latitude" data-venue-field="latitude" />
+    <input type="hidden" name="venue_longitude" data-venue-field="longitude" />
+  </div>
+</label>
+
+<script>
+  type Suggestion = { placeId: string; mainText: string; secondaryText: string };
+  type ParsedPlace = {
+    name: string;
+    streetAddress: string | null;
+    city: string | null;
+    state: string | null;
+    postalCode: string | null;
+    country: string | null;
+    latitude: number;
+    longitude: number;
+  };
+
+  const FIELDS: Array<Exclude<keyof ParsedPlace, 'name'>> = [
+    'streetAddress',
+    'city',
+    'state',
+    'postalCode',
+    'country',
+    'latitude',
+    'longitude',
+  ];
+
+  function debounce<T extends (...a: any[]) => void>(fn: T, ms: number): T {
+    let h: ReturnType<typeof setTimeout> | null = null;
+    return ((...args: any[]) => {
+      if (h) clearTimeout(h);
+      h = setTimeout(() => fn(...args), ms);
+    }) as T;
+  }
+
+  function initVenueAc(root: HTMLElement) {
+    const input = root.querySelector<HTMLInputElement>('[data-venue-input]')!;
+    const listbox = root.querySelector<HTMLUListElement>('[data-venue-listbox]')!;
+    const fields = new Map<string, HTMLInputElement>();
+    root.querySelectorAll<HTMLInputElement>('[data-venue-field]').forEach((el) => {
+      fields.set(el.dataset.venueField!, el);
+    });
+
+    let suggestions: Suggestion[] = [];
+    let activeIndex = -1;
+    let isPicked = false;
+
+    function clearAddressFields() {
+      for (const key of FIELDS) {
+        const el = fields.get(key);
+        if (el) el.value = '';
+      }
+    }
+
+    function applyPicked(p: ParsedPlace) {
+      input.value = p.name;
+      for (const key of FIELDS) {
+        const el = fields.get(key);
+        if (!el) continue;
+        const v = p[key];
+        el.value = v == null ? '' : String(v);
+      }
+      isPicked = true;
+      closeList();
+    }
+
+    function renderList() {
+      listbox.innerHTML = '';
+      activeIndex = -1;
+      if (suggestions.length === 0) {
+        closeList();
+        return;
+      }
+      suggestions.forEach((s, i) => {
+        const li = document.createElement('li');
+        li.id = `${input.id}-opt-${i}`;
+        li.setAttribute('role', 'option');
+        li.setAttribute('aria-selected', 'false');
+        li.className = 'venue-ac__opt';
+        const main = document.createElement('span');
+        main.className = 'venue-ac__opt-main';
+        main.textContent = s.mainText;
+        const sec = document.createElement('span');
+        sec.className = 'venue-ac__opt-sec';
+        sec.textContent = s.secondaryText;
+        li.appendChild(main);
+        if (s.secondaryText) li.appendChild(sec);
+        li.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          pick(i);
+        });
+        listbox.appendChild(li);
+      });
+      openList();
+    }
+
+    function openList() {
+      listbox.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+    }
+
+    function closeList() {
+      listbox.hidden = true;
+      input.setAttribute('aria-expanded', 'false');
+      input.removeAttribute('aria-activedescendant');
+    }
+
+    function setActive(i: number) {
+      const opts = Array.from(listbox.querySelectorAll<HTMLLIElement>('[role="option"]'));
+      opts.forEach((el, idx) => {
+        el.setAttribute('aria-selected', idx === i ? 'true' : 'false');
+        el.classList.toggle('is-active', idx === i);
+      });
+      activeIndex = i;
+      if (i >= 0 && opts[i]) {
+        input.setAttribute('aria-activedescendant', opts[i].id);
+      } else {
+        input.removeAttribute('aria-activedescendant');
+      }
+    }
+
+    async function pick(i: number) {
+      const s = suggestions[i];
+      if (!s) return;
+      try {
+        const res = await fetch(`/api/places/details?id=${encodeURIComponent(s.placeId)}`);
+        if (!res.ok) {
+          // Failed to fetch details — keep what they typed as free text.
+          input.value = s.mainText;
+          clearAddressFields();
+          closeList();
+          return;
+        }
+        const data: ParsedPlace = await res.json();
+        applyPicked(data);
+      } catch {
+        input.value = s.mainText;
+        clearAddressFields();
+        closeList();
+      }
+    }
+
+    async function search(q: string) {
+      if (!q || q.length < 2) {
+        suggestions = [];
+        renderList();
+        return;
+      }
+      try {
+        const res = await fetch(`/api/places/autocomplete?q=${encodeURIComponent(q)}`);
+        if (!res.ok) {
+          suggestions = [];
+          renderList();
+          return;
+        }
+        const data: { suggestions: Suggestion[] } = await res.json();
+        suggestions = data.suggestions ?? [];
+        renderList();
+      } catch {
+        suggestions = [];
+        renderList();
+      }
+    }
+
+    const debouncedSearch = debounce(search, 250);
+
+    input.addEventListener('input', () => {
+      if (isPicked) {
+        clearAddressFields();
+        isPicked = false;
+      }
+      debouncedSearch(input.value.trim());
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (listbox.hidden || suggestions.length === 0) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActive((activeIndex + 1) % suggestions.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActive(activeIndex <= 0 ? suggestions.length - 1 : activeIndex - 1);
+      } else if (e.key === 'Enter' && activeIndex >= 0) {
+        e.preventDefault();
+        pick(activeIndex);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        closeList();
+      }
+    });
+
+    input.addEventListener('blur', () => {
+      setTimeout(closeList, 150); // let mousedown on option fire first
+    });
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-venue-ac]').forEach(initVenueAc);
+</script>
+
+<style>
+  .venue-ac { position: relative; display: block; }
+  .venue-ac__listbox {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin: 4px 0 0;
+    padding: 4px 0;
+    list-style: none;
+    background: white;
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    max-height: 280px;
+    overflow-y: auto;
+    z-index: 50;
+  }
+  .venue-ac__opt {
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .venue-ac__opt:hover,
+  .venue-ac__opt.is-active {
+    background: rgba(0, 0, 0, 0.06);
+  }
+  .venue-ac__opt-main {
+    font-weight: 500;
+    color: var(--sn-color-text, #1a1a1a);
+  }
+  .venue-ac__opt-sec {
+    font-size: 0.875em;
+    color: rgba(0, 0, 0, 0.6);
+  }
+</style>

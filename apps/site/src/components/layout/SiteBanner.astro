@@ -7,11 +7,16 @@
  * never throws — it just renders nothing when the banner is disabled.
  *
  * Dismissal: when the visitor closes the banner, we store the current
- * content hash (server-computed at render time) in localStorage under
- * `sn-banner-dismissed`. On the next page load, an inline script hides
- * the banner immediately if the stored hash matches the current one.
- * Changing the message on the admin side rolls the hash and re-shows the
- * banner to everyone — which is exactly what you want for a new sale.
+ * content hash (server-computed at render time) in sessionStorage under
+ * `sn-banner-dismissed`. On subsequent page loads within the same
+ * browsing session, an inline script hides the banner immediately if the
+ * stored hash matches. Closing the tab / browser clears sessionStorage,
+ * so the banner returns on the next visit — respect the dismiss intent
+ * for now, but don't burn the campaign forever.
+ *
+ * Changing the message on the admin side ALSO re-shows the banner
+ * immediately (the new content hash won't match anyone's stored value),
+ * which is what you want for a new sale.
  *
  * Variants:
  *   gold      — calm announcement / general (default)
@@ -171,52 +176,96 @@ const contentHash = shouldRender ? bannerContentHash(banner) : "";
 </style>
 
 <script is:inline>
-  // Dismiss + persistence + CSS variable for the fixed SiteHeader offset.
-  // Inline (not type=module) so it runs before hydration and doesn't flash
-  // the banner for returning visitors who already dismissed this exact
-  // content.
+  // Dismiss + per-session persistence + CSS variable for the fixed
+  // SiteHeader offset. Inline (not type=module) so it runs before
+  // hydration and doesn't flash the banner for visitors who dismissed
+  // earlier in the SAME browsing session.
+  //
+  // sessionStorage is intentional — the banner returns on the next visit
+  // (new tab tomorrow, fresh browser) so an active campaign isn't burned
+  // forever by a single click. The content hash still acts as a kill
+  // switch: when the admin changes the message, no stored hash matches
+  // and everyone sees the new banner immediately.
   (function () {
     var STORAGE_KEY = "sn-banner-dismissed";
     var banner = document.querySelector("[data-banner-hash]");
     if (!banner) return;
 
     var currentHash = banner.getAttribute("data-banner-hash");
+    var root = document.documentElement;
+    var setOffset = function (px) {
+      root.style.setProperty("--sn-banner-height", px + "px");
+    };
     var hideBanner = function () {
       banner.setAttribute("hidden", "");
-      document.documentElement.style.setProperty("--sn-banner-height", "0px");
-    };
-    var publishHeight = function () {
-      // Expose the actual rendered height so the fixed SiteHeader can
-      // offset itself via top: var(--sn-banner-height). Measured rather
-      // than hard-coded so message wrapping on narrow screens doesn't
-      // overlap the header.
-      var h = banner.getBoundingClientRect().height;
-      document.documentElement.style.setProperty("--sn-banner-height", h + "px");
+      setOffset(0);
     };
 
+    // Publish how much of the banner is STILL VISIBLE in the viewport.
+    // The fixed SiteHeader uses this as its `top` offset, so as the
+    // visitor scrolls past the banner the header slides up flush to
+    // y=0. Critically this means scrolling back to the very top puts
+    // the banner above the header (correct) and scrolling away leaves
+    // the header at the screen edge with no phantom gap below the
+    // banner (the bug we're fixing).
+    var publishVisibleHeight = function () {
+      var rect = banner.getBoundingClientRect();
+      // visibleBottom = how far the banner's bottom edge is below y=0.
+      // Clamp to [0, fullHeight]. When the banner is fully scrolled out,
+      // rect.bottom <= 0 → offset 0. When sitting at the top, rect.bottom
+      // ≈ rect.height → offset equals the full banner height.
+      var visible = Math.max(0, Math.min(rect.height, rect.bottom));
+      setOffset(visible);
+    };
+
+    // rAF-throttled scroll handler — getBoundingClientRect + a CSS var
+    // write per frame is cheap (no layout thrash), but we still pin
+    // updates to one per animation frame for predictable timing.
+    var pending = false;
+    var onScroll = function () {
+      if (pending) return;
+      pending = true;
+      requestAnimationFrame(function () {
+        pending = false;
+        publishVisibleHeight();
+      });
+    };
+
+    // Best-effort cleanup of the previous deploy's localStorage entry.
+    // Old visitors had their dismissal written to localStorage; without
+    // this they'd be carrying a permanent dismiss-this-banner record
+    // they can never see clear, even though we no longer read from it.
     try {
-      var dismissed = localStorage.getItem(STORAGE_KEY);
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (_) { /* storage blocked, nothing to clean */ }
+
+    try {
+      var dismissed = sessionStorage.getItem(STORAGE_KEY);
       if (dismissed === currentHash) {
         hideBanner();
         return;
       }
     } catch (_) {
-      // localStorage blocked (Safari private mode etc.) — degrade to
+      // sessionStorage blocked (Safari private mode etc.) — degrade to
       // "always show, dismissals don't persist." Better than a hard error.
     }
 
-    publishHeight();
-    window.addEventListener("resize", publishHeight, { passive: true });
+    publishVisibleHeight();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", publishVisibleHeight, { passive: true });
 
     var btn = banner.querySelector("[data-banner-dismiss]");
     if (!btn) return;
     btn.addEventListener("click", function () {
       hideBanner();
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", publishVisibleHeight);
       try {
-        localStorage.setItem(STORAGE_KEY, currentHash);
+        sessionStorage.setItem(STORAGE_KEY, currentHash);
       } catch (_) {
         // No persistence available; the banner is still hidden for this
-        // session because we set the `hidden` attribute above.
+        // page because we set the `hidden` attribute above. Navigating
+        // to another page would re-show it — acceptable degraded path.
       }
     });
   })();

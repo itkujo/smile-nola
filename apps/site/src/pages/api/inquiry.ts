@@ -92,6 +92,13 @@ export const POST: APIRoute = async ({ request }) => {
       message: data.message ?? null,
       collections_interested: [data.collection],
       collection_fields: collectionFields,
+      venue_street_address: data.venue_street_address ?? null,
+      venue_city: data.venue_city ?? null,
+      venue_state: data.venue_state ?? null,
+      venue_postal_code: data.venue_postal_code ?? null,
+      venue_country: data.venue_country ?? null,
+      venue_latitude: data.venue_latitude ?? null,
+      venue_longitude: data.venue_longitude ?? null,
     });
   } catch (err) {
     console.error("[/api/inquiry] DB insert failed:", err);

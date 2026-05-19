@@ -21,6 +21,25 @@ const optionalTrim = (max = 200) =>
     .or(z.literal(""))
     .transform((v) => (v ? v : undefined));
 
+/**
+ * Venue address sub-fields. Populated only when the user picked the
+ * venue from Google Places autocomplete; absent or empty for free-text
+ * submissions. All fields are optional so old clients submitting just
+ * `venue` still validate.
+ *
+ * Inline (snake_case) variant used directly inside InquiryShortSchema
+ * and InquiryDeepSchema below.
+ */
+const venueAddressFieldsSnake = {
+  venue_street_address: optionalTrim(200),
+  venue_city: optionalTrim(80),
+  venue_state: optionalTrim(40),
+  venue_postal_code: optionalTrim(20),
+  venue_country: optionalTrim(2),
+  venue_latitude: z.coerce.number().min(-90).max(90).optional(),
+  venue_longitude: z.coerce.number().min(-180).max(180).optional(),
+};
+
 /* ---- Lightweight form (collection-page embed) ----------------------------- */
 
 export const InquiryShortSchema = z.object({
@@ -48,6 +67,9 @@ export const InquiryShortSchema = z.object({
   source: trim(80).default("contact"),
   /** Tier slug from the PackagesWidget Reserve CTA (e.g. "memory", "mirror"). */
   selected_package: optionalTrim(60),
+
+  // Optional structured venue address from Places autocomplete.
+  ...venueAddressFieldsSnake,
 });
 
 export type InquiryShortInput = z.infer<typeof InquiryShortSchema>;
@@ -86,6 +108,9 @@ export const InquiryDeepSchema = z.object({
   /** Per-collection answer bundle: { aurora: { video_wall_size: "..." }, ... } */
   collection_fields: z.record(z.string(), z.unknown()).optional(),
   source: trim(80).default("contact"),
+
+  // Optional structured venue address from Places autocomplete.
+  ...venueAddressFieldsSnake,
 });
 
 export type InquiryDeepInput = z.infer<typeof InquiryDeepSchema>;
@@ -136,6 +161,16 @@ const builderEventSchema = z.object({
     .transform((v) => (v ? v : null)),
   type:  nullableTrim(80),
   venue: nullableTrim(160),
+  // Optional structured venue address (from Places autocomplete). All
+  // nullable so old builder payloads (sending only `venue` as a string)
+  // continue to validate.
+  venue_street_address: nullableTrim(200),
+  venue_city:           nullableTrim(80),
+  venue_state:          nullableTrim(40),
+  venue_postal_code:    nullableTrim(20),
+  venue_country:        nullableTrim(2),
+  venue_latitude:  z.coerce.number().min(-90).max(90).nullish().transform((v) => v ?? null),
+  venue_longitude: z.coerce.number().min(-180).max(180).nullish().transform((v) => v ?? null),
   guestCount: z.coerce.number().int().min(0).max(100000).nullish().transform((v) => v ?? null),
   note: nullableTrim(4000),
 });

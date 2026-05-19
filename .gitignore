@@ -15,6 +15,18 @@ build/
 .env.local
 .env*.local
 
+# VSCO Workspace integration — resolved studio IDs.
+#
+# We DO commit apps/site/vsco-config.json so production deploys have the
+# file available without needing to run the bootstrap inside the container.
+# The contents are non-secret (ULIDs that identify lookup entries in the
+# studio); only VSCO_API_KEY is sensitive and it lives in env vars.
+#
+# If you regenerate the config (e.g. you re-bootstrap a fresh studio), the
+# resulting file should be committed. The bootstrap script is idempotent
+# and re-running it against an already-configured studio produces an
+# equivalent file with the same ULIDs.
+
 # Data (booth captures)
 data/
 *.db

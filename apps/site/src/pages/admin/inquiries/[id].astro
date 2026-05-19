@@ -4,7 +4,7 @@
  * Editable: status + admin notes. Everything else is read-only.
  */
 import AdminLayout from "@/layouts/AdminLayout.astro";
-import { getInquiry } from "@/lib/db";
+import { getInquiry, getVscoEntities, getVscoPushesForInquiry } from "@/lib/db";
 import { inquiryProjectName } from "@/lib/project-name";
 
 const id = Number(Astro.params.id);
@@ -35,10 +35,16 @@ try {
     }
   }
 } catch { /* ignore */ }
+
+// VSCO Workspace integration state
+const isQualified = !!inquiry.qualified_at;
+const vscoEntities = isQualified ? getVscoEntities(inquiry.external_uuid ?? "") : [];
+const vscoPushes = getVscoPushesForInquiry(inquiry.id);
+const jobEntity = vscoEntities.find((e) => e.kind === "job");
 ---
 
 <AdminLayout title={`Inquiry #${inquiry.id}`} section="inquiries">
-  <p class="back-link"><a href="/admin/inquiries">← All inquiries</a></p>
+  <p class="back-link"><a href="/admin/inquiries">← Back to inquiries</a></p>
 
   <header class="head">
     <div>
@@ -103,6 +109,95 @@ try {
     </form>
   </section>
 
+  <section class="status-block vsco-block">
+    <h2>VSCO Workspace</h2>
+
+    {/* Status summary — always shown so the operator can see at a glance
+        what state this lead is in. */}
+    <div class="vsco-row">
+      <dl class="kv">
+        <div>
+          <dt>Qualified at</dt>
+          <dd>{inquiry.qualified_at ?? <span class="muted">— not yet —</span>}</dd>
+        </div>
+        {jobEntity && (
+          <div>
+            <dt>VSCO Job ID</dt>
+            <dd class="muted mono">{jobEntity.vsco_id}</dd>
+          </div>
+        )}
+        {isQualified && !jobEntity && (
+          <div>
+            <dt>VSCO status</dt>
+            <dd class="muted">No Job in VSCO yet — push pending or previously failed.</dd>
+          </div>
+        )}
+      </dl>
+    </div>
+
+    {/* Action button — its label and behavior depend on state:
+        - not qualified              → "Mark Qualified"    (qualifies + pushes)
+        - qualified, no Job yet      → "Push to VSCO"      (retry push)
+        - qualified, Job exists      → "Re-sync to VSCO"   (read-modify-write update)
+        All three call the same endpoint; the backend decides what to do. */}
+    <div class="vsco-row">
+      <div class="form-actions">
+        <button type="button" class="btn-gold" id="qualify-btn">
+          {!isQualified && "Mark Qualified"}
+          {isQualified && !jobEntity && "Push to VSCO"}
+          {isQualified && jobEntity && "Re-sync to VSCO"}
+        </button>
+        <span class="qualify-status" aria-live="polite"></span>
+      </div>
+      {isQualified && (
+        <p class="muted vsco-hint">
+          {!jobEntity
+            ? "Retrying the push. Audit history below will record the outcome."
+            : "Pushes the current inquiry data to the existing VSCO Job (read-modify-write)."}
+        </p>
+      )}
+    </div>
+    {vscoPushes.length > 0 && (
+      <details class="vsco-history">
+        <summary>Sync history ({vscoPushes.length})</summary>
+        <ul class="vsco-history-list">
+          {vscoPushes.slice(0, 20).map((p) => {
+            // Pretty-print the error body if it parses as JSON, otherwise
+            // show it raw. VSCO returns RFC-7807-style problem JSON for
+            // validation errors; pretty-printing makes the failing field
+            // legible without copy-paste-into-jq gymnastics.
+            let prettyError: string | null = null;
+            if (p.verdict === "failed" && p.error_body) {
+              try {
+                prettyError = JSON.stringify(JSON.parse(p.error_body), null, 2);
+              } catch {
+                prettyError = p.error_body;
+              }
+            }
+            return (
+              <li class={`vsco-push is-${p.verdict}`}>
+                <div class="vsco-push-row">
+                  <span class="vsco-when muted">{p.created_at}</span>
+                  <span class={`vsco-verdict is-${p.verdict}`}>{p.verdict}</span>
+                  <span class="muted">·</span>
+                  <span class="vsco-trigger">{p.trigger}</span>
+                  {p.http_status !== null && <span class="muted">· HTTP {p.http_status}</span>}
+                  {p.notes && <span class="muted">· {p.notes}</span>}
+                </div>
+                {prettyError && (
+                  <details class="vsco-error-detail">
+                    <summary>Show VSCO response body</summary>
+                    <pre class="vsco-error-body">{prettyError}</pre>
+                  </details>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </details>
+    )}
+  </section>
+
   <section class="block">
     <h2>Contact</h2>
     <dl class="kv">
@@ -120,7 +215,32 @@ try {
     <dl class="kv">
       <div><dt>Date</dt><dd>{inquiry.event_date || "—"}</dd></div>
       <div><dt>Type</dt><dd>{inquiry.event_type || "—"}</dd></div>
-      <div><dt>Venue</dt><dd>{inquiry.venue || "—"}</dd></div>
+      <div>
+        <dt>Venue</dt>
+        <dd>
+          {inquiry.venue || "—"}
+          {(inquiry.venue_street_address || inquiry.venue_city) && (
+            <div class="venue-detail">
+              {[
+                inquiry.venue_street_address,
+                inquiry.venue_city,
+                inquiry.venue_state,
+                inquiry.venue_postal_code,
+              ].filter(Boolean).join(", ")}
+            </div>
+          )}
+          {inquiry.venue_latitude != null && inquiry.venue_longitude != null && (
+            <a
+              class="venue-map-link"
+              href={`https://www.google.com/maps?q=${inquiry.venue_latitude},${inquiry.venue_longitude}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View on map ↗
+            </a>
+          )}
+        </dd>
+      </div>
       <div><dt>Guest count</dt><dd>{inquiry.guest_count ?? "—"}</dd></div>
       <div><dt>Start</dt><dd>{inquiry.event_start || "—"}</dd></div>
       <div><dt>End</dt><dd>{inquiry.event_end || "—"}</dd></div>
@@ -191,6 +311,51 @@ try {
 </AdminLayout>
 
 <script define:vars={{ inquiryId: inquiry.id }}>
+  // VSCO action button — POSTs to the qualify endpoint, reloads the page
+  // on success so the new qualified_at and any VSCO entities show up.
+  //
+  // The same endpoint handles three semantic actions:
+  //   1. Mark Qualified  (first time)
+  //   2. Push to VSCO    (qualified but no Job yet)
+  //   3. Re-sync to VSCO (qualified and Job exists)
+  //
+  // The endpoint figures out which case applies and does the right thing.
+  // We give the fire-and-forget VSCO push 2.5s to land before reloading,
+  // because the audit row only appears after the fetch resolves.
+  const qualifyBtn = document.getElementById("qualify-btn");
+  const qualifyStatus = qualifyBtn?.parentElement?.querySelector(".qualify-status");
+  qualifyBtn?.addEventListener("click", async () => {
+    if (!qualifyStatus) return;
+    const originalLabel = qualifyBtn.textContent ?? "Update VSCO";
+    const verbing = originalLabel.startsWith("Mark") ? "Qualifying…"
+                  : originalLabel.startsWith("Push") ? "Pushing…"
+                  : "Syncing…";
+    qualifyBtn.setAttribute("disabled", "true");
+    qualifyBtn.textContent = verbing;
+    qualifyStatus.textContent = "";
+    qualifyStatus.style.color = "";
+    try {
+      const res = await fetch(`/api/admin/inquiries/${inquiryId}/qualify`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Server responded ${res.status}`);
+      }
+      qualifyStatus.textContent = "✓ Reloading to show result…";
+      qualifyStatus.style.color = "var(--sn-gold)";
+      // 2.5s gives the fire-and-forget push time to: hit VSCO, get a
+      // response, write the audit row, write any vsco_entities. With
+      // a fast network this is overkill; with a slow one it's borderline.
+      setTimeout(() => { window.location.reload(); }, 2500);
+    } catch (err) {
+      qualifyStatus.textContent = err instanceof Error ? err.message : "Action failed";
+      qualifyStatus.style.color = "var(--sn-amber)";
+      qualifyBtn.removeAttribute("disabled");
+      qualifyBtn.textContent = originalLabel;
+    }
+  });
+
   const form = document.getElementById("status-form");
   const saveStatus = form?.querySelector(".save-status");
   const submitBtn = form?.querySelector(".submit-btn");
@@ -295,6 +460,26 @@ try {
     transition: color 200ms ease;
   }
   .back-link a:hover { color: var(--sn-gold); }
+
+  .venue-detail {
+    margin-top: 2px;
+    font-size: 0.85em;
+    color: var(--sn-muted-stone);
+    opacity: 0.85;
+  }
+  .venue-map-link {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 0.78em;
+    letter-spacing: 0.08em;
+    color: var(--sn-gold);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--sn-gold-40);
+  }
+  .venue-map-link:hover {
+    color: var(--sn-gold);
+    border-bottom-color: var(--sn-gold);
+  }
 
   .head {
     display: flex;
@@ -541,6 +726,83 @@ try {
 
   /* Booth-expo block: visual cue that this lead came from a kiosk capture. */
   .booth-block { border-left: 2px solid var(--sn-amber); }
+
+  /* VSCO block — green when qualified, amber otherwise. Same shape as the
+     status-block so it sits naturally below it. */
+  .vsco-block { border-left: 2px solid var(--sn-gold); }
+  .vsco-row { margin: 0.5rem 0; }
+  .vsco-history {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed rgba(212, 175, 55, 0.18);
+  }
+  .vsco-history summary {
+    cursor: pointer;
+    color: var(--sn-muted-stone);
+    font-size: 0.85rem;
+  }
+  .vsco-history-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.75rem 0 0;
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+  .vsco-push {
+    padding: 0.25rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+  .vsco-push-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: baseline;
+  }
+  .vsco-when { font-family: ui-monospace, monospace; font-size: 0.78rem; }
+  .vsco-verdict {
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    padding: 0.05em 0.5em;
+    border-radius: 4px;
+  }
+  .vsco-verdict.is-ok       { color: var(--sn-gold);  border: 1px solid var(--sn-gold-40); background: rgba(212, 175, 55, 0.08); }
+  .vsco-verdict.is-failed   { color: var(--sn-amber); border: 1px solid var(--sn-amber); background: rgba(255, 178, 63, 0.08); }
+  .vsco-verdict.is-skipped  { color: var(--sn-muted-stone); border: 1px solid var(--sn-muted-stone); background: rgba(184, 178, 165, 0.06); }
+  .vsco-trigger { font-family: ui-monospace, monospace; font-size: 0.78rem; }
+
+  /* Failed pushes can expand to reveal the VSCO response body. Indented
+     under the row, monospace for the JSON, with a quiet border so it
+     visually groups with the push row above. */
+  .vsco-error-detail {
+    margin: 0.4rem 0 0.5rem 1rem;
+  }
+  .vsco-error-detail summary {
+    cursor: pointer;
+    color: var(--sn-amber);
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.2rem 0;
+  }
+  .vsco-error-body {
+    font-family: ui-monospace, monospace;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: var(--sn-champagne);
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 178, 63, 0.18);
+    border-radius: 4px;
+    padding: 0.6rem 0.8rem;
+    margin: 0.3rem 0 0;
+    overflow-x: auto;
+    white-space: pre;
+    max-height: 320px;
+  }
+
+  .qualify-status { font-size: 0.82rem; letter-spacing: 0.04em; }
+  .vsco-hint { font-size: 0.8rem; margin: 0.4rem 0 0; }
+
   .mono {
     font-family: ui-monospace, monospace;
     font-size: 0.78rem;

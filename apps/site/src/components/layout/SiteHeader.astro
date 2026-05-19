@@ -55,9 +55,12 @@ const isActive = (href: string) =>
 <style>
   .site-header {
     position: fixed;
-    /* --sn-banner-height is set by SiteBanner's inline script when the
-       site-wide announcement banner is visible. Defaults to 0 when no
-       banner is rendered, so the header sits flush at the top as before. */
+    /* --sn-banner-height tracks how much of the SiteBanner is still
+       visible in the viewport (updated per scroll frame by the banner's
+       inline script). When the banner has scrolled out — or isn't
+       rendered at all — this is 0 and the header sits flush at the top.
+       No `top` transition: this value updates per frame on scroll, so a
+       transition would visibly lag the natural document scroll. */
     top: var(--sn-banner-height, 0px);
     left: 0; right: 0;
     z-index: 50;
@@ -69,8 +72,7 @@ const isActive = (href: string) =>
       background-color 280ms ease,
       backdrop-filter 280ms ease,
       border-color 280ms ease,
-      padding 280ms ease,
-      top 200ms ease;
+      padding 280ms ease;
     border-bottom: 1px solid transparent;
   }
   .site-header.is-scrolled {

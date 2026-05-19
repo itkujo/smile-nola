@@ -27,6 +27,13 @@ const DEFAULT_VALUES: Partial<Lead> = {
   partner2Name: "",
   eventDate: "",
   venueName: "",
+  venueStreetAddress: undefined,
+  venueCity: undefined,
+  venueState: undefined,
+  venuePostalCode: undefined,
+  venueCountry: undefined,
+  venueLatitude: undefined,
+  venueLongitude: undefined,
   collectionsInterested: [],
   notes: "",
 };

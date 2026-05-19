@@ -216,6 +216,32 @@ function validatePayload(item: unknown): ValidatedOk | ValidatedFail {
     }
   }
 
+  // Optional venue address strings (string | null | undefined).
+  // Older booth payloads (pre-autocomplete) leave these fully absent;
+  // newer ones include them set to a value or null.
+  for (const k of [
+    "venue_street_address",
+    "venue_city",
+    "venue_state",
+    "venue_postal_code",
+    "venue_country",
+  ] as const) {
+    if (o[k] !== undefined && !isStringOrNull(o[k])) {
+      return { ok: false, message: `field ${k} must be a string, null, or absent` };
+    }
+  }
+
+  // Optional venue lat/lng (number | null | undefined).
+  for (const k of ["venue_latitude", "venue_longitude"] as const) {
+    if (
+      o[k] !== undefined &&
+      o[k] !== null &&
+      typeof o[k] !== "number"
+    ) {
+      return { ok: false, message: `field ${k} must be a number, null, or absent` };
+    }
+  }
+
   // Defensive shape: created_at must look like an ISO-ish date so we
   // don't accept arbitrary garbage that the SQLite TEXT column will
   // happily store but later display tools will choke on.
@@ -255,6 +281,15 @@ function validatePayload(item: unknown): ValidatedOk | ValidatedFail {
       partner2_name: o.partner2_name as string | null,
       event_setting: o.event_setting as string | null,
       poc_relationship: o.poc_relationship as string | null,
+      venue_street_address: (o.venue_street_address ?? null) as string | null,
+      venue_city: (o.venue_city ?? null) as string | null,
+      venue_state: (o.venue_state ?? null) as string | null,
+      venue_postal_code: (o.venue_postal_code ?? null) as string | null,
+      venue_country: (o.venue_country ?? null) as string | null,
+      venue_latitude:
+        typeof o.venue_latitude === "number" ? o.venue_latitude : null,
+      venue_longitude:
+        typeof o.venue_longitude === "number" ? o.venue_longitude : null,
     },
   };
 }
