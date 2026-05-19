@@ -33,15 +33,28 @@ const NAV = [
 ] as const;
 
 /**
- * Build identity — baked at image-build time from the Dockerfile via
- * PUBLIC_GIT_SHA (sourced from Coolify's SOURCE_COMMIT) and
- * PUBLIC_BUILD_TIME (stamped by `date` inside the build container).
+ * Build identity, resolved at SSR request time.
  *
- * Falls back to 'dev' / 'local' for non-Coolify builds (local docker,
- * CI, `pnpm dev`) so the layout never breaks. The full timestamp lives
- * in the title attribute; the bar shows a compact "sha · short date".
+ * - SHA comes from Coolify's predefined `SOURCE_COMMIT` runtime env var
+ *   (no "Build Variable" checkbox required, no Dockerfile build-arg
+ *   wiring — Coolify just sets it on the running container per deploy).
+ *   Falls back to `import.meta.env.PUBLIC_GIT_SHA` (the older build-time
+ *   path, still works if someone wires it that way) and finally `'dev'`.
+ *
+ * - BUILD_TIME is baked at image build time by the Dockerfile (no
+ *   Coolify config needed for that one — `date` runs inside the build).
+ *   Always available so this side is fine as-is.
+ *
+ * Why runtime not build-time: Coolify's runtime env var forwarding is
+ * rock-solid; its build-arg forwarding has more moving pieces ("Include
+ * Source Commit in Build" toggle, "Is Build Time?" per-var flag, variable
+ * expansion) and any one of them being off silently breaks the chain.
+ * Going runtime sidesteps the whole stack of fragility.
  */
-const rawSha = import.meta.env.PUBLIC_GIT_SHA ?? 'dev';
+const rawSha =
+  process.env.SOURCE_COMMIT ||
+  import.meta.env.PUBLIC_GIT_SHA ||
+  'dev';
 const buildSha = rawSha.slice(0, 7); // short SHA, mirrors `git log --oneline`
 const buildTime = import.meta.env.PUBLIC_BUILD_TIME ?? 'local';
 // Compact display: "May 19" if we have a real ISO timestamp, else

@@ -47,17 +47,20 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Build identity exposed to the SSR app so the admin UI can display
-# "what build am I running?" — useful when verifying that a deploy
-# actually landed and matches the git ref you pushed.
+# "what build am I running?"
 #
-# GIT_SHA is fed in by Coolify via the predefined SOURCE_COMMIT variable
-# (requires "Include Source Commit in Build" enabled in the app's General
-# settings) — set GIT_SHA=$SOURCE_COMMIT in Coolify's Environment Variables.
-# Builds outside Coolify (local docker build, CI, etc.) without this arg
-# get 'dev' as a sentinel; the admin UI handles the fallback gracefully.
+# BUILD_TIME is stamped at build time by `date` — always reliable.
 #
-# BUILD_TIME is stamped inside the build itself so we always have a real
-# timestamp without needing to wire anything from outside.
+# GIT_SHA is OPTIONAL here. The admin layout's primary source for the
+# git commit is `process.env.SOURCE_COMMIT` at SSR time, which Coolify
+# sets on the running container automatically per deploy. We accept
+# GIT_SHA as a fallback for non-Coolify build contexts (local docker,
+# CI) where you want to bake the SHA in at build time:
+#
+#   docker build --build-arg GIT_SHA=$(git rev-parse --short HEAD) ...
+#
+# Without it, layout falls back to 'dev'. Both pathways are handled in
+# AdminLayout.astro — see the rawSha computation there.
 ARG GIT_SHA=dev
 ENV PUBLIC_GIT_SHA=${GIT_SHA}
 RUN PUBLIC_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
