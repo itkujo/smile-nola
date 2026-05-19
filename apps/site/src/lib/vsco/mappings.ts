@@ -732,12 +732,34 @@ export function inquiryToJobWorksheet(
   return ws
 }
 
-function normalizeContactPreference(p: string | null | undefined): 'Email' | 'Phone' | 'Text' | null {
+/**
+ * Map our inquiry form's contact-preference values to the strict enum
+ * VSCO's Person schema requires. VSCO accepts:
+ *   'email' | 'cell-phone' | 'home-phone' | 'work-phone' | null
+ *
+ * Anything else (including the title-cased 'Email' / 'Phone' / 'Text'
+ * the previous implementation returned) gets rejected by VSCO's
+ * worksheet endpoint with a vague 400 ('contacts.0.contact ... matched
+ * none') — the actual culprit isn't surfaced in the error.
+ *
+ * Mapping policy:
+ *   Email      → 'email'
+ *   Phone      → 'cell-phone'  (cellular is the default modern reading)
+ *   Text / SMS → 'cell-phone'  (VSCO has no separate 'text' channel;
+ *                              the 'prefers text' nuance lives in the
+ *                              leadNotes field for daniel to read)
+ *   Anything else → null       (omit the field)
+ */
+function normalizeContactPreference(
+  p: string | null | undefined,
+): 'email' | 'cell-phone' | 'home-phone' | 'work-phone' | null {
   if (!p) return null
-  const lc = p.toLowerCase()
-  if (lc.startsWith('email')) return 'Email'
-  if (lc.startsWith('phone')) return 'Phone'
-  if (lc.startsWith('text') || lc.startsWith('sms')) return 'Text'
+  const lc = p.toLowerCase().trim()
+  if (lc.startsWith('email')) return 'email'
+  if (lc.startsWith('phone') || lc.startsWith('cell')) return 'cell-phone'
+  if (lc.startsWith('text') || lc.startsWith('sms')) return 'cell-phone'
+  if (lc.startsWith('home')) return 'home-phone'
+  if (lc.startsWith('work')) return 'work-phone'
   return null
 }
 

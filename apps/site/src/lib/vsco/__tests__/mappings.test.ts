@@ -498,6 +498,35 @@ describe('inquiryToJobWorksheet', () => {
     expect(ws.events![0].endTime).toBe('21:00')
   })
 
+  it('contactPreference is mapped to VSCO\'s lowercase-hyphen enum', () => {
+    // Regression: VSCO's Person schema only accepts
+    //   email | cell-phone | home-phone | work-phone | null
+    // Sending the previous capitalized values ('Email', 'Phone', 'Text')
+    // 400s the worksheet endpoint with a vague 'contacts.0.contact ...
+    // matched none'. This was Kopp's actual bug — his preferred_contact
+    // was "Phone" which mapped to "Phone" which VSCO rejected.
+    const cases: Array<[string, string | null]> = [
+      ['Email', 'email'],
+      ['email', 'email'],
+      ['Phone', 'cell-phone'],
+      ['phone', 'cell-phone'],
+      ['Cell phone', 'cell-phone'],
+      ['Text', 'cell-phone'],
+      ['SMS', 'cell-phone'],
+      ['Home phone', 'home-phone'],
+      ['Work phone', 'work-phone'],
+      ['', null],
+    ]
+    for (const [input, expected] of cases) {
+      const inquiry = makeInquiry({ preferred_contact: input })
+      const ws = inquiryToJobWorksheet(inquiry, { config: cfg, siteBase })
+      const poc = ws.contacts.find((c) => c.contact.kind === 'person')
+      if (poc && poc.contact.kind === 'person') {
+        expect(poc.contact.contactPreference, `input=${JSON.stringify(input)}`).toBe(expected)
+      }
+    }
+  })
+
   it('POC phone is normalized to strict E.164 before VSCO sees it', () => {
     // Regression: VSCO rejects unnormalized phones with a 400 on
     // /job/-/worksheet (contacts.0.contact union mismatch). Real users

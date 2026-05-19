@@ -153,7 +153,21 @@ interface ContactBase {
   requireStrictPrivacy?: boolean | null;
 }
 
-export type ContactPreference = 'Email' | 'Phone' | 'Text' | null;
+/**
+ * VSCO's strict enum for Person/Contact.contactPreference. The values
+ * are lowercase with hyphens; sending anything else (e.g. title-cased
+ * 'Phone') makes the worksheet endpoint 400 with a vague 'contacts.0
+ * .contact ... matched none' error.
+ *
+ * Source: OpenAPI spec (/api/v2/openapi.json) at
+ * components.schemas.Person.allOf[0].properties.contactPreference.enum.
+ */
+export type ContactPreference =
+  | 'email'
+  | 'cell-phone'
+  | 'home-phone'
+  | 'work-phone'
+  | null;
 
 export interface PersonWrite extends ContactBase {
   kind: 'person';
