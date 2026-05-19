@@ -428,11 +428,7 @@ function mergeCustomFields<
 /**
  * Push a builder submission to VSCO. Two steps:
  *   1. Update the Job (refined event details, consultation pref, etc.).
- *   2. Create an Order with line items, WITHOUT a dueDate, so the Order
- *      lands as a quote (VSCO booking proposal). Quotes accept contracts
- *      and questionnaires; invoices don't. See builderToOrder() in
- *      mappings.ts for the full reasoning. The actual invoice is
- *      generated later in VSCO from the accepted quote.
+ *   2. Create an Order with line items; setting dueDate triggers invoice gen.
  *
  * Skips when:
  *   - VSCO_ENABLED is false
@@ -486,11 +482,8 @@ export async function pushBuilderToVsco(
 
   const existingOrderId = getVscoEntityId(inquiry.external_uuid, 'order')
   if (existingOrderId) {
-    // Don't recreate. We treat builder submissions as terminal: the
-    // quote goes out once. Subsequent revisions (price negotiation,
-    // scope changes) happen in VSCO directly, not by re-pushing from
-    // here. Returning a duplicate skip lets the admin see this in the
-    // push audit log without erroring.
+    // Don't recreate. Update would be possible but we treat builder submissions
+    // as terminal: invoice goes out once.
     recordSkipped(ctx, `order ${existingOrderId} already exists`)
     return { ok: false, orderId: existingOrderId, reason: 'duplicate' }
   }
@@ -533,12 +526,7 @@ export async function pushBuilderToVsco(
     recordVscoEntities(inquiry.external_uuid, [
       { kind: 'order', vscoId: orderId },
     ])
-    // Audit note reads "quote" — the Order was created without dueDate
-    // and therefore lands in VSCO as a quote/booking proposal, not as
-    // an invoice. The vsco_entities kind stays 'order' (it's still an
-    // Order resource at the API level); the human-readable note is
-    // what reflects the workflow truth for ops.
-    recordOk(ctx, Date.now() - start, `quote ${orderId}`)
+    recordOk(ctx, Date.now() - start, `order ${orderId}`)
     return { ok: true, orderId }
   } catch (err) {
     recordFailure(ctx, Date.now() - start, err)

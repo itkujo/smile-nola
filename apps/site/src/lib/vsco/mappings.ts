@@ -77,6 +77,12 @@ function isoDateOnly(d: string | Date): string {
   return d.toISOString().slice(0, 10)
 }
 
+function addDays(isoDate: string, days: number): string {
+  const d = new Date(`${isoDate}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Budget range parser
 // ──────────────────────────────────────────────────────────────────────
@@ -702,27 +708,6 @@ function addonToLineItem(
 /**
  * Build the Order body from a builder submission.
  *
- * IMPORTANT — Order created WITHOUT a dueDate, on purpose.
- *
- * The VSCO Order endpoint supports a writeOnly `dueDate` field that
- * auto-generates an invoice for the Order at creation time. The previous
- * implementation set that field; the result was an Order with an attached
- * invoice. Problem: invoices in VSCO don't accept contracts or client
- * questionnaires. Daniel needs both — every booking goes out with a
- * signed contract and a questionnaire to nail down the day-of details.
- *
- * The right artifact for that workflow is a QUOTE (VSCO's booking
- * proposal). An Order created WITHOUT dueDate sits in VSCO as a quote-
- * shaped Order — daniel attaches the contract template + questionnaire
- * in the VSCO UI, sends it as a quote to the client, and when the client
- * accepts, an invoice gets generated from that accepted quote (a
- * separate, post-acceptance step done in VSCO).
- *
- * So: every builder submission becomes a quote on the VSCO side. The
- * invoice arrives later, after acceptance, via a manual op — not from
- * this code path. (See OrderRead.bookedFromQuote in types.ts:454 — VSCO
- * tracks "this Order was booked from a Quote" as a first-class signal.)
- *
  * IMPORTANT (verified live on 2026-05-13): VSCO's Order.total computation
  * EXCLUDES the pricePerUnit of line items that have children. A parent
  * with children acts as a presentational container, not a billed line —
@@ -734,7 +719,7 @@ function addonToLineItem(
  * Solution: emit every package and every add-on as a TOP-LEVEL line
  * item. No nesting. This matches what existing real orders in the
  * studio look like (verified by inspecting a half-dozen completed
- * wedding orders). Mild downside: the quote won't visually group
+ * wedding orders). Mild downside: invoices won't visually group
  * add-ons under their parent package, but they'll be priced correctly,
  * which is what actually matters.
  *
@@ -792,13 +777,14 @@ export function builderToOrder(
     }
   }
 
-  // No dueDate. See the function-level comment: setting dueDate would
-  // auto-generate an invoice, but daniel needs a quote (to attach
-  // contracts + questionnaires). The invoice is generated later, in
-  // VSCO, from the accepted quote.
+  // Due date = created_at + 14 days
+  const created = isoDateOnly(sub.created_at)
+  const dueDate = addDays(created, 14)
+
   return {
     name: null,
     recipientId,
+    dueDate,
     lineItems,
   }
 }
