@@ -28,7 +28,10 @@ const counts = inquiryCounts();
       <span class="num font-deco">{counts.closed}</span>
       <span class="label">Closed</span>
     </a>
-    <a href="/admin/inquiries" class="stat-card">
+    {/* Explicit ?status=all — the inquiries list defaults to "open" so
+        bare URLs would land there. These stat cards represent total / all-
+        time context and need the explicit opt-out. */}
+    <a href="/admin/inquiries?status=all" class="stat-card">
       <span class="num font-deco">{counts.total}</span>
       <span class="label">Total · all time</span>
     </a>
@@ -37,7 +40,7 @@ const counts = inquiryCounts();
   <section class="quick">
     <h2 class="font-deco">quick actions</h2>
     <div class="links">
-      <a href="/admin/inquiries" class="quick-link">
+      <a href="/admin/inquiries?status=all" class="quick-link">
         <span class="qk-title">All inquiries</span>
         <span class="qk-sub">View, filter, update status, export CSV</span>
       </a>

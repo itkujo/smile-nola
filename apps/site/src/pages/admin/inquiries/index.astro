@@ -6,7 +6,13 @@
 import AdminLayout from "@/layouts/AdminLayout.astro";
 import { getAllInquiries } from "@/lib/db";
 
-const status = Astro.url.searchParams.get("status") ?? "all";
+/**
+ * Default landing is "open" (new + contacted) — the daily-workflow view,
+ * filtering out the closed pile so daniel sees only inquiries that still
+ * need action. Dashboard quick-links to `?status=all` opt out explicitly
+ * when total-counts context matters (audits, reporting).
+ */
+const status = Astro.url.searchParams.get("status") ?? "open";
 const sourceParam = Astro.url.searchParams.get("source") ?? "all";
 const q = (Astro.url.searchParams.get("q") ?? "").trim().toLowerCase();
 
@@ -15,9 +21,16 @@ const q = (Astro.url.searchParams.get("q") ?? "").trim().toLowerCase();
 const SITE_SOURCES = (r: { source: string }): boolean =>
   r.source !== "booth-expo";
 
+/** Synthetic filter — "open" matches anything that's not closed. */
+const isOpen = (s: string): boolean => s !== "closed";
+
 const allRows = getAllInquiries();
 const filtered = allRows
-  .filter((r) => (status === "all" ? true : r.status === status))
+  .filter((r) => {
+    if (status === "all") return true;
+    if (status === "open") return isOpen(r.status);
+    return r.status === status;
+  })
   .filter((r) => {
     if (sourceParam === "all") return true;
     if (sourceParam === "booth-expo") return r.source === "booth-expo";
@@ -37,11 +50,14 @@ const filtered = allRows
     );
   });
 
+// "Open" sits second because it's the default landing view and the
+// most-used filter. "All" stays as the explicit opt-out for audits.
 const FILTERS = [
-  { value: "all",       label: "All",            count: allRows.length },
-  { value: "new",       label: "New",            count: allRows.filter((r) => r.status === "new").length },
+  { value: "open",      label: "Open",            count: allRows.filter((r) => isOpen(r.status)).length },
+  { value: "new",       label: "New",             count: allRows.filter((r) => r.status === "new").length },
   { value: "contacted", label: "In conversation", count: allRows.filter((r) => r.status === "contacted").length },
-  { value: "closed",    label: "Closed",         count: allRows.filter((r) => r.status === "closed").length },
+  { value: "closed",    label: "Closed",          count: allRows.filter((r) => r.status === "closed").length },
+  { value: "all",       label: "All",             count: allRows.length },
 ] as const;
 
 const SOURCE_FILTERS = [
@@ -50,10 +66,16 @@ const SOURCE_FILTERS = [
   { value: "booth-expo", label: "Booth (expo)", count: allRows.filter((r) => r.source === "booth-expo").length },
 ] as const;
 
+/**
+ * "open" is the default landing status; omitting `?status` from the URL
+ * means open. Any non-default status (new, contacted, closed, all) is
+ * preserved explicitly. Source defaults to "all" — different sentinel
+ * because there's no daily-workflow equivalent for source filtering.
+ */
 function buildHref(overrides: Record<string, string | null>): string {
   const params = new URLSearchParams();
   const next = {
-    status: status === "all" ? null : status,
+    status: status === "open" ? null : status,
     source: sourceParam === "all" ? null : sourceParam,
     q: q || null,
     ...overrides,
@@ -72,6 +94,10 @@ function shortDate(iso: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+// Export always carries the active filter — even when the filter is
+// "open" (the default landing). Omitting the param on the export URL
+// would default to "all", which would silently mismatch what the user
+// sees on the page.
 const exportHref =
   status === "all"
     ? "/api/admin/export/inquiries.csv"
@@ -92,7 +118,7 @@ const exportHref =
       <div class="chips">
         {FILTERS.map((f) => (
           <a
-            href={buildHref({ status: f.value === "all" ? null : f.value })}
+            href={buildHref({ status: f.value === "open" ? null : f.value })}
             class:list={["chip", { "is-active": status === f.value }]}
           >
             {f.label} <span class="ct">{f.count}</span>
@@ -112,7 +138,7 @@ const exportHref =
     </div>
 
     <div class="search">
-      {status !== "all" && <input type="hidden" name="status" value={status} />}
+      {status !== "open" && <input type="hidden" name="status" value={status} />}
       {sourceParam !== "all" && <input type="hidden" name="source" value={sourceParam} />}
       <input
         type="search"
