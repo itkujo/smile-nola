@@ -71,12 +71,39 @@ function splitName(full: string | null | undefined): { firstName: string; lastNa
   return { firstName: t.slice(0, idx), lastName: t.slice(idx + 1).trim() }
 }
 
+/**
+ * Identity comparison for collapsing the POC contact with partner1 /
+ * partner2 entries when they refer to the same human. Used to avoid
+ * creating duplicate contacts on the VSCO Job (which leak into the
+ * auto-generated Job title as e.g. "Christiana, Christiana White, et al").
+ *
+ * Match rules (case- and whitespace-insensitive):
+ *   1. Both first AND last name match → same person. The strict case.
+ *   2. First names match AND at least one side has no last name → same
+ *      person. Booth UX lets attendees enter just a first name in the
+ *      partner fields ("Christiana", "Chunks") while the POC name is
+ *      typed in full ("Christiana White"). Without this rule the
+ *      partial entry gets pushed as a SECOND client contact and VSCO's
+ *      auto-titling produces ugly "X, Y, et al's <Service>" job names.
+ *
+ * Rule 2 is intentionally one-sided: we only collapse when there is no
+ * conflicting last name. If both sides have non-empty last names that
+ * differ ("Christiana White" vs "Christiana Smith"), we treat them as
+ * different people — same first name but clearly distinct.
+ */
 function isSamePerson(
   a: { firstName: string; lastName: string },
   b: { firstName: string; lastName: string },
 ): boolean {
   const norm = (s: string) => s.trim().toLowerCase()
-  return norm(a.firstName) === norm(b.firstName) && norm(a.lastName) === norm(b.lastName)
+  const aFirst = norm(a.firstName)
+  const bFirst = norm(b.firstName)
+  if (!aFirst || aFirst !== bFirst) return false
+  const aLast = norm(a.lastName)
+  const bLast = norm(b.lastName)
+  if (aLast && bLast) return aLast === bLast
+  // At least one side has no last name → first-name match is enough.
+  return true
 }
 
 function isoDateOnly(d: string | Date): string {

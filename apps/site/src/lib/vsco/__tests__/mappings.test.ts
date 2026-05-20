@@ -671,6 +671,73 @@ describe('inquiryToJobWorksheet', () => {
     expect(casey!.jobRoles).toContain('JR_PRIMARY')
   })
 
+  it('booth: partner field with first-name-only dedupes against POC full name', () => {
+    // Real-world booth pattern: POC enters "Christiana White" as their
+    // name, then types just "Christiana" again in the Partner 2 field
+    // (because they're "one of the couple" and the other partner is
+    // their nickname). Without first-name dedup, VSCO sees Christiana
+    // White + a separate "Christiana" contact and auto-titles the Job
+    // "Christiana, Christiana White, et al's Videography".
+    const inquiry = makeInquiry({
+      source: 'booth-expo',
+      first_name: 'Christiana',
+      last_name: 'White',
+      email: 'christiana@example.com',
+      partner1_name: 'Chunks',          // distinct partner — stays as separate contact
+      partner2_name: 'Christiana',       // her again, no last name — must merge into POC
+      event_type: 'wedding',
+      poc_relationship: 'One of the couple',
+      external_uuid: 'uuid-booth-4',
+    })
+    const ws = inquiryToJobWorksheet(inquiry, { config: cfg, siteBase })
+    const persons = ws.contacts.filter((c) => c.contact.kind === 'person')
+
+    // Exactly 2 persons: POC (=partner-b) + Chunks (=partner-a). The
+    // third "Christiana" entry MUST be absorbed into the POC contact.
+    expect(persons).toHaveLength(2)
+
+    const poc = persons.find((p) =>
+      p.contact.kind === 'person' && p.contact.email === 'christiana@example.com',
+    )
+    expect(poc).toBeDefined()
+    expect(poc!.jobRoles).toContain('JR_PRIMARY')
+    // POC absorbs the partner-b role from the duplicate Christiana entry.
+    expect(poc!.jobRoles).toContain('JR_PB')
+
+    // Chunks remains as the partner-a contact (no last name, no first-name
+    // collision with the POC → not deduped).
+    const chunks = persons.find((p) =>
+      p.contact.kind === 'person' && p.contact.firstName === 'Chunks',
+    )
+    expect(chunks).toBeDefined()
+    expect(chunks!.jobRoles).toEqual(['JR_PA'])
+  })
+
+  it('booth: same first name with DIFFERENT last names stays as distinct contacts', () => {
+    // Guard against over-eager dedup: if both sides have non-empty
+    // last names AND they differ, treat as different people.
+    const inquiry = makeInquiry({
+      source: 'booth-expo',
+      first_name: 'Christiana',
+      last_name: 'White',
+      email: 'christiana.white@example.com',
+      partner1_name: 'Christiana Smith', // same first name, different last
+      partner2_name: null,
+      event_type: 'wedding',
+      poc_relationship: 'One of the couple',
+      external_uuid: 'uuid-booth-5',
+    })
+    const ws = inquiryToJobWorksheet(inquiry, { config: cfg, siteBase })
+    const persons = ws.contacts.filter((c) => c.contact.kind === 'person')
+    // POC + Christiana Smith → 2 distinct contacts.
+    expect(persons).toHaveLength(2)
+    const poc = persons.find((p) =>
+      p.contact.kind === 'person' && p.contact.email === 'christiana.white@example.com',
+    )
+    // POC must NOT have absorbed partner-a.
+    expect(poc!.jobRoles).not.toContain('JR_PA')
+  })
+
   it('sets the 5 interested-* custom fields based on collections_interested', () => {
     const inquiry = makeInquiry({
       collections_interested: JSON.stringify(['smile', 'aurora', 'visionary']),
