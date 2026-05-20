@@ -31,6 +31,16 @@ export interface MappingContext {
   config: VscoConfig
   /** Public site origin, e.g. "https://smilenola.com". Used for admin URLs. */
   siteBase: string
+  /**
+   * Public package-builder invite URL for this inquiry, e.g.
+   * `https://smilenola.com/build?invite=<token>`. When supplied, the
+   * inquiry mapper writes it into the `builder-submission-link` custom
+   * field so VSCO operators can see (and re-send) the link without
+   * round-tripping through the admin app. Optional — when omitted the
+   * field is left unset (preserves prior behavior for older call sites
+   * and unit tests that don't care about the link).
+   */
+  builderInviteUrl?: string
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -513,7 +523,7 @@ export function inquiryToJobWorksheet(
   inquiry: InquiryRow,
   ctx: MappingContext,
 ): ConcreteJobWorksheet {
-  const { config, siteBase } = ctx
+  const { config, siteBase, builderInviteUrl } = ctx
 
   // ---- Basic Job fields ----
   const leadSourceKey = leadSourceKeyForInquiry(inquiry.source)
@@ -554,6 +564,13 @@ export function inquiryToJobWorksheet(
   }
   if (inquiry.event_setting) {
     customFields.push(cfv(config, 'event-setting', inquiry.event_setting))
+  }
+  // Public builder URL — handed to the client to fill out their package
+  // selections. Only set when the caller passed it in; this lets the
+  // qualify push attach the link without forcing every code path that
+  // builds a worksheet (tests, ad-hoc tools) to mint a token first.
+  if (builderInviteUrl) {
+    customFields.push(cfv(config, 'builder-submission-link', builderInviteUrl))
   }
 
   // ---- Contacts ----
@@ -778,10 +795,15 @@ export function builderToJobUpdate(
 ): Partial<JobWrite> {
   const { config, siteBase } = ctx
 
+  // Internal admin URL for reviewing what the client submitted. This
+  // lives in its own custom field ('builder-submission-review') so it
+  // doesn't clobber 'builder-submission-link' (which holds the public
+  // /build?invite=… URL written at qualify time). Two URLs, two fields:
+  // the client-facing builder link and the internal review link.
   const customFields: CustomFieldValue[] = [
     cfv(
       config,
-      'builder-submission-link',
+      'builder-submission-review',
       `${siteBase}/admin/builder-submissions/${sub.id}`,
     ),
   ]

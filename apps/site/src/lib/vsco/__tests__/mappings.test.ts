@@ -86,6 +86,7 @@ const cfg: VscoConfig = {
     'event-setting': 'CF_EVENT_SETTING',
     'consultation-preference': 'CF_CONSULT_PREF',
     'builder-submission-link': 'CF_BUILDER_LINK',
+    'builder-submission-review': 'CF_BUILDER_REVIEW',
     'event-occasion': 'CF_EVENT_OCCASION',
   },
 }
@@ -705,6 +706,32 @@ describe('inquiryToJobWorksheet', () => {
     expect(cfMap['CF_EVENT_SETTING']).toBe('Outdoor — Covered')
   })
 
+  it('writes builder-submission-link when builderInviteUrl is supplied', () => {
+    // This is what the qualify push does: it mints (or reuses) an invite
+    // token via createOrGetActiveInvite and hands the resulting public
+    // URL to the mapper. The CF should land in the worksheet verbatim.
+    const inquiry = makeInquiry()
+    const url = 'https://smilenola.com/build?invite=abc123'
+    const ws = inquiryToJobWorksheet(inquiry, {
+      config: cfg,
+      siteBase,
+      builderInviteUrl: url,
+    })
+    const cfMap = Object.fromEntries(ws.customFields.map((c) => [c.fieldId, c.value]))
+    expect(cfMap['CF_BUILDER_LINK']).toBe(url)
+  })
+
+  it('omits builder-submission-link when builderInviteUrl is not supplied', () => {
+    // Older call sites (and tests) that don't care about the link must
+    // not get an empty value silently written — the field stays absent
+    // so VSCO's merge logic doesn't overwrite a previously-set value
+    // with empty string.
+    const inquiry = makeInquiry()
+    const ws = inquiryToJobWorksheet(inquiry, { config: cfg, siteBase })
+    const cfMap = Object.fromEntries(ws.customFields.map((c) => [c.fieldId, c.value]))
+    expect(cfMap['CF_BUILDER_LINK']).toBeUndefined()
+  })
+
   it('parses budget_range into leadMaxBudget (DOLLARS — VSCO multiplies x100 internally)', () => {
     const inquiry = makeInquiry({ budget_range: '$15,000 — $25,000' })
     const ws = inquiryToJobWorksheet(inquiry, { config: cfg, siteBase })
@@ -808,9 +835,17 @@ describe('builderToJobUpdate', () => {
     expect(patch.eventDate).toBe('2026-10-12')
     expect(patch.guestCount).toBe(140)
 
-    // builder-submission-link custom field points to admin builder page
+    // The builder push writes the admin review URL into its OWN field
+    // ('builder-submission-review') so it doesn't clobber the public
+    // /build?invite=… URL written at qualify time into 'builder-submission-link'.
+    const review = patch.customFields?.find((c) => c.fieldId === 'CF_BUILDER_REVIEW')
+    expect(review?.value).toBe('https://smilenola.com/admin/builder-submissions/10')
+
+    // The builder push must NOT touch 'builder-submission-link' — that
+    // field is owned by the inquiry push and holds the client-facing
+    // invite URL for the lifetime of the Job.
     const link = patch.customFields?.find((c) => c.fieldId === 'CF_BUILDER_LINK')
-    expect(link?.value).toBe('https://smilenola.com/admin/builder-submissions/10')
+    expect(link).toBeUndefined()
 
     // consultation-preference custom field set
     const pref = patch.customFields?.find((c) => c.fieldId === 'CF_CONSULT_PREF')

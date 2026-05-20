@@ -193,6 +193,7 @@ const DESIRED_CUSTOM_FIELDS: DesiredCustomField[] = [
   { key: 'consultation-preference',    spec: { canApplyTo: 'Job', kind: 'DropDown', name: 'Consultation Preference',
     choices: ['Video', 'In-Person', 'None'] } },
   { key: 'builder-submission-link',    spec: { canApplyTo: 'Job', kind: 'TextField', name: 'Builder Submission Link' } },
+  { key: 'builder-submission-review',  spec: { canApplyTo: 'Job', kind: 'TextField', name: 'Builder Submission Review' } },
   /* Event occasion — now that Job Type carries the service line (Photo Booth /
      Videography / Production), we need a separate field to capture WHAT KIND
      OF EVENT the booking is (Wedding / Reception / Corporate / etc.). The

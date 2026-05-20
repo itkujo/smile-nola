@@ -84,6 +84,7 @@ const minimalConfig = {
     'event-setting': 'CF_ES',
     'consultation-preference': 'CF_CP',
     'builder-submission-link': 'CF_BL',
+    'builder-submission-review': 'CF_BR',
     'event-occasion': 'CF_OCC',
   },
 }
