@@ -291,6 +291,25 @@ const {
           throw new Error(data.error || `Server responded ${res.status}`);
         }
 
+        // Plausible: log a successful inquiry as a conversion. The script
+        // is only injected on production hosts, so `window.plausible` may
+        // be undefined in dev — guard it. The `collection` prop here is
+        // the single collection page this short form is embedded on, so
+        // we can see which collection page drives the most leads.
+        if (typeof window !== "undefined" && window.plausible) {
+          window.plausible("Inquiry Submitted", {
+            props: {
+              form: "short",
+              collections: typeof payload.collection === "string" && payload.collection
+                ? payload.collection
+                : "none",
+              has_date: Boolean(
+                typeof payload.event_date === "string" && payload.event_date
+              ),
+            },
+          });
+        }
+
         // Build a personalized thank-you. Falls back gracefully when the
         // user didn't share a first name or event date.
         const firstName = typeof payload.first_name === "string" ? payload.first_name.trim() : "";

@@ -35,6 +35,29 @@ const fullTitle = title.includes("Smile NOLA")
   : `${title} · Smile NOLA`;
 
 const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? "https://smile-nola.com").toString();
+
+/**
+ * Plausible analytics — production only.
+ *
+ * We self-host Plausible at plausible.relentnet.dev. The script filename
+ * encodes the optional measurements that are enabled (Plausible serves a
+ * separate built file per combination): outbound-links, file-downloads,
+ * 404, and tagged-events.
+ *
+ * Gated by hostname rather than NODE_ENV so previews / staging hostnames
+ * could be added explicitly if/when we ever have any. Localhost,
+ * 127.0.0.1, and any *.local hostname stay clean — no dashboard noise
+ * from dev work.
+ *
+ * `tagged-events` lets us add class names like
+ *   `plausible-event-name=Phone+Tap` or
+ *   `plausible-event-name=Email+Click`
+ * to anchor/button tags and have them auto-tracked as custom events.
+ */
+const host = Astro.url.hostname;
+const isProdHost = host !== "localhost"
+  && host !== "127.0.0.1"
+  && !host.endsWith(".local");
 ---
 
 <!doctype html>
@@ -75,6 +98,34 @@ const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? "htt
     <meta name="twitter:title" content={fullTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={new URL(ogImage, Astro.site ?? "https://smile-nola.com").toString()} />
+
+    {/*
+      Plausible analytics — only injected in production (see hostname check
+      above). Self-hosted at plausible.relentnet.dev. The filename combo
+      enables: outbound link click tracking, file download tracking, 404
+      page tracking, and tagged-events (manual class-based event tagging
+      on CTAs). Loaded `defer` so it never blocks rendering.
+    */}
+    {isProdHost && (
+      <script
+        is:inline
+        defer
+        data-domain="smile-nola.com"
+        src="https://plausible.relentnet.dev/js/script.outbound-links.file-downloads.404.tagged-events.js"
+      ></script>
+    )}
+
+    {/*
+      Plausible queue shim — lets us call `window.plausible('Event Name', { props })`
+      from islands before the deferred script has finished loading. The real
+      script replaces this with the actual implementation on load, then flushes
+      the queue. Same snippet recommended by Plausible's docs for manual events.
+    */}
+    {isProdHost && (
+      <script is:inline>
+        window.plausible = window.plausible || function () { (window.plausible.q = window.plausible.q || []).push(arguments) };
+      </script>
+    )}
 
     <!-- LocalBusiness structured data -->
     <script type="application/ld+json" is:inline set:html={JSON.stringify({
