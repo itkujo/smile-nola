@@ -48,20 +48,24 @@ const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? "htt
  * the script filename. The CE build does not ship a `.404.` variant —
  * adding it to the filename gives a 404 from the JS server.
  *
- * Gated by hostname rather than NODE_ENV so previews / staging hostnames
- * could be added explicitly if/when we ever have any. Localhost,
- * 127.0.0.1, and any *.local hostname stay clean — no dashboard noise
- * from dev work.
+ * Gated by `import.meta.env.PROD` (Astro's build-time prod flag) rather
+ * than `Astro.url.hostname`. Behind Coolify's Traefik proxy, the Host
+ * header the container sees is the internal forwarded address (e.g.
+ * 10.0.x.x:3000), NOT smile-nola.com — same root-cause that earlier
+ * forced SITE_PUBLIC_URL / X-Forwarded-Host handling for absolute URLs.
+ * A hostname check evaluated to "this is localhost" and the script was
+ * never emitted in production. `PROD` is set at build time by Astro's
+ * own `astro build`, so it's stable regardless of the proxy.
+ *
+ * Plausible's own script ignores localhost client-side by default, so
+ * dev pageviews still don't pollute the dashboard.
  *
  * `tagged-events` lets us add class names like
  *   `plausible-event-name=Phone+Tap` or
  *   `plausible-event-name=Email+Click`
  * to anchor/button tags and have them auto-tracked as custom events.
  */
-const host = Astro.url.hostname;
-const isProdHost = host !== "localhost"
-  && host !== "127.0.0.1"
-  && !host.endsWith(".local");
+const enablePlausible = import.meta.env.PROD;
 ---
 
 <!doctype html>
@@ -111,7 +115,7 @@ const isProdHost = host !== "localhost"
       `defer` so it never blocks rendering. 404 tracking is configured in
       the Plausible dashboard itself (CE doesn't ship a `.404.` variant).
     */}
-    {isProdHost && (
+    {enablePlausible && (
       <script
         is:inline
         defer
@@ -126,7 +130,7 @@ const isProdHost = host !== "localhost"
       script replaces this with the actual implementation on load, then flushes
       the queue. Same snippet recommended by Plausible's docs for manual events.
     */}
-    {isProdHost && (
+    {enablePlausible && (
       <script is:inline>
         window.plausible = window.plausible || function () { (window.plausible.q = window.plausible.q || []).push(arguments) };
       </script>
