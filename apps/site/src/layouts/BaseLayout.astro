@@ -39,10 +39,14 @@ const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? "htt
 /**
  * Plausible analytics — production only.
  *
- * We self-host Plausible at plausible.relentnet.dev. The script filename
- * encodes the optional measurements that are enabled (Plausible serves a
- * separate built file per combination): outbound-links, file-downloads,
- * 404, and tagged-events.
+ * We self-host Plausible (Community Edition) at plausible.relentnet.dev.
+ * The script filename encodes the optional measurements that are enabled
+ * (the server pre-builds a separate JS file per combination of
+ * extensions). We enable: outbound-links, file-downloads, tagged-events.
+ *
+ * Note: 404 tracking is configured in the Plausible dashboard, not by
+ * the script filename. The CE build does not ship a `.404.` variant —
+ * adding it to the filename gives a 404 from the JS server.
  *
  * Gated by hostname rather than NODE_ENV so previews / staging hostnames
  * could be added explicitly if/when we ever have any. Localhost,
@@ -102,16 +106,17 @@ const isProdHost = host !== "localhost"
     {/*
       Plausible analytics — only injected in production (see hostname check
       above). Self-hosted at plausible.relentnet.dev. The filename combo
-      enables: outbound link click tracking, file download tracking, 404
-      page tracking, and tagged-events (manual class-based event tagging
-      on CTAs). Loaded `defer` so it never blocks rendering.
+      enables: outbound link click tracking, file download tracking, and
+      tagged-events (manual class-based event tagging on CTAs). Loaded
+      `defer` so it never blocks rendering. 404 tracking is configured in
+      the Plausible dashboard itself (CE doesn't ship a `.404.` variant).
     */}
     {isProdHost && (
       <script
         is:inline
         defer
         data-domain="smile-nola.com"
-        src="https://plausible.relentnet.dev/js/script.outbound-links.file-downloads.404.tagged-events.js"
+        src="https://plausible.relentnet.dev/js/script.outbound-links.file-downloads.tagged-events.js"
       ></script>
     )}
 
