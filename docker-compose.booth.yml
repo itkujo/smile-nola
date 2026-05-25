@@ -7,7 +7,7 @@
 #
 # DEPLOY MODES
 #   1. Production (default):    Pulls a published multi-arch image from
-#                               ghcr.io/itkujo/smile-nola-booth:latest.
+#                               ghcr.io/itkujo/smile-nola/booth:latest.
 #                               Use this on the Pi.
 #   2. Local dev build:         BOOTH_IMAGE=local docker compose -f \
 #                               docker-compose.booth.yml up -d --build
@@ -36,7 +36,7 @@ services:
     # Override:
     #   BOOTH_IMAGE=local        → build from apps/intake/ source
     #   BOOTH_IMAGE=ghcr.io/...:tag → pin a specific tag (e.g. v0.1.0, edge)
-    image: ${BOOTH_IMAGE:-ghcr.io/itkujo/smile-nola-booth:latest}
+    image: ${BOOTH_IMAGE:-ghcr.io/itkujo/smile-nola/booth:latest}
     # When BOOTH_IMAGE=local, this build section kicks in. The image is
     # tagged smile-nola-booth:local-dev and reused on subsequent `up`s.
     build:

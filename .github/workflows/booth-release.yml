@@ -17,9 +17,16 @@
 # apps/intake/Dockerfile for full notes.
 #
 # IMAGE NAME RATIONALE
-#   We publish as ghcr.io/itkujo/smile-nola-booth (NOT smile-nola/booth)
-#   so callers pulling the image don't need to know it's monorepo-sourced.
-#   The name reads as a standalone product.
+#   We publish as ghcr.io/itkujo/smile-nola/booth (slash-delimited under the
+#   monorepo's name). This 3-segment pattern makes GitHub's auto-link from
+#   the org.opencontainers.image.source label reliably bind the package to
+#   the smile-nola repository, so the package management UI (Settings,
+#   visibility toggle, etc.) lives at the repo's /pkgs/container/... path
+#   where you'd expect to find it.
+#
+#   An earlier 2-segment name (smile-nola-booth) created a package that
+#   GitHub uploaded but never showed in the user/repo packages UI \u2014
+#   making it unmanageable through the web. Avoid that.
 # ============================================================================
 
 name: Booth image release
@@ -39,10 +46,10 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  # Hardcoded image basename. NOT ${{ github.repository }} because that
-  # would yield ghcr.io/itkujo/smile-nola which collides with the main-site
-  # image namespace. Booth lives at its own /smile-nola-booth slot.
-  IMAGE_NAME: itkujo/smile-nola-booth
+  # 3-segment name: <owner>/<repo>/<image> so GitHub binds the package to
+  # the smile-nola repository automatically. See "IMAGE NAME RATIONALE"
+  # in the header comment above for the full story.
+  IMAGE_NAME: itkujo/smile-nola/booth
 
 jobs:
   build-and-push:

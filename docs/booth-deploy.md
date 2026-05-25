@@ -7,7 +7,7 @@ This doc covers running the published image on three targets:
 2. **Linux laptop / desktop** — what we use for development and as a backup booth.
 3. **macOS** — fallback for events where a Mac is the only available host.
 
-The image is published at `ghcr.io/itkujo/smile-nola-booth` and is multi-arch (`linux/amd64`, `linux/arm64`). Pull is the same command on every host.
+The image is published at `ghcr.io/itkujo/smile-nola/booth` and is multi-arch (`linux/amd64`, `linux/arm64`). Pull is the same command on every host.
 
 ---
 
@@ -20,7 +20,7 @@ docker run -d \
   -v smile_nola_booth_data:/data \
   --env-file ~/smile-nola-booth.env \
   --restart unless-stopped \
-  ghcr.io/itkujo/smile-nola-booth:latest
+  ghcr.io/itkujo/smile-nola/booth:latest
 ```
 
 Open `http://<host-ip>:3000` on the iPad. Done.
@@ -107,7 +107,7 @@ chmod 600 .env
 ### 4. Pull the image and start the booth
 
 ```sh
-docker pull ghcr.io/itkujo/smile-nola-booth:latest
+docker pull ghcr.io/itkujo/smile-nola/booth:latest
 
 docker run -d \
   --name smile-nola-booth \
@@ -115,7 +115,7 @@ docker run -d \
   -v smile_nola_booth_data:/data \
   --env-file ~/smile-nola-booth/.env \
   --restart unless-stopped \
-  ghcr.io/itkujo/smile-nola-booth:latest
+  ghcr.io/itkujo/smile-nola/booth:latest
 ```
 
 Wait ~30 seconds for the container to warm up (Next.js cold-start on the Pi 3B is the slow case). Then verify:
@@ -184,7 +184,7 @@ docker run -d \
   -v smile_nola_booth_data:/data \
   --env-file ~/smile-nola-booth/.env \
   --restart unless-stopped \
-  ghcr.io/itkujo/smile-nola-booth:latest
+  ghcr.io/itkujo/smile-nola/booth:latest
 
 # verify
 curl -s http://localhost:3000/api/health
@@ -262,7 +262,7 @@ Don't run that last command unless `/api/health` reports `"pending":0` and you'v
 ## Upgrading
 
 ```sh
-docker pull ghcr.io/itkujo/smile-nola-booth:latest
+docker pull ghcr.io/itkujo/smile-nola/booth:latest
 docker stop smile-nola-booth
 docker rm smile-nola-booth
 # re-run the same `docker run` command from step 4
@@ -273,7 +273,7 @@ The named volume persists across the rebuild. Captured leads survive.
 To pin to a specific version (recommended for production):
 
 ```sh
-docker pull ghcr.io/itkujo/smile-nola-booth:0.2.0
+docker pull ghcr.io/itkujo/smile-nola/booth:0.2.0
 # ... and use that tag in the docker run command
 ```
 
