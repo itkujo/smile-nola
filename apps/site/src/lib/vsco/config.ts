@@ -114,7 +114,17 @@ export const CUSTOM_FIELD_KEYS = [
   'reserved-package',
   'event-setting',
   'consultation-preference',
+  // `builder-submission-link` holds the PUBLIC builder URL — the
+  // `https://smilenola.com/build?invite=<token>` link we hand to the
+  // client. Populated on the inquiry → qualify push so VSCO operators
+  // can see (and re-send) the link without going back to the admin app.
   'builder-submission-link',
+  // `builder-submission-review` holds the INTERNAL admin review URL
+  // (`/admin/builder-submissions/<id>`) once the client actually
+  // submits the builder. Separate from `builder-submission-link` so
+  // both URLs remain visible in VSCO — the client-facing one and the
+  // internal one — instead of one overwriting the other.
+  'builder-submission-review',
   // Added in Model B: Job Type now captures the service line (Photo
   // Booth / Videography / Production), so the kind of event (Wedding,
   // Corporate, etc.) lives in this custom field instead.

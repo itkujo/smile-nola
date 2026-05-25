@@ -854,6 +854,26 @@ const TIME_OPTIONS: Array<{ value: string; label: string }> = (() => {
           throw new Error(data.error || `Server responded ${res.status}`);
         }
 
+        // Plausible: log a successful inquiry as a conversion. The script
+        // is only injected on production hosts, so `window.plausible` may
+        // be undefined in dev — guard it. Props help segment in the
+        // dashboard: which collections drove the lead, whether a date
+        // was provided (stronger signal of intent), and which form
+        // variant fired (this is the long /contact form).
+        if (typeof window !== "undefined" && window.plausible) {
+          window.plausible("Inquiry Submitted", {
+            props: {
+              form: "deep",
+              collections: collectionsInterested.length
+                ? collectionsInterested.join(",")
+                : "none",
+              has_date: Boolean(
+                typeof payload.event_date === "string" && payload.event_date
+              ),
+            },
+          });
+        }
+
         // Personalize the thank-you using whatever the user shared.
         const firstName = typeof payload.first_name === "string" ? payload.first_name.trim() : "";
         const eventDate = typeof payload.event_date === "string" ? payload.event_date.trim() : "";

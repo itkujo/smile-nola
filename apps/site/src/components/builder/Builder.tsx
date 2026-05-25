@@ -110,6 +110,27 @@ export function Builder({ invite }: BuilderProps) {
         return;
       }
       state.clearPersisted();
+
+      // Plausible: a built-and-submitted package is the strongest
+      // conversion signal we have on the public site — separate event
+      // name from the generic "Inquiry Submitted" so it can be set as
+      // its own Goal in the dashboard. Props let us segment by
+      // consultation preference (call vs in-person) and by which
+      // collections were selected. Guarded because the tracker script
+      // is only loaded on production hosts.
+      if (typeof window !== "undefined" && window.plausible) {
+        window.plausible("Package Built", {
+          props: {
+            consultation: state.consultationPref || "unset",
+            collections: state.collections.length
+              ? state.collections.join(",")
+              : "none",
+            collection_count: state.collections.length,
+            invited: Boolean(invite),
+          },
+        });
+      }
+
       setSubmitState({ kind: "success", firstName });
     } catch (err) {
       // eslint-disable-next-line no-console

@@ -86,6 +86,7 @@ const cfg: VscoConfig = {
     'event-setting': 'CF_EVENT_SETTING',
     'consultation-preference': 'CF_CONSULT_PREF',
     'builder-submission-link': 'CF_BUILDER_LINK',
+    'builder-submission-review': 'CF_BUILDER_REVIEW',
     'event-occasion': 'CF_EVENT_OCCASION',
   },
 }
@@ -670,6 +671,73 @@ describe('inquiryToJobWorksheet', () => {
     expect(casey!.jobRoles).toContain('JR_PRIMARY')
   })
 
+  it('booth: partner field with first-name-only dedupes against POC full name', () => {
+    // Real-world booth pattern: POC enters "Christiana White" as their
+    // name, then types just "Christiana" again in the Partner 2 field
+    // (because they're "one of the couple" and the other partner is
+    // their nickname). Without first-name dedup, VSCO sees Christiana
+    // White + a separate "Christiana" contact and auto-titles the Job
+    // "Christiana, Christiana White, et al's Videography".
+    const inquiry = makeInquiry({
+      source: 'booth-expo',
+      first_name: 'Christiana',
+      last_name: 'White',
+      email: 'christiana@example.com',
+      partner1_name: 'Chunks',          // distinct partner — stays as separate contact
+      partner2_name: 'Christiana',       // her again, no last name — must merge into POC
+      event_type: 'wedding',
+      poc_relationship: 'One of the couple',
+      external_uuid: 'uuid-booth-4',
+    })
+    const ws = inquiryToJobWorksheet(inquiry, { config: cfg, siteBase })
+    const persons = ws.contacts.filter((c) => c.contact.kind === 'person')
+
+    // Exactly 2 persons: POC (=partner-b) + Chunks (=partner-a). The
+    // third "Christiana" entry MUST be absorbed into the POC contact.
+    expect(persons).toHaveLength(2)
+
+    const poc = persons.find((p) =>
+      p.contact.kind === 'person' && p.contact.email === 'christiana@example.com',
+    )
+    expect(poc).toBeDefined()
+    expect(poc!.jobRoles).toContain('JR_PRIMARY')
+    // POC absorbs the partner-b role from the duplicate Christiana entry.
+    expect(poc!.jobRoles).toContain('JR_PB')
+
+    // Chunks remains as the partner-a contact (no last name, no first-name
+    // collision with the POC → not deduped).
+    const chunks = persons.find((p) =>
+      p.contact.kind === 'person' && p.contact.firstName === 'Chunks',
+    )
+    expect(chunks).toBeDefined()
+    expect(chunks!.jobRoles).toEqual(['JR_PA'])
+  })
+
+  it('booth: same first name with DIFFERENT last names stays as distinct contacts', () => {
+    // Guard against over-eager dedup: if both sides have non-empty
+    // last names AND they differ, treat as different people.
+    const inquiry = makeInquiry({
+      source: 'booth-expo',
+      first_name: 'Christiana',
+      last_name: 'White',
+      email: 'christiana.white@example.com',
+      partner1_name: 'Christiana Smith', // same first name, different last
+      partner2_name: null,
+      event_type: 'wedding',
+      poc_relationship: 'One of the couple',
+      external_uuid: 'uuid-booth-5',
+    })
+    const ws = inquiryToJobWorksheet(inquiry, { config: cfg, siteBase })
+    const persons = ws.contacts.filter((c) => c.contact.kind === 'person')
+    // POC + Christiana Smith → 2 distinct contacts.
+    expect(persons).toHaveLength(2)
+    const poc = persons.find((p) =>
+      p.contact.kind === 'person' && p.contact.email === 'christiana.white@example.com',
+    )
+    // POC must NOT have absorbed partner-a.
+    expect(poc!.jobRoles).not.toContain('JR_PA')
+  })
+
   it('sets the 5 interested-* custom fields based on collections_interested', () => {
     const inquiry = makeInquiry({
       collections_interested: JSON.stringify(['smile', 'aurora', 'visionary']),
@@ -703,6 +771,32 @@ describe('inquiryToJobWorksheet', () => {
     const ws = inquiryToJobWorksheet(inquiry, { config: cfg, siteBase })
     const cfMap = Object.fromEntries(ws.customFields.map((c) => [c.fieldId, c.value]))
     expect(cfMap['CF_EVENT_SETTING']).toBe('Outdoor — Covered')
+  })
+
+  it('writes builder-submission-link when builderInviteUrl is supplied', () => {
+    // This is what the qualify push does: it mints (or reuses) an invite
+    // token via createOrGetActiveInvite and hands the resulting public
+    // URL to the mapper. The CF should land in the worksheet verbatim.
+    const inquiry = makeInquiry()
+    const url = 'https://smilenola.com/build?invite=abc123'
+    const ws = inquiryToJobWorksheet(inquiry, {
+      config: cfg,
+      siteBase,
+      builderInviteUrl: url,
+    })
+    const cfMap = Object.fromEntries(ws.customFields.map((c) => [c.fieldId, c.value]))
+    expect(cfMap['CF_BUILDER_LINK']).toBe(url)
+  })
+
+  it('omits builder-submission-link when builderInviteUrl is not supplied', () => {
+    // Older call sites (and tests) that don't care about the link must
+    // not get an empty value silently written — the field stays absent
+    // so VSCO's merge logic doesn't overwrite a previously-set value
+    // with empty string.
+    const inquiry = makeInquiry()
+    const ws = inquiryToJobWorksheet(inquiry, { config: cfg, siteBase })
+    const cfMap = Object.fromEntries(ws.customFields.map((c) => [c.fieldId, c.value]))
+    expect(cfMap['CF_BUILDER_LINK']).toBeUndefined()
   })
 
   it('parses budget_range into leadMaxBudget (DOLLARS — VSCO multiplies x100 internally)', () => {
@@ -808,9 +902,17 @@ describe('builderToJobUpdate', () => {
     expect(patch.eventDate).toBe('2026-10-12')
     expect(patch.guestCount).toBe(140)
 
-    // builder-submission-link custom field points to admin builder page
+    // The builder push writes the admin review URL into its OWN field
+    // ('builder-submission-review') so it doesn't clobber the public
+    // /build?invite=… URL written at qualify time into 'builder-submission-link'.
+    const review = patch.customFields?.find((c) => c.fieldId === 'CF_BUILDER_REVIEW')
+    expect(review?.value).toBe('https://smilenola.com/admin/builder-submissions/10')
+
+    // The builder push must NOT touch 'builder-submission-link' — that
+    // field is owned by the inquiry push and holds the client-facing
+    // invite URL for the lifetime of the Job.
     const link = patch.customFields?.find((c) => c.fieldId === 'CF_BUILDER_LINK')
-    expect(link?.value).toBe('https://smilenola.com/admin/builder-submissions/10')
+    expect(link).toBeUndefined()
 
     // consultation-preference custom field set
     const pref = patch.customFields?.find((c) => c.fieldId === 'CF_CONSULT_PREF')

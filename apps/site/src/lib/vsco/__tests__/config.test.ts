@@ -74,6 +74,7 @@ const validConfig: VscoConfig = {
     'event-setting': '01cf0007',
     'consultation-preference': '01cf0008',
     'builder-submission-link': '01cf0009',
+    'builder-submission-review': '01cf0011',
     'event-occasion': '01cf0010',
   },
 }

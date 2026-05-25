@@ -76,6 +76,7 @@
     "reserved-package": "01...",
     "event-setting": "01...",
     "consultation-preference": "01...",
-    "builder-submission-link": "01..."
+    "builder-submission-link": "01...",
+    "builder-submission-review": "01..."
   }
 }

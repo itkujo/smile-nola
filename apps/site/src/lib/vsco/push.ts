@@ -19,6 +19,7 @@
 import type { InquiryRow } from '@/lib/db'
 import type { PackageBuilderSubmissionRow } from '@/lib/builder/submissions'
 import {
+  getDb,
   getInquiry,
   getVscoEntityId,
   recordVscoEntities,
@@ -26,6 +27,7 @@ import {
   type VscoEntityKind,
   type VscoPushTrigger,
 } from '@/lib/db'
+import { createOrGetActiveInvite } from '@/lib/builder/invites'
 import { VscoClient, VscoError } from './client.ts'
 import { loadVscoConfig, type VscoConfig } from './config.ts'
 import {
@@ -56,6 +58,29 @@ function isEnabled(): boolean {
 
 function siteBase(): string {
   return process.env.SITE_PUBLIC_URL || 'https://smilenola.com'
+}
+
+/**
+ * Mint (or reuse) the active package-builder invite for this inquiry and
+ * return the public `${siteBase}/build?invite=<token>` URL we hand to the
+ * client. This is the same URL the "Copy package builder link" button on
+ * `/admin/inquiries/<id>` generates — `createOrGetActiveInvite` is
+ * idempotent, so calling it from both places is safe and yields the same
+ * token until it gets consumed.
+ *
+ * Returns null and logs (does not throw) on any failure so a transient DB
+ * blip can't take down the whole VSCO push. Callers should treat null as
+ * "skip the builder-submission-link custom field" and proceed.
+ */
+function builderInviteUrlForInquiry(inquiryId: number): string | null {
+  try {
+    const invite = createOrGetActiveInvite(getDb(), inquiryId, 'admin')
+    return `${siteBase()}/build?invite=${encodeURIComponent(invite.token)}`
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[vsco] builderInviteUrlForInquiry failed', err)
+    return null
+  }
 }
 
 let clientSingleton: VscoClient | null = null
@@ -181,6 +206,10 @@ export async function pushInquiryToVsco(
     const worksheet = inquiryToJobWorksheet(inquiry, {
       config,
       siteBase: siteBase(),
+      // Surface the public builder URL in VSCO from the moment the lead
+      // is qualified — same link the operator would copy from the admin
+      // inquiry page. Null on failure → field simply omitted.
+      builderInviteUrl: builderInviteUrlForInquiry(inquiry.id) ?? undefined,
     })
     const client = getVscoClient()
     const response = await client.post<JobWorksheetResponse>(
@@ -309,6 +338,10 @@ async function updateJobFromInquiry(
   const ws = inquiryToJobWorksheet(inquiry, {
     config,
     siteBase: siteBase(),
+    // Include the invite URL on update pushes too, so inquiries that
+    // existed before this code shipped get the link backfilled on their
+    // next push (e.g. an admin edit, status change, or manual re-push).
+    builderInviteUrl: builderInviteUrlForInquiry(inquiry.id) ?? undefined,
   })
 
   const next: JobWrite = {

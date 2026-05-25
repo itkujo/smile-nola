@@ -35,6 +35,37 @@ const fullTitle = title.includes("Smile NOLA")
   : `${title} · Smile NOLA`;
 
 const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? "https://smile-nola.com").toString();
+
+/**
+ * Plausible analytics — production only.
+ *
+ * We self-host Plausible (Community Edition) at plausible.relentnet.dev.
+ * The script filename encodes the optional measurements that are enabled
+ * (the server pre-builds a separate JS file per combination of
+ * extensions). We enable: outbound-links, file-downloads, tagged-events.
+ *
+ * Note: 404 tracking is configured in the Plausible dashboard, not by
+ * the script filename. The CE build does not ship a `.404.` variant —
+ * adding it to the filename gives a 404 from the JS server.
+ *
+ * Gated by `import.meta.env.PROD` (Astro's build-time prod flag) rather
+ * than `Astro.url.hostname`. Behind Coolify's Traefik proxy, the Host
+ * header the container sees is the internal forwarded address (e.g.
+ * 10.0.x.x:3000), NOT smile-nola.com — same root-cause that earlier
+ * forced SITE_PUBLIC_URL / X-Forwarded-Host handling for absolute URLs.
+ * A hostname check evaluated to "this is localhost" and the script was
+ * never emitted in production. `PROD` is set at build time by Astro's
+ * own `astro build`, so it's stable regardless of the proxy.
+ *
+ * Plausible's own script ignores localhost client-side by default, so
+ * dev pageviews still don't pollute the dashboard.
+ *
+ * `tagged-events` lets us add class names like
+ *   `plausible-event-name=Phone+Tap` or
+ *   `plausible-event-name=Email+Click`
+ * to anchor/button tags and have them auto-tracked as custom events.
+ */
+const enablePlausible = import.meta.env.PROD;
 ---
 
 <!doctype html>
@@ -75,6 +106,35 @@ const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? "htt
     <meta name="twitter:title" content={fullTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={new URL(ogImage, Astro.site ?? "https://smile-nola.com").toString()} />
+
+    {/*
+      Plausible analytics — only injected in production (see hostname check
+      above). Self-hosted at plausible.relentnet.dev. The filename combo
+      enables: outbound link click tracking, file download tracking, and
+      tagged-events (manual class-based event tagging on CTAs). Loaded
+      `defer` so it never blocks rendering. 404 tracking is configured in
+      the Plausible dashboard itself (CE doesn't ship a `.404.` variant).
+    */}
+    {enablePlausible && (
+      <script
+        is:inline
+        defer
+        data-domain="smile-nola.com"
+        src="https://plausible.relentnet.dev/js/script.outbound-links.file-downloads.tagged-events.js"
+      ></script>
+    )}
+
+    {/*
+      Plausible queue shim — lets us call `window.plausible('Event Name', { props })`
+      from islands before the deferred script has finished loading. The real
+      script replaces this with the actual implementation on load, then flushes
+      the queue. Same snippet recommended by Plausible's docs for manual events.
+    */}
+    {enablePlausible && (
+      <script is:inline>
+        window.plausible = window.plausible || function () { (window.plausible.q = window.plausible.q || []).push(arguments) };
+      </script>
+    )}
 
     <!-- LocalBusiness structured data -->
     <script type="application/ld+json" is:inline set:html={JSON.stringify({
