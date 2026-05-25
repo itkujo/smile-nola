@@ -17,7 +17,7 @@ The image is published at `ghcr.io/itkujo/smile-nola/booth` and is multi-arch (`
 docker run -d \
   --name smile-nola-booth \
   -p 3000:3000 \
-  -v smile_nola_booth_data:/data \
+  -v "$(pwd)/data:/data" \
   --env-file ~/smile-nola-booth.env \
   --restart unless-stopped \
   ghcr.io/itkujo/smile-nola/booth:latest
@@ -112,7 +112,7 @@ docker pull ghcr.io/itkujo/smile-nola/booth:latest
 docker run -d \
   --name smile-nola-booth \
   -p 3000:3000 \
-  -v smile_nola_booth_data:/data \
+  -v "$(pwd)/data:/data" \
   --env-file ~/smile-nola-booth/.env \
   --restart unless-stopped \
   ghcr.io/itkujo/smile-nola/booth:latest
@@ -181,7 +181,7 @@ nano .env   # paste the template from the Pi section above
 docker run -d \
   --name smile-nola-booth \
   -p 3000:3000 \
-  -v smile_nola_booth_data:/data \
+  -v "$(pwd)/data:/data" \
   --env-file ~/smile-nola-booth/.env \
   --restart unless-stopped \
   ghcr.io/itkujo/smile-nola/booth:latest
@@ -225,26 +225,26 @@ If `INTAKE_SYNC_TOKEN` is absent the booth runs fully offline and queues leads i
 
 ## Persistent storage
 
-The booth's SQLite database lives inside the Docker named volume `smile_nola_booth_data`. It survives container restarts, image upgrades, and host reboots.
+The booth's SQLite database lives in `./data/` on the host (a bind mount into the container's `/data/`). It survives container restarts, image upgrades, and host reboots.
+
+Why a bind mount over a Docker named volume:
+
+- **Visible on the host.** `ls ~/smile-nola-booth/data/` shows `leads.db` directly. CasaOS / Portainer / Synology Files all browse to it. No `docker volume inspect` dance.
+- **Portable WITH the compose.** `tar czf booth.tgz docker-compose.booth.yml data/` captures everything needed to migrate.
 
 ### Backup
 
 ```sh
-# Snapshot the volume to a tarball
-docker run --rm \
-  -v smile_nola_booth_data:/data \
-  -v $(pwd):/backup \
-  alpine tar czf /backup/booth-data-$(date +%Y%m%d-%H%M%S).tgz -C /data .
+cd ~/smile-nola-booth   # wherever your .env + data/ live
+tar czf booth-data-$(date +%Y%m%d-%H%M%S).tgz data/
 ```
 
-### Restore (or migrate to a new Pi)
+### Restore (or migrate to a new host)
 
 ```sh
-docker volume create smile_nola_booth_data
-docker run --rm \
-  -v smile_nola_booth_data:/data \
-  -v $(pwd):/backup \
-  alpine tar xzf /backup/booth-data-YYYYMMDD-HHMMSS.tgz -C /data
+cd ~/smile-nola-booth
+tar xzf booth-data-YYYYMMDD-HHMMSS.tgz   # writes data/leads.db
+# Then start the container with the normal `docker run` from below.
 ```
 
 ### DESTROY (only after confirming everything synced)
@@ -252,10 +252,26 @@ docker run --rm \
 ```sh
 docker stop smile-nola-booth
 docker rm smile-nola-booth
-docker volume rm smile_nola_booth_data
+rm -rf ~/smile-nola-booth/data
 ```
 
 Don't run that last command unless `/api/health` reports `"pending":0` and you've verified the rows on `smile-nola.com/admin`.
+
+### CasaOS / ZimaBlade override
+
+CasaOS prefers app data under `/DATA/AppData/<app>/` so the directory shows up in its Files app and the per-app "Back up" button works. Map there instead of `./data` in your compose:
+
+```yaml
+volumes:
+  - /DATA/AppData/smile-nola-booth/data:/data
+```
+
+Pre-create the directory with the right ownership before first start:
+
+```sh
+sudo mkdir -p /DATA/AppData/smile-nola-booth/data
+sudo chown -R 100:101 /DATA/AppData/smile-nola-booth
+```
 
 ---
 

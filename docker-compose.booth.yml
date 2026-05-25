@@ -73,14 +73,25 @@ services:
       - "3000:3000"
 
     volumes:
-      # Named volume = portable across machines. Survives container/image
-      # upgrades and host reboots. To migrate to a new machine:
-      #   1. On old:   docker run --rm -v smile_nola_booth_data:/d \
-      #                  -v $(pwd):/b alpine tar czf /b/booth-data.tgz -C /d .
-      #   2. On new:   docker volume create smile_nola_booth_data && \
-      #                docker run --rm -v smile_nola_booth_data:/d \
-      #                  -v $(pwd):/b alpine tar xzf /b/booth-data.tgz -C /d
-      - smile_nola_booth_data:/data
+      # Bind mount: the booth's SQLite DB lives in a `data/` dir alongside
+      # this compose file on the host. Two reasons over a named volume:
+      #
+      #   1. **Visible on the host.** Pi/laptop/NAS operators can `ls` the
+      #      directory, sqlite3 the DB, scp it for backup, no `docker volume
+      #      inspect` dance. CasaOS / Portainer / Synology DSM all show the
+      #      directory natively in their file browsers.
+      #   2. **Portable WITH the compose.** `tar czf booth.tgz docker-compose.booth.yml data/`
+      #      captures everything needed to move a booth to a new host. No
+      #      separate `docker volume export` step.
+      #
+      # The directory is auto-created on first `up`. Pre-create with
+      # `mkdir -p ./data && sudo chown -R 100:101 ./data` if you want to
+      # set ownership before the container's first write.
+      #
+      # ZimaBlade/CasaOS deployments override this to `/DATA/AppData/smile-nola-booth/data:/data`
+      # so the data dir shows up in the CasaOS Files app. That override
+      # lives in the host's local compose copy, not here.
+      - ./data:/data
 
     healthcheck:
       # Hits /api/health (DB-aware probe). A passing healthcheck means
@@ -95,8 +106,3 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
-
-volumes:
-  smile_nola_booth_data:
-    # Distinct from the prod `smile_nola_data` volume. Booth-only.
-    name: smile_nola_booth_data
