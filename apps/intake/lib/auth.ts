@@ -119,12 +119,35 @@ export interface IssuedCookie {
   exp: number;
 }
 
+/**
+ * Decide whether to set the `Secure` flag on outgoing cookies.
+ *
+ * Browsers REFUSE to store a `Secure` cookie that arrives over plain HTTP.
+ * The booth deliberately serves plain HTTP on the LAN (no TLS required for
+ * a single-iPad kiosk on venue Wi-Fi), so gating Secure on NODE_ENV would
+ * silently break login on every booth deployment.
+ *
+ * Rule: emit `Secure` only when we are CERTAIN the original client request
+ * actually arrived over HTTPS. Trust:
+ *   1. `req.url` reporting an https:// origin (rare for fetch APIs but happens
+ *      when called from a hosted SSR context like Coolify), OR
+ *   2. `X-Forwarded-Proto: https` from a reverse proxy (Coolify's Traefik,
+ *      Caddy, nginx, etc. set this when terminating TLS upstream).
+ *
+ * Plain-HTTP LAN booth → no Secure → cookie persists on the iPad.
+ * HTTPS-fronted hosted deployment → Secure → cookie is locked to TLS.
+ */
+function requestIsHttps(req?: Request): boolean {
+  if (!req) return false;
+  if (req.url.startsWith("https://")) return true;
+  const xfProto = req.headers.get("x-forwarded-proto");
+  if (xfProto && xfProto.split(",")[0]?.trim() === "https") return true;
+  return false;
+}
+
 export function issueSessionCookie(req?: Request): IssuedCookie {
   const exp = Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SEC;
   const value = signCookie(exp);
-  const isHttps =
-    process.env.NODE_ENV === "production" ||
-    req?.url.startsWith("https://") === true;
   const parts = [
     `${COOKIE_NAME}=${value}`,
     "Path=/",
@@ -132,14 +155,11 @@ export function issueSessionCookie(req?: Request): IssuedCookie {
     "SameSite=Lax",
     `Max-Age=${SESSION_MAX_AGE_SEC}`,
   ];
-  if (isHttps) parts.push("Secure");
+  if (requestIsHttps(req)) parts.push("Secure");
   return { header: parts.join("; "), value, name: COOKIE_NAME, exp };
 }
 
 export function clearSessionCookie(req?: Request): string {
-  const isHttps =
-    process.env.NODE_ENV === "production" ||
-    req?.url.startsWith("https://") === true;
   const parts = [
     `${COOKIE_NAME}=`,
     "Path=/",
@@ -147,7 +167,7 @@ export function clearSessionCookie(req?: Request): string {
     "SameSite=Lax",
     "Max-Age=0",
   ];
-  if (isHttps) parts.push("Secure");
+  if (requestIsHttps(req)) parts.push("Secure");
   return parts.join("; ");
 }
 
