@@ -9,7 +9,13 @@
 # different domains (smile-nola.com vs expo.smile-nola.com).
 # =============================================================================
 
-ARG NODE_VERSION=22-alpine
+# Pinned to Alpine 3.22 (not :22-alpine which floats to 3.23+). Alpine 3.23's
+# musl libc dropped/renamed the `fcntl64` symbol that better-sqlite3's
+# prebuilt binary (from prebuild-install) expects. The result on a `:22-alpine`
+# build is `Error relocating ... fcntl64: symbol not found` at first DB query.
+# Pin until better-sqlite3 publishes a prebuild against musl 1.2.5+ for
+# Alpine 3.23, then bump.
+ARG NODE_VERSION=22-alpine3.22
 
 # -----------------------------------------------------------------------------
 # Stage 1: deps -- install all dependencies, compile better-sqlite3 against
@@ -26,7 +32,19 @@ COPY package.json pnpm-lock.yaml .npmrc ./
 RUN corepack prepare --activate
 
 # Frozen lockfile so the container build matches what the host generated.
-RUN pnpm install --frozen-lockfile
+#
+# CRITICAL: better-sqlite3's `prebuild-install` ships a binary linked
+# against GLIBC, not musl — even on alpine. On Alpine 3.22+ the binary
+# loads but fails at first call with "Error relocating ... fcntl64:
+# symbol not found" because Alpine's musl doesn't expose fcntl64@GLIBC_2.28.
+# We delete the broken prebuild after install and force node-gyp to
+# compile against THIS image's musl libc. The deps stage has python3 +
+# make + g++ already installed for exactly this.
+RUN pnpm install --frozen-lockfile \
+ && npm install -g node-gyp \
+ && cd node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3 \
+ && rm -rf build prebuilds \
+ && node-gyp rebuild --release
 
 # -----------------------------------------------------------------------------
 # Stage 2: build -- compile the Next.js app to .next/standalone.

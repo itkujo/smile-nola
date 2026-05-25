@@ -2,8 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 
-const DEFAULT_PROXY_BASE =
-  process.env.NEXT_PUBLIC_PROXY_BASE ?? "https://smile-nola.com";
+// Default: call the booth's own /api/places/* routes (vendored from the
+// marketing site so the booth is self-sufficient and doesn't depend on
+// smile-nola.com being reachable from venue Wi-Fi).
+//
+// Override by setting NEXT_PUBLIC_PROXY_BASE at build time — useful for
+// dev or for a booth deployment that wants to share the site's Places
+// quota instead of using its own GOOGLE_PLACES_API_KEY.
+const DEFAULT_PROXY_BASE = process.env.NEXT_PUBLIC_PROXY_BASE ?? "";
 
 export interface VenueValue {
   name: string;
@@ -51,10 +57,12 @@ interface Props {
  * transparent bg, gold underline w/ amber glow on focus) so the autocomplete
  * field blends with the rest of the intake form.
  *
- * Calls the SITE's /api/places proxy cross-origin (booth domain != site
- * domain). The site proxy emits Access-Control-Allow-Origin: * headers
- * to permit this. Falls back to free-text entry if the proxy is down
- * or the user types without picking.
+ * Calls the booth's own /api/places/* routes by default (relative URLs,
+ * vendored from the marketing site). Set NEXT_PUBLIC_PROXY_BASE at build
+ * time to point at a different origin (e.g. "https://smile-nola.com")
+ * if you want this booth to share the site's Places quota instead of
+ * using its own GOOGLE_PLACES_API_KEY. Falls back to free-text entry if
+ * the proxy is down or the user types without picking.
  */
 export function VenueAutocomplete({
   value,

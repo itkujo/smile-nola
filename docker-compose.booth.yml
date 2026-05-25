@@ -1,0 +1,102 @@
+# =============================================================================
+# Smile NOLA — booth laptop / Pi compose file
+#
+# Runs the intake app in a single container, exposed on the LAN so an iPad
+# on the venue Wi-Fi can submit leads. Captured rows live in a Docker named
+# volume; the in-app drainer pushes them to smile-nola.com when online.
+#
+# DEPLOY MODES
+#   1. Production (default):    Pulls a published multi-arch image from
+#                               ghcr.io/itkujo/smile-nola/booth:latest.
+#                               Use this on the Pi.
+#   2. Local dev build:         BOOTH_IMAGE=local docker compose -f \
+#                               docker-compose.booth.yml up -d --build
+#                               Builds from apps/intake/ source. Use this
+#                               when iterating on the booth code.
+#
+# USAGE
+#   ✦  Start  →  docker compose -f docker-compose.booth.yml up -d
+#   ✦  Stop   →  docker compose -f docker-compose.booth.yml down
+#   ✦  Logs   →  docker compose -f docker-compose.booth.yml logs -f intake
+#   ✦  Reset  →  docker compose -f docker-compose.booth.yml down -v
+#                (DESTROYS the local booth DB — only after confirming all
+#                rows have synced to smile-nola.com.)
+#
+# WHY A SEPARATE COMPOSE FILE (not the root docker-compose.yml)?
+#   The root file is the PRODUCTION compose, shipped to Coolify. Coolify
+#   reads it and creates both site + intake on its own server. The booth
+#   laptop/Pi should NOT spin up a marketing site too — this overlay
+#   defines only the booth-side intake service.
+# =============================================================================
+
+services:
+  intake:
+    # ── Image selection ─────────────────────────────────────────────────────
+    # Default: pull the published multi-arch booth image from ghcr.io.
+    # Override:
+    #   BOOTH_IMAGE=local        → build from apps/intake/ source
+    #   BOOTH_IMAGE=ghcr.io/...:tag → pin a specific tag (e.g. v0.1.0, edge)
+    image: ${BOOTH_IMAGE:-ghcr.io/itkujo/smile-nola/booth:latest}
+    # When BOOTH_IMAGE=local, this build section kicks in. The image is
+    # tagged smile-nola-booth:local-dev and reused on subsequent `up`s.
+    build:
+      context: ./apps/intake
+      dockerfile: Dockerfile
+    container_name: smile-nola-booth
+    restart: unless-stopped
+
+    # The intake app reads env at startup. apps/intake/.env.local lives in
+    # the repo (gitignored) and contains:
+    #   ADMIN_PASSWORD, ADMIN_SESSION_SECRET — booth admin gate
+    #   INTAKE_SYNC_TOKEN                    — prod sync auth
+    #   INTAKE_SYNC_URL                      — defaults to smile-nola.com
+    #   GOOGLE_PLACES_API_KEY                — booth's own Places key (optional)
+    env_file:
+      - apps/intake/.env.local
+
+    environment:
+      # Container-internal; override env_file.
+      NODE_ENV: production
+      HOSTNAME: "0.0.0.0"
+      PORT: "3000"
+      # SQLite location. The named volume below mounts onto /data.
+      SMILE_NOLA_DB_DIR: "/data"
+      # Default the sync URL/interval if .env.local omits them. .env.local
+      # wins when set (env_file is loaded before `environment:`).
+      INTAKE_SYNC_URL: ${INTAKE_SYNC_URL:-https://smile-nola.com/api/sync/inquiries}
+      INTAKE_SYNC_INTERVAL: ${INTAKE_SYNC_INTERVAL:-30000}
+
+    ports:
+      # 0.0.0.0:3000 → container:3000. The iPad on venue Wi-Fi reaches us
+      # at http://<host-LAN-ip>:3000/. The start script prints the URL +
+      # a QR code so the iPad can scan it.
+      - "3000:3000"
+
+    volumes:
+      # Named volume = portable across machines. Survives container/image
+      # upgrades and host reboots. To migrate to a new machine:
+      #   1. On old:   docker run --rm -v smile_nola_booth_data:/d \
+      #                  -v $(pwd):/b alpine tar czf /b/booth-data.tgz -C /d .
+      #   2. On new:   docker volume create smile_nola_booth_data && \
+      #                docker run --rm -v smile_nola_booth_data:/d \
+      #                  -v $(pwd):/b alpine tar xzf /b/booth-data.tgz -C /d
+      - smile_nola_booth_data:/data
+
+    healthcheck:
+      # Hits /api/health (DB-aware probe). A passing healthcheck means
+      # SELECT 1 succeeded against the booth's SQLite file — the entire
+      # write path is alive.
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  smile_nola_booth_data:
+    # Distinct from the prod `smile_nola_data` volume. Booth-only.
+    name: smile_nola_booth_data
