@@ -38,6 +38,9 @@ on:
     paths:
       - "apps/intake/**"
       - ".github/workflows/booth-release.yml"
+  schedule:
+    # Weekly rebuild on a fresh base image (Mondays 08:00 UTC, a quiet hour).
+    - cron: "0 8 * * 1"
   workflow_dispatch:
 
 permissions:
