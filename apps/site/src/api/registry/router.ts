@@ -13,7 +13,7 @@
 
 import crypto from "node:crypto";
 import type { AnyOperation, AuthContext } from "./define";
-import { BODY_METHODS, pathParams } from "./define";
+import { BODY_METHODS, ResponseExtras, pathParams } from "./define";
 import { authenticate, authorize } from "./auth";
 import { ApiError, badRequest, fromZodError } from "./errors";
 import { apiRateLimiter, rateLimitHeaders, type RateLimiter } from "./ratelimit";
@@ -84,7 +84,29 @@ function isJsonContentType(ct: string | null): boolean {
   return base === "application/json" || (base.startsWith("application/") && base.endsWith("+json"));
 }
 
-async function readBody(request: Request): Promise<Record<string, unknown>> {
+function isMultipart(ct: string | null): boolean {
+  return (ct ?? "").split(";")[0].trim().toLowerCase() === "multipart/form-data";
+}
+
+async function readMultipart(request: Request): Promise<Record<string, unknown>> {
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    throw badRequest("body: not valid multipart form data");
+  }
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of form.entries()) {
+    if (v instanceof File && v.size === 0) continue; // an empty file input
+    const prev = out[k];
+    if (prev === undefined) out[k] = v;
+    else out[k] = Array.isArray(prev) ? [...prev, v] : [prev, v];
+  }
+  return out;
+}
+
+async function readBody(request: Request, multipart = false): Promise<Record<string, unknown>> {
+  if (multipart && isMultipart(request.headers.get("content-type"))) return readMultipart(request);
   const text = await request.text();
   if (text.trim() === "") return {};
   if (!isJsonContentType(request.headers.get("content-type"))) {
@@ -185,20 +207,34 @@ export function createRouter(opts: RouterOptions): ApiHandler {
       authorize(op, auth, request);
 
       // 5. Input.
-      const body = BODY_METHODS.has(op.method) ? await readBody(request) : {};
+      const body = BODY_METHODS.has(op.method) ? await readBody(request, op.multipart) : {};
       const raw = { ...queryObject(url), ...body, ...params };
       const parsed = op.input.safeParse(raw);
       if (!parsed.success) throw fromZodError(parsed.error);
 
       // 6. Handle.
-      const result = await op.handler({ input: parsed.data, auth, request, requestId });
+      const answer = await op.handler({
+        input: parsed.data,
+        auth,
+        request,
+        requestId,
+        clientAddress: meta.clientAddress ?? "unknown",
+      });
+      const extras = answer instanceof ResponseExtras ? answer.extras : {};
+      const result = answer instanceof ResponseExtras ? answer.value : answer;
       const out = op.output.safeParse(result);
       if (!out.success) {
         throw new Error(`operation ${op.id} answered outside its output schema: ${out.error.message}`);
       }
-      const status = op.successStatus ?? 200;
+      const status = extras.status ?? op.successStatus ?? 200;
+      if (op.text) {
+        return new Response(String(out.data), {
+          status,
+          headers: { ...headers, ...extras.headers, "Content-Type": op.text.contentType },
+        });
+      }
       if (status === 204) return new Response(null, { status, headers: { "X-Request-Id": requestId, ...rateHeadersOnly(headers) } });
-      return new Response(JSON.stringify(out.data), { status, headers });
+      return new Response(JSON.stringify(out.data), { status, headers: { ...headers, ...extras.headers } });
     } catch (err) {
       const apiErr =
         err instanceof ApiError

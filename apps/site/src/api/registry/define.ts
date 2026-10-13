@@ -30,7 +30,24 @@ export interface HandlerContext<I> {
   auth: AuthContext;
   request: Request;
   requestId: string;
+  /** The caller's address (for per-address limits); "unknown" when the adapter cannot tell. */
+  clientAddress: string;
 }
+
+/**
+ * Wrap a handler's answer to add response headers (e.g. Set-Cookie) or
+ * override the status. The value is still validated against the output schema.
+ */
+export class ResponseExtras<T> {
+  constructor(
+    readonly value: T,
+    readonly extras: { headers?: Record<string, string>; status?: number } = {},
+  ) {}
+}
+export const withResponse = <T>(
+  value: T,
+  extras: { headers?: Record<string, string>; status?: number } = {},
+): ResponseExtras<T> => new ResponseExtras(value, extras);
 
 /** The marker the discovery step looks for on module exports. */
 export const OPERATION = Symbol.for("smile-nola.api.operation");
@@ -57,9 +74,22 @@ export interface OperationSpec<I extends InputSchema, O extends OutputSchema> {
   output: O;
   /** HTTP status on success. Default 200. */
   successStatus?: number;
+  /**
+   * Also accept multipart/form-data (file uploads). Fields become input keys
+   * (repeated keys become arrays; files stay File objects). Every other
+   * operation answers 415 to a non-JSON body.
+   */
+  multipart?: boolean;
+  /**
+   * The answer is a string sent as-is with this content type (CSV export),
+   * not JSON. The output schema must be z.string().
+   */
+  text?: { contentType: string };
   /** Offer this operation to AI agents (MCP) once that exists. */
   agent?: boolean;
-  handler: (ctx: HandlerContext<z.output<I>>) => Promise<z.input<O>> | z.input<O>;
+  handler: (
+    ctx: HandlerContext<z.output<I>>,
+  ) => Promise<z.input<O> | ResponseExtras<z.input<O>>> | z.input<O> | ResponseExtras<z.input<O>>;
 }
 
 export type Operation<I extends InputSchema = InputSchema, O extends OutputSchema = OutputSchema> =
