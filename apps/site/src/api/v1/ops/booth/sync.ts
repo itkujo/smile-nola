@@ -14,6 +14,7 @@ export const boothSyncStatus = defineOperation({
   method: "GET",
   path: "/booth/sync/status",
   scope: "read:booth",
+  agent: true,
   input: z.object({}),
   output: z.object({
     mode: z.enum(["booth", "prod"]),
