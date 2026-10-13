@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineOperation } from "@/api/registry/define";
 import { ApiError, notFound } from "@/api/registry/errors";
 import { PagingInput, pageOf, paginate } from "@/api/registry/paging";
-import { clientIp, rateLimit } from "@/lib/auth";
+import { rateLimit } from "@/lib/auth";
 import { LeadSchema } from "@/lib/booth/schema";
 import { insertBoothLead, listBoothInquiries, softDeleteBoothInquiry } from "@/lib/booth/store";
 import { ensureSyncLoop } from "@/lib/booth/sync";
@@ -59,9 +59,8 @@ export const boothInquiriesSubmit = defineOperation({
     externalUuid: z.string(),
     createdAt: z.string(),
   }),
-  handler({ input, request }) {
-    const ip = clientIp(request);
-    const limit = rateLimit("booth-submit", ip, { windowMs: 60_000, max: BOOTH_SUBMIT_MAX_PER_MINUTE });
+  handler({ input, clientAddress }) {
+    const limit = rateLimit("booth-submit", clientAddress, { windowMs: 60_000, max: BOOTH_SUBMIT_MAX_PER_MINUTE });
     if (!limit.allowed) {
       throw new ApiError("rate_limited", `Too many submissions. Wait ${limit.retryAfter} seconds.`, {
         "Retry-After": String(limit.retryAfter),
