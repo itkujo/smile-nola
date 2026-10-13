@@ -14,6 +14,7 @@ export const SCOPE_RESOURCES = {
   testimonials: "testimonials",
   settings: "site settings",
   sync: "booth inquiry sync",
+  booth: "booth expo leads and the booth sync",
 } as const;
 
 /** Scopes that are not a read/write pair. */

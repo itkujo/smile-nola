@@ -1,0 +1,284 @@
+---
+/**
+ * /admin/booth — expo booth captures: list, soft delete, CSV export, sync
+ * status and a drain button. Behind the admin middleware like every /admin/*
+ * page. Everything goes through the booth operations (/api/v1/booth/*) with
+ * the admin session cookie, the same calls a token holder could make.
+ */
+import AdminLayout from "@/layouts/AdminLayout.astro";
+
+export const prerender = false;
+---
+
+<AdminLayout title="Booth">
+  <header class="head">
+    <p class="eyebrow">— admin · expo booth —</p>
+    <h1 class="font-deco">leads from the booth.</h1>
+    <p class="head-sub">
+      Captured on the <a href="/booth">/booth</a> kiosk. A booth laptop keeps its own copy and
+      pushes rows to the main site when it is online.
+    </p>
+  </header>
+
+  <section class="block" id="sync">
+    <h2>Sync</h2>
+    <dl class="sync-grid" id="sync-grid">
+      <div><dt>Mode</dt><dd data-f="mode">…</dd></div>
+      <div><dt>Waiting for prod</dt><dd data-f="pending">…</dd></div>
+      <div><dt>Synced</dt><dd data-f="synced">…</dd></div>
+      <div><dt>Target</dt><dd data-f="target">…</dd></div>
+      <div><dt>Auto drain</dt><dd data-f="auto">…</dd></div>
+      <div><dt>Last run</dt><dd data-f="last">…</dd></div>
+    </dl>
+    <div class="actions">
+      <button type="button" class="btn-gold" id="drain-btn">Drain now</button>
+      <span class="status" id="sync-status" aria-live="polite"></span>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="list-head">
+      <h2>Captures <span id="total" class="count"></span></h2>
+      <a class="btn-ghost" href="/api/v1/booth/export.csv" download>Export CSV</a>
+    </div>
+    <p class="empty" id="empty" hidden>No booth captures yet.</p>
+    <ul class="list" id="list"></ul>
+    <div class="actions">
+      <button type="button" class="btn-ghost" id="more-btn" hidden>Load more</button>
+      <span class="status" id="list-status" aria-live="polite"></span>
+    </div>
+  </section>
+</AdminLayout>
+
+<script>
+  interface Inquiry {
+    id: number;
+    createdAt: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    partner1Name: string | null;
+    partner2Name: string | null;
+    eventDate: string | null;
+    venue: string | null;
+    setting: string | null;
+    collections: string[];
+    notes: string | null;
+    syncedAt: string | null;
+  }
+
+  const listEl = document.getElementById("list") as HTMLUListElement;
+  const emptyEl = document.getElementById("empty") as HTMLElement;
+  const moreBtn = document.getElementById("more-btn") as HTMLButtonElement;
+  const listStatus = document.getElementById("list-status") as HTMLElement;
+  const totalEl = document.getElementById("total") as HTMLElement;
+  const drainBtn = document.getElementById("drain-btn") as HTMLButtonElement;
+  const syncStatusEl = document.getElementById("sync-status") as HTMLElement;
+  let cursor: string | null = null;
+
+  async function apiError(res: Response): Promise<string> {
+    try {
+      const body = await res.json();
+      return body?.error?.message ?? `HTTP ${res.status}`;
+    } catch {
+      return `HTTP ${res.status}`;
+    }
+  }
+
+  function fmt(iso: string | null): string {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString("en-US", { timeZone: "America/Chicago", dateStyle: "medium", timeStyle: "short" });
+  }
+
+  function el(tag: string, cls?: string, text?: string): HTMLElement {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  // Everything below writes user-entered text with textContent, never innerHTML.
+  function renderRow(r: Inquiry): HTMLLIElement {
+    const li = document.createElement("li");
+    li.className = "row";
+    li.dataset.id = String(r.id);
+
+    const head = el("div", "row-head");
+    head.append(el("span", "row-name", `${r.firstName} ${r.lastName}`.trim()));
+    head.append(el("span", r.syncedAt ? "pill pill--ok" : "pill pill--wait", r.syncedAt ? "synced" : "waiting"));
+    li.append(head);
+
+    const couple = [r.partner1Name, r.partner2Name].filter(Boolean).join(" & ");
+    const meta = el("dl", "row-meta");
+    const add = (k: string, v: string | null | undefined) => {
+      if (!v) return;
+      const wrap = el("div");
+      wrap.append(el("dt", undefined, k), el("dd", undefined, v));
+      meta.append(wrap);
+    };
+    add("Email", r.email);
+    add("Phone", r.phone);
+    add("Couple", couple);
+    add("Date", r.eventDate);
+    add("Venue", r.venue);
+    add("Setting", r.setting);
+    add("Interested", r.collections.join(", "));
+    add("Captured", fmt(r.createdAt));
+    if (r.syncedAt) add("Synced", fmt(r.syncedAt));
+    li.append(meta);
+    if (r.notes) li.append(el("p", "row-notes", r.notes));
+
+    const del = el("button", "del", "Delete") as HTMLButtonElement;
+    del.type = "button";
+    del.addEventListener("click", async () => {
+      if (!confirm(`Delete the capture from ${r.firstName} ${r.lastName}? It stays in the database but leaves this list, the export and the sync.`)) return;
+      del.disabled = true;
+      const res = await fetch(`/api/v1/booth/inquiries/${r.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        alert(await apiError(res));
+        del.disabled = false;
+        return;
+      }
+      li.remove();
+      emptyEl.hidden = listEl.children.length > 0;
+      void loadStatus();
+    });
+    li.append(del);
+    return li;
+  }
+
+  async function loadPage(): Promise<void> {
+    listStatus.textContent = "Loading…";
+    const qs = new URLSearchParams({ limit: "25" });
+    if (cursor) qs.set("cursor", cursor);
+    const res = await fetch(`/api/v1/booth/inquiries?${qs}`);
+    if (!res.ok) {
+      listStatus.textContent = await apiError(res);
+      return;
+    }
+    const page = (await res.json()) as { data: Inquiry[]; nextCursor: string | null };
+    for (const r of page.data) listEl.append(renderRow(r));
+    cursor = page.nextCursor;
+    moreBtn.hidden = !cursor;
+    emptyEl.hidden = listEl.children.length > 0;
+    listStatus.textContent = "";
+  }
+
+  async function loadStatus(): Promise<void> {
+    const res = await fetch("/api/v1/booth/sync/status");
+    if (!res.ok) {
+      syncStatusEl.textContent = await apiError(res);
+      return;
+    }
+    const s = await res.json();
+    const set = (f: string, v: string) => {
+      const node = document.querySelector<HTMLElement>(`[data-f="${f}"]`);
+      if (node) node.textContent = v;
+    };
+    set("mode", s.mode === "booth" ? "Booth laptop" : "Main site");
+    set("pending", String(s.pending));
+    set("synced", String(s.synced));
+    set("target", s.target ?? "not set");
+    set("auto", s.mode !== "booth" ? "off (not a booth)" : s.intervalMs > 0 ? `every ${Math.round(s.intervalMs / 1000)}s` : "manual only");
+    set("last", s.lastRun ? `${fmt(s.lastRun.at)} · ${s.lastRun.message}` : "none yet");
+    totalEl.textContent = `(${s.total})`;
+    drainBtn.disabled = s.mode !== "booth";
+    drainBtn.title = s.mode !== "booth" ? "Only a booth-mode server drains to prod." : "";
+  }
+
+  drainBtn.addEventListener("click", async () => {
+    drainBtn.disabled = true;
+    syncStatusEl.textContent = "Draining…";
+    const res = await fetch("/api/v1/booth/sync/drain", { method: "POST" });
+    if (!res.ok) {
+      syncStatusEl.textContent = await apiError(res);
+    } else {
+      const r = await res.json();
+      syncStatusEl.textContent = r.message;
+      // Rows just got a synced_at; reload the list to show it.
+      listEl.replaceChildren();
+      cursor = null;
+      await loadPage();
+    }
+    await loadStatus();
+  });
+
+  moreBtn.addEventListener("click", () => void loadPage());
+
+  void loadStatus();
+  void loadPage();
+</script>
+
+<style>
+  .head { margin-bottom: 32px; }
+  .head .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .head h1 {
+    font-weight: 400;
+    font-size: clamp(28px, 3.8vw, 44px);
+    color: var(--sn-ivory);
+    margin: 8px 0 12px;
+    line-height: 1.05;
+  }
+  .head-sub { color: var(--sn-muted-stone); font-size: 0.95rem; margin: 0; max-width: 64ch; line-height: 1.6; }
+  .head-sub a { color: var(--sn-gold); }
+  .block {
+    padding: 24px;
+    background: var(--sn-soft-black);
+    border: 1px solid rgba(212, 175, 55, 0.24);
+    margin-bottom: 24px;
+    min-width: 0;
+  }
+  h2 {
+    color: var(--sn-gold);
+    font-size: 0.72rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin: 0 0 22px;
+  }
+  .count { color: var(--sn-muted-stone); letter-spacing: 0.1em; }
+  .list-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .list-head :global(a.btn-ghost) {
+    display: inline-block;
+    text-decoration: none;
+    font-size: 0.7rem;
+    padding: 8px 18px;
+    min-height: 0;
+  }
+  .sync-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px 24px; margin: 0 0 20px; }
+  .sync-grid dt { color: var(--sn-muted-stone); font-size: 0.75rem; }
+  .sync-grid dd { color: var(--sn-ivory); margin: 2px 0 0; overflow-wrap: anywhere; }
+  .actions { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
+  .status { color: var(--sn-champagne); font-size: 0.9rem; }
+  .empty { color: var(--sn-muted-stone); }
+  .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+  .list :global(.row) { padding: 16px 0; border-bottom: 1px solid rgba(212, 175, 55, 0.15); }
+  .list :global(.row-head) { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+  .list :global(.row-name) { color: var(--sn-ivory); font-size: 1rem; }
+  .list :global(.pill) { font-size: 0.68rem; letter-spacing: 0.15em; text-transform: uppercase; padding: 2px 8px; border: 1px solid currentColor; }
+  .list :global(.pill--ok) { color: #8fd18f; }
+  .list :global(.pill--wait) { color: var(--sn-amber); }
+  .list :global(.row-meta) { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 8px 0 0; font-size: 0.82rem; }
+  .list :global(.row-meta dt) { color: var(--sn-muted-stone); display: inline; }
+  .list :global(.row-meta dd) { color: var(--sn-ivory); display: inline; margin: 0 0 0 6px; }
+  .list :global(.row-notes) { color: var(--sn-champagne); font-size: 0.85rem; margin: 8px 0 0; white-space: pre-wrap; }
+  .list :global(.del) {
+    margin-top: 10px;
+    background: none;
+    border: 1px solid #f08a7a;
+    color: #f08a7a;
+    padding: 4px 12px;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .list :global(.del:disabled) { opacity: 0.5; cursor: wait; }
+</style>
