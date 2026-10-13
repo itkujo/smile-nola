@@ -13,6 +13,7 @@ export const SCOPE_RESOURCES = {
   portfolio: "the video portfolio",
   testimonials: "testimonials",
   settings: "site settings",
+  sync: "booth inquiry sync",
 } as const;
 
 /** Scopes that are not a read/write pair. */
