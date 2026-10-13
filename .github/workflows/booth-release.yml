@@ -1,8 +1,8 @@
 # ============================================================================
 # Booth image release workflow
 #
-# Builds + publishes the multi-arch standalone booth image to GitHub
-# Container Registry (ghcr.io/itkujo/smile-nola-booth).
+# Builds + publishes the multi-arch booth image (the apps/site image) to GitHub
+# Container Registry (ghcr.io/itkujo/smile-nola/booth).
 #
 # TRIGGERS
 #   • push to main (when booth-relevant paths change)  → publish :edge
@@ -11,10 +11,10 @@
 #   • manual workflow_dispatch                          → publish :edge for
 #                                                         debugging
 #
-# Build context is apps/intake/ (the booth source lives in the monorepo
-# under that path). The Dockerfile already handles better-sqlite3's
-# fcntl64-on-Alpine issue via a force-rebuild from source — see
-# apps/intake/Dockerfile for full notes.
+# Build context is apps/site/ (the booth is the site image started with
+# SMILE_NOLA_MODE=booth; there is no separate booth app). The Dockerfile pins
+# Alpine 3.22 for better-sqlite3 (fcntl64 on newer musl) — see
+# apps/site/Dockerfile for full notes.
 #
 # IMAGE NAME RATIONALE
 #   We publish as ghcr.io/itkujo/smile-nola/booth (slash-delimited under the
@@ -36,7 +36,7 @@ on:
     branches: [main]
     tags: ["v*"]
     paths:
-      - "apps/intake/**"
+      - "apps/site/**"
       - ".github/workflows/booth-release.yml"
   workflow_dispatch:
 
@@ -91,9 +91,9 @@ jobs:
       - name: Build and push (multi-arch)
         uses: docker/build-push-action@v6
         with:
-          # Build context = apps/intake/ (the booth source root).
-          context: ./apps/intake
-          file: ./apps/intake/Dockerfile
+          # Build context = apps/site/ (the booth is the site image run in booth mode).
+          context: ./apps/site
+          file: ./apps/site/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
