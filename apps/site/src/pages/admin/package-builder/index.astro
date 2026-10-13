@@ -5,17 +5,15 @@
  *
  * Spec: docs/superpowers/specs/2026-05-11-package-builder-design.md §11.1
  *
- * Note: plan calls listSubmissions() with no args; the actual export from
- * lib/builder/submissions is listSubmissions(db). We pass getDb() here.
+ * Data comes from the builder_submissions_list operation (no direct DB access).
  */
 import AdminLayout from "@/layouts/AdminLayout.astro";
-import { listSubmissions } from "@/lib/builder/submissions";
 import type { PackageBuilderSubmissionRow } from "@/lib/builder/submissions";
-import { getDb } from "@/lib/db";
+import { callOperation } from "@/lib/api-call";
 
 const status = Astro.url.searchParams.get("status") ?? "all";
 
-const allRows: PackageBuilderSubmissionRow[] = listSubmissions(getDb());
+const allRows = (await callOperation<{ items: PackageBuilderSubmissionRow[] }>("builder_submissions_list")).items;
 const filtered = allRows.filter((r) =>
   status === "all" ? true : r.status === status
 );

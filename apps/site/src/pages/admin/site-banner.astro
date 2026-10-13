@@ -10,9 +10,10 @@
  * they don't need to manually nudge anyone.
  */
 import AdminLayout from "@/layouts/AdminLayout.astro";
-import { getBannerSettings } from "@/lib/site-settings";
+import type { BannerSettings } from "@/lib/site-settings";
+import { callOperation } from "@/lib/api-call";
 
-const banner = getBannerSettings();
+const banner = await callOperation<BannerSettings>("settings_banner_get");
 ---
 
 <AdminLayout title="Site Banner" section="site-banner">
@@ -219,18 +220,14 @@ const banner = getBannerSettings();
     }
 
     try {
-      const res = await fetch("/api/admin/site-banner", {
+      const res = await fetch("/api/v1/settings/site-banner", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        const detail =
-          data.details && typeof data.details === "object"
-            ? " — " + Object.values(data.details).join("; ")
-            : "";
-        throw new Error((data.error || `Server responded ${res.status}`) + detail);
+        throw new Error(data.error?.message || `Server responded ${res.status}`);
       }
       setStatus("Saved · live on the public site.", true);
     } catch (err) {

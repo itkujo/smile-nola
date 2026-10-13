@@ -4,11 +4,12 @@
  * Editable: status + admin notes. Everything else is read-only.
  */
 import AdminLayout from "@/layouts/AdminLayout.astro";
-import { getInquiry, getVscoEntities, getVscoPushesForInquiry } from "@/lib/db";
+import type { InquiryRow, VscoEntityRow, VscoPushRow } from "@/lib/db";
+import { callOrNull } from "@/lib/api-call";
 import { inquiryProjectName } from "@/lib/project-name";
 
 const id = Number(Astro.params.id);
-const inquiry = Number.isFinite(id) ? getInquiry(id) : undefined;
+const inquiry = Number.isFinite(id) ? await callOrNull<InquiryRow>("inquiries_get", { id }) : null;
 if (!inquiry) {
   return new Response("Inquiry not found", { status: 404 });
 }
@@ -38,8 +39,9 @@ try {
 
 // VSCO Workspace integration state
 const isQualified = !!inquiry.qualified_at;
-const vscoEntities = isQualified ? getVscoEntities(inquiry.external_uuid ?? "") : [];
-const vscoPushes = getVscoPushesForInquiry(inquiry.id);
+const vsco = await callOrNull<{ entities: VscoEntityRow[]; pushes: VscoPushRow[] }>("inquiries_vsco_debug", { id: inquiry.id });
+const vscoEntities = isQualified ? (vsco?.entities ?? []) : [];
+const vscoPushes = vsco?.pushes ?? [];
 const jobEntity = vscoEntities.find((e) => e.kind === "job");
 ---
 
@@ -335,12 +337,12 @@ const jobEntity = vscoEntities.find((e) => e.kind === "job");
     qualifyStatus.textContent = "";
     qualifyStatus.style.color = "";
     try {
-      const res = await fetch(`/api/admin/inquiries/${inquiryId}/qualify`, {
+      const res = await fetch(`/api/v1/inquiries/${inquiryId}/qualify`, {
         method: "POST",
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `Server responded ${res.status}`);
+        throw new Error(data.error?.message || `Server responded ${res.status}`);
       }
       qualifyStatus.textContent = "✓ Reloading to show result…";
       qualifyStatus.style.color = "var(--sn-gold)";
@@ -373,14 +375,14 @@ const jobEntity = vscoEntities.find((e) => e.kind === "job");
     submitBtn.textContent = "Saving…";
 
     try {
-      const res = await fetch(`/api/admin/inquiries/${inquiryId}`, {
+      const res = await fetch(`/api/v1/inquiries/${inquiryId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status, notes }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `Server responded ${res.status}`);
+        throw new Error(data.error?.message || `Server responded ${res.status}`);
       }
       saveStatus.textContent = "✓ Saved";
       saveStatus.style.color = "var(--sn-gold)";
@@ -393,7 +395,7 @@ const jobEntity = vscoEntities.find((e) => e.kind === "job");
     }
   });
 
-  // Copy package builder invite link — POSTs to /api/package-builder/invite,
+  // Copy package builder invite link — POSTs to /api/v1/builder/invites,
   // copies the returned URL, shows a toast.
   document.querySelectorAll("[data-copy-builder-invite]").forEach((btn) => {
     const toast = btn.parentElement?.querySelector(".invite-toast");
@@ -404,14 +406,14 @@ const jobEntity = vscoEntities.find((e) => e.kind === "job");
       btn.textContent = "Copying…";
       toast.textContent = "";
       try {
-        const res = await fetch("/api/package-builder/invite", {
+        const res = await fetch("/api/v1/builder/invites", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ inquiryId }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || `Server responded ${res.status}`);
+          throw new Error(data.error?.message || `Server responded ${res.status}`);
         }
         const data = await res.json();
         await navigator.clipboard.writeText(data.url);

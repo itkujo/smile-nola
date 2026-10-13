@@ -3,6 +3,5 @@ Allow: /
 Disallow: /admin
 Disallow: /admin/
 Disallow: /api/
-Disallow: /api/admin/
 
 Sitemap: https://smile-nola.com/sitemap.xml

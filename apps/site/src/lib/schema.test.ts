@@ -116,7 +116,7 @@ describe("BuilderSubmissionSchema", () => {
   });
 
   it("accepts explicit null for optional event sub-fields (date/type/venue/note/guestCount)", () => {
-    // The /api/package-builder contract (and the React island) send `null` for
+    // The /api/v1/builder/submissions contract (and the React island) send `null` for
     // empty optional fields, not missing keys or empty strings. The schema must
     // accept `null` for parity with the inter-cluster contract.
     const body = validBody();

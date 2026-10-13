@@ -94,7 +94,7 @@ export function Builder({ invite }: BuilderProps) {
     };
 
     try {
-      const res = await fetch("/api/package-builder", {
+      const res = await fetch("/api/v1/builder/submissions", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
