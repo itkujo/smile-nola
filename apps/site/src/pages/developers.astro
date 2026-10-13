@@ -19,6 +19,9 @@ import { BODY_METHODS } from "@/api/registry/define";
 const ops = getOperations();
 const groups = [...operationsByTag(ops)];
 const baseUrl = publicOrigin(Astro.request) + API_PREFIX;
+const mcpUrl = baseUrl + "/mcp";
+const claudeCodeLine = `claude mcp add --transport http smilenola ${mcpUrl} --header "Authorization: Bearer <token>"`;
+const agentOps = ops.filter((o) => o.agent);
 
 function scopeLabel(scope: string | null): string {
   if (scope === null) return "No token";
@@ -122,6 +125,34 @@ const pageExample = JSON.stringify({ data: ["..."], nextCursor: "eyJ..." }, null
       </p>
       <pre><code>{pageExample}</code></pre>
       <p>Pass <code>nextCursor</code> back as <code>cursor</code> for the next page; it is <code>null</code> on the last. Cursors are opaque.</p>
+    </section>
+
+    <section id="claude">
+      <h2>Add to Claude</h2>
+      <p>
+        The operations marked as agent tools are also an MCP server, so Claude can look at the studio's
+        data directly. It speaks Model Context Protocol over Streamable HTTP: <code>POST</code> only,
+        each message answered as JSON at once, no sessions.
+      </p>
+      <ul>
+        <li><strong>Connector URL:</strong> <code>{mcpUrl}</code></li>
+        <li><strong>Header:</strong> <code>Authorization: Bearer &lt;token&gt;</code>, a token from <a href="/admin/tokens">Admin › API tokens</a>.</li>
+      </ul>
+      <p>In Claude Code:</p>
+      <pre><code>{claudeCodeLine}</code></pre>
+      <p>
+        A tool shows up only if the token's scopes let it run. A read-only token can look but not
+        change anything; give a token <code>write:inquiries</code> if you want Claude to update an inquiry.
+        Nothing that sends email, pushes to VSCO, makes or revokes tokens, uploads or deletes is offered.
+      </p>
+      <dl class="table">
+        {agentOps.map((op) => (
+          <div class="row">
+            <dt><code>{op.id}</code></dt>
+            <dd>{op.summary} ({scopeLabel(op.scope)})</dd>
+          </div>
+        ))}
+      </dl>
     </section>
 
     <section id="endpoints">
