@@ -72,12 +72,6 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET}
 
-      # ---- Legacy booth sync token (OPTIONAL) --------------------------------
-      # Only the old /api/sync/inquiries route reads this. Booths now push to
-      # /api/v1/sync/inquiries with an API token (write:sync) and need nothing
-      # here. Remove once that old route is gone.
-      INTAKE_SYNC_TOKEN: ${INTAKE_SYNC_TOKEN:-}
-
       # ---- Inquiry / submission email notifications (OPTIONAL) ---------------
       # If RESEND_API_KEY is blank the app falls back to console logging and
       # still persists the submission. SMTP_* are legacy and no longer read.
