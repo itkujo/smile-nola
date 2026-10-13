@@ -1,107 +1,103 @@
 # =============================================================================
 # Smile NOLA — booth laptop / Pi compose file
 #
-# Runs the intake app in a single container, exposed on the LAN so an iPad
-# on the venue Wi-Fi can submit leads. Captured rows live in a Docker named
-# volume; the in-app drainer pushes them to smile-nola.com when online.
+# Runs the site image in BOOTH MODE: the same Astro app as smile-nola.com,
+# started with SMILE_NOLA_MODE=booth. The iPad opens /booth on the venue
+# Wi-Fi; captured rows live in ./data/leads.db on this machine and a sync
+# loop pushes them to the prod site (POST <BOOTH_PROD_API_URL>/api/v1/sync/
+# inquiries, authenticated with a write:sync API token) whenever it is online.
 #
 # DEPLOY MODES
-#   1. Production (default):    Pulls a published multi-arch image from
+#   1. Production (default):    Pulls the published multi-arch image from
 #                               ghcr.io/itkujo/smile-nola/booth:latest.
 #                               Use this on the Pi.
 #   2. Local dev build:         BOOTH_IMAGE=local docker compose -f \
 #                               docker-compose.booth.yml up -d --build
-#                               Builds from apps/intake/ source. Use this
-#                               when iterating on the booth code.
+#                               Builds from apps/site/ source.
+#
+# SETUP (once)
+#   cp apps/site/.env.booth.example apps/site/.env.booth   # then fill it in
+#   See docs/BOOTH_SETUP.md for how to make the prod token.
 #
 # USAGE
-#   ✦  Start  →  docker compose -f docker-compose.booth.yml up -d
-#   ✦  Stop   →  docker compose -f docker-compose.booth.yml down
-#   ✦  Logs   →  docker compose -f docker-compose.booth.yml logs -f intake
-#   ✦  Reset  →  docker compose -f docker-compose.booth.yml down -v
-#                (DESTROYS the local booth DB — only after confirming all
-#                rows have synced to smile-nola.com.)
+#   Start  ->  docker compose -f docker-compose.booth.yml up -d
+#   Stop   ->  docker compose -f docker-compose.booth.yml down
+#   Logs   ->  docker compose -f docker-compose.booth.yml logs -f booth
+#   Reset  ->  docker compose -f docker-compose.booth.yml down  && rm -rf ./data
+#              (DESTROYS the local booth DB — only after /admin/booth shows
+#              nothing waiting for prod.)
 #
 # WHY A SEPARATE COMPOSE FILE (not the root docker-compose.yml)?
-#   The root file is the PRODUCTION compose, shipped to Coolify. Coolify
-#   reads it and creates both site + intake on its own server. The booth
-#   laptop/Pi should NOT spin up a marketing site too — this overlay
-#   defines only the booth-side intake service.
+#   The root file is the PRODUCTION compose, shipped to Coolify. The booth
+#   laptop/Pi runs its own copy of the site with its own database, so it
+#   gets its own compose file with booth mode switched on.
 # =============================================================================
 
 services:
-  intake:
-    # ── Image selection ─────────────────────────────────────────────────────
+  booth:
     # Default: pull the published multi-arch booth image from ghcr.io.
     # Override:
-    #   BOOTH_IMAGE=local        → build from apps/intake/ source
-    #   BOOTH_IMAGE=ghcr.io/...:tag → pin a specific tag (e.g. v0.1.0, edge)
+    #   BOOTH_IMAGE=local            -> build from apps/site/ source
+    #   BOOTH_IMAGE=ghcr.io/...:tag  -> pin a specific tag (e.g. v0.1.0, edge)
     image: ${BOOTH_IMAGE:-ghcr.io/itkujo/smile-nola/booth:latest}
-    # When BOOTH_IMAGE=local, this build section kicks in. The image is
-    # tagged smile-nola-booth:local-dev and reused on subsequent `up`s.
+    # Used when BOOTH_IMAGE=local (or `up --build`).
     build:
-      context: ./apps/intake
+      context: ./apps/site
       dockerfile: Dockerfile
     container_name: smile-nola-booth
     restart: unless-stopped
 
-    # The intake app reads env at startup. apps/intake/.env.local lives in
-    # the repo (gitignored) and contains:
-    #   ADMIN_PASSWORD, ADMIN_SESSION_SECRET — booth admin gate
-    #   INTAKE_SYNC_TOKEN                    — prod sync auth
-    #   INTAKE_SYNC_URL                      — defaults to smile-nola.com
-    #   GOOGLE_PLACES_API_KEY                — booth's own Places key (optional)
+    # apps/site/.env.booth (gitignored; template: apps/site/.env.booth.example)
+    # carries ADMIN_PASSWORD, ADMIN_SESSION_SECRET, the BOOTH_PROD_* sync
+    # settings and the optional GOOGLE_PLACES_API_KEY.
     env_file:
-      - apps/intake/.env.local
+      - apps/site/.env.booth
 
     environment:
-      # Container-internal; override env_file.
+      # Container-internal; these win over env_file.
+      SMILE_NOLA_MODE: booth
       NODE_ENV: production
-      HOSTNAME: "0.0.0.0"
+      HOST: "0.0.0.0"
       PORT: "3000"
-      # SQLite location. The named volume below mounts onto /data.
+      # SQLite location. The bind mount below mounts onto /data.
       SMILE_NOLA_DB_DIR: "/data"
-      # Default the sync URL/interval if .env.local omits them. .env.local
-      # wins when set (env_file is loaded before `environment:`).
-      INTAKE_SYNC_URL: ${INTAKE_SYNC_URL:-https://smile-nola.com/api/sync/inquiries}
-      INTAKE_SYNC_INTERVAL: ${INTAKE_SYNC_INTERVAL:-30000}
+      BOOTH_SYNC_INTERVAL_MS: ${BOOTH_SYNC_INTERVAL_MS:-30000}
 
     ports:
-      # 0.0.0.0:3000 → container:3000. The iPad on venue Wi-Fi reaches us
-      # at http://<host-LAN-ip>:3000/. The start script prints the URL +
-      # a QR code so the iPad can scan it.
+      # 0.0.0.0:3000 -> container:3000. The iPad on venue Wi-Fi reaches us
+      # at http://<host-LAN-ip>:3000/booth. scripts/booth-start.sh prints the
+      # URL and a QR code.
       - "3000:3000"
 
     volumes:
       # Bind mount: the booth's SQLite DB lives in a `data/` dir alongside
       # this compose file on the host. Two reasons over a named volume:
       #
-      #   1. **Visible on the host.** Pi/laptop/NAS operators can `ls` the
-      #      directory, sqlite3 the DB, scp it for backup, no `docker volume
-      #      inspect` dance. CasaOS / Portainer / Synology DSM all show the
-      #      directory natively in their file browsers.
-      #   2. **Portable WITH the compose.** `tar czf booth.tgz docker-compose.booth.yml data/`
-      #      captures everything needed to move a booth to a new host. No
-      #      separate `docker volume export` step.
+      #   1. Visible on the host. Pi/laptop/NAS operators can `ls` the
+      #      directory, sqlite3 the DB, scp it for backup. CasaOS / Portainer /
+      #      Synology DSM all show the directory natively in their file browsers.
+      #   2. Portable WITH the compose. `tar czf booth.tgz docker-compose.booth.yml data/`
+      #      captures everything needed to move a booth to a new host.
       #
       # The directory is auto-created on first `up`. Pre-create with
-      # `mkdir -p ./data && sudo chown -R 100:101 ./data` if you want to
-      # set ownership before the container's first write.
+      # `mkdir -p ./data && sudo chown -R 100:101 ./data` to set ownership
+      # before the container's first write (the app user inside is 100:101).
       #
-      # ZimaBlade/CasaOS deployments override this to `/DATA/AppData/smile-nola-booth/data:/data`
-      # so the data dir shows up in the CasaOS Files app. That override
-      # lives in the host's local compose copy, not here.
+      # ZimaBlade/CasaOS deployments override this to
+      # `/DATA/AppData/smile-nola-booth/data:/data` so the data dir shows up
+      # in the CasaOS Files app. That override lives in the host's local
+      # compose copy, not here.
       - ./data:/data
 
     healthcheck:
-      # Hits /api/health (DB-aware probe). A passing healthcheck means
-      # SELECT 1 succeeded against the booth's SQLite file — the entire
-      # write path is alive.
+      # Hits a cheap public API operation. A 200 means the server is up and
+      # the API router loaded, which is also what starts the booth sync loop
+      # (Astro has no server-start hook, so the loop begins on first request).
       test:
         - "CMD"
         - "node"
         - "-e"
-        - "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        - "fetch('http://127.0.0.1:3000/api/v1/public/brand').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 30s
       timeout: 5s
       retries: 3

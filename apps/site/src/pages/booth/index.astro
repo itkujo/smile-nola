@@ -1,0 +1,56 @@
+---
+/**
+ * /booth — the expo kiosk, shown full-screen on the booth iPad.
+ *
+ * Its own document (not BaseLayout): kiosk viewport, home-screen manifest,
+ * no site chrome. Visitors submit to POST /api/v1/booth/inquiries. In booth
+ * mode (SMILE_NOLA_MODE=booth) loading this page also starts the sync loop.
+ */
+import "@/components/booth/booth.css";
+import { BoothKiosk } from "@/components/booth/form/BoothKiosk";
+import { ensureSyncLoop } from "@/lib/booth/sync";
+
+export const prerender = false;
+
+ensureSyncLoop();
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#050505" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Smile NOLA — Inquire</title>
+    <meta
+      name="description"
+      content="Luxury photo booths, video walls, sound, lighting, videography, and event web design. Designed for unforgettable celebrations in New Orleans."
+    />
+    <link rel="manifest" href="/booth/manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="/booth/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/booth/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/booth/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Smile NOLA" />
+    <meta name="format-detection" content="telephone=no, email=no, address=no" />
+    <!-- Poppins is the kiosk body face. Offline it falls back to the system sans. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+    />
+  </head>
+  <body>
+    <main class="relative h-screen overflow-hidden" style="height: 100dvh">
+      <BoothKiosk client:load />
+    </main>
+  </body>
+</html>
