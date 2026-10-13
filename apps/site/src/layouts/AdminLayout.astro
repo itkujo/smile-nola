@@ -120,11 +120,11 @@ const buildTooltip = `build ${rawSha}\n${buildTime}`;
     </main>
 
     <script>
-      // Logout: POST to /api/admin/logout, then redirect to /admin/login.
+      // Logout: POST to /api/v1/auth/logout, then redirect to /admin/login.
       document.querySelectorAll<HTMLButtonElement>("[data-logout]").forEach((btn) => {
         btn.addEventListener("click", async () => {
           try {
-            await fetch("/api/admin/logout", { method: "POST" });
+            await fetch("/api/v1/auth/logout", { method: "POST" });
           } catch { /* ignore */ }
           window.location.href = "/admin/login";
         });

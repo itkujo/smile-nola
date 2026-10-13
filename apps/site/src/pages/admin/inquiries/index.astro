@@ -4,7 +4,8 @@
  * a search box, and CSV export.
  */
 import AdminLayout from "@/layouts/AdminLayout.astro";
-import { getAllInquiries } from "@/lib/db";
+import type { InquiryRow } from "@/lib/db";
+import { callOperation } from "@/lib/api-call";
 
 /**
  * Default landing is "open" (new + contacted) — the daily-workflow view,
@@ -24,7 +25,7 @@ const SITE_SOURCES = (r: { source: string }): boolean =>
 /** Synthetic filter — "open" matches anything that's not closed. */
 const isOpen = (s: string): boolean => s !== "closed";
 
-const allRows = getAllInquiries();
+const allRows = (await callOperation<{ items: InquiryRow[] }>("inquiries_list")).items;
 const filtered = allRows
   .filter((r) => {
     if (status === "all") return true;
@@ -100,8 +101,8 @@ function shortDate(iso: string): string {
 // sees on the page.
 const exportHref =
   status === "all"
-    ? "/api/admin/export/inquiries.csv"
-    : `/api/admin/export/inquiries.csv?status=${status}`;
+    ? "/api/v1/inquiries/export.csv"
+    : `/api/v1/inquiries/export.csv?status=${status}`;
 ---
 
 <AdminLayout title="Inquiries" section="inquiries">
@@ -230,14 +231,14 @@ const exportHref =
       sel.classList.add("is-saving");
 
       try {
-        const res = await fetch(`/api/admin/inquiries/${id}`, {
+        const res = await fetch(`/api/v1/inquiries/${id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status: next }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || `Server responded ${res.status}`);
+          throw new Error(data.error?.message || `Server responded ${res.status}`);
         }
         // Success → reload so the active filter (if any) re-evaluates the row.
         window.location.reload();

@@ -3,7 +3,7 @@
  * /admin/login — single-password gate.
  *
  * No protective middleware on this route (it's in PUBLIC_ADMIN_PATHS). On
- * successful POST to /api/admin/login the response sets the signed session
+ * successful POST to /api/v1/auth/login the response sets the signed session
  * cookie and we redirect to ?next=… or /admin.
  *
  * If the user is already authed, send them home immediately so refresh
@@ -98,14 +98,13 @@ if (isAuthed(Astro.request)) {
         }
 
         try {
-          const res = await fetch("/api/admin/login", {
+          const res = await fetch("/api/v1/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ password }),
           });
           const data = (await res.json().catch(() => ({}))) as {
-            error?: string;
-            remainingAttempts?: number;
+            error?: { code?: string; message?: string };
           };
 
           if (res.ok) {
@@ -114,11 +113,9 @@ if (isAuthed(Astro.request)) {
           }
 
           if (res.status === 429) {
-            showError(data.error ?? "Too many attempts. Please wait a moment.");
-          } else if (typeof data.remainingAttempts === "number") {
-            showError(`${data.error ?? "Incorrect password."} (${data.remainingAttempts} attempts remaining)`);
+            showError(data.error?.message ?? "Too many attempts. Please wait a moment.");
           } else {
-            showError(data.error ?? "Login failed.");
+            showError(data.error?.message ?? "Login failed.");
           }
         } catch {
           showError("Network error. Try again.");

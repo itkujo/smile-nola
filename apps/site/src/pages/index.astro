@@ -10,13 +10,20 @@ import HeroCycler from "@/components/brand/HeroCycler.astro";
 import GoldDivider from "@/components/brand/GoldDivider.astro";
 import CollectionCard from "@/components/cards/CollectionCard.astro";
 import { COLLECTIONS } from "@/content/collections";
-import { listTestimonials } from "@/lib/testimonials";
+import type { TestimonialRow } from "@/lib/testimonials";
+import { callOperation } from "@/lib/api-call";
+
+const listTestimonials = async (opts: { onlyFeatured?: boolean; limit: number }) =>
+  (await callOperation<{ items: TestimonialRow[] }>("testimonials_list", {
+    ...(opts.onlyFeatured ? { featured: "true" } : {}),
+    limit: opts.limit,
+  })).items;
 
 // Pull featured testimonials for the homepage. Hide the section entirely if
 // the table is empty (no placeholders on a luxury site).
-const testimonials = listTestimonials({ onlyFeatured: true, limit: 5 });
+const testimonials = await listTestimonials({ onlyFeatured: true, limit: 5 });
 const fallbackTestimonials = testimonials.length === 0
-  ? listTestimonials({ limit: 3 })
+  ? await listTestimonials({ limit: 3 })
   : testimonials;
 
 const HERO_WORDS = [
