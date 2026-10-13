@@ -44,7 +44,7 @@ interface Props {
  * React variant of the venue autocomplete combobox.
  *
  * Used by the package builder's EventDetails component and the booth iPad's
- * StepCelebration. Server-side proxy at proxyBase + '/api/places/...'.
+ * StepCelebration. Server-side proxy at proxyBase + '/api/v1/places/...'.
  * Free-text fallback when the user types but never picks (TBD, backyard, etc.).
  */
 export function VenueAutocompleteReact({
@@ -91,7 +91,7 @@ export function VenueAutocompleteReact({
   async function search(q: string) {
     try {
       const res = await fetch(
-        `${proxyBase}/api/places/autocomplete?q=${encodeURIComponent(q)}`,
+        `${proxyBase}/api/v1/places/autocomplete?q=${encodeURIComponent(q)}`,
       )
       if (!res.ok) {
         setSuggestions([])
@@ -109,7 +109,7 @@ export function VenueAutocompleteReact({
   async function pick(s: Suggestion) {
     try {
       const res = await fetch(
-        `${proxyBase}/api/places/details?id=${encodeURIComponent(s.placeId)}`,
+        `${proxyBase}/api/v1/places/details?id=${encodeURIComponent(s.placeId)}`,
       )
       if (!res.ok) {
         onChange({ ...EMPTY_VENUE, name: s.mainText })

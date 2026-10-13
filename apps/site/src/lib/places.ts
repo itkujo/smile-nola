@@ -1,7 +1,7 @@
 /**
  * Helpers for the Google Places API (New) integration.
  *
- * The proxy endpoints in src/pages/api/places/ call Google directly;
+ * The proxy endpoints in src/api/v1/ops/site/places.ts call Google directly;
  * this file holds pure parsers + types so they can be unit-tested
  * without a network.
  */

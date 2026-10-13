@@ -21,7 +21,7 @@
  * Free-text entry without picking is fully supported — the visible
  * input always submits as `name="venue"`. Hidden fields stay empty.
  *
- * Server-side: the /api/places/* proxy handles the Google API key.
+ * Server-side: the /api/v1/places/* proxy handles the Google API key.
  * If the proxy returns 5xx (key missing / Google down), the dropdown
  * silently disappears and the user can still submit free text.
  */
@@ -203,7 +203,7 @@ const {
       const s = suggestions[i];
       if (!s) return;
       try {
-        const res = await fetch(`/api/places/details?id=${encodeURIComponent(s.placeId)}`);
+        const res = await fetch(`/api/v1/places/details?id=${encodeURIComponent(s.placeId)}`);
         if (!res.ok) {
           // Failed to fetch details — keep what they typed as free text.
           input.value = s.mainText;
@@ -227,7 +227,7 @@ const {
         return;
       }
       try {
-        const res = await fetch(`/api/places/autocomplete?q=${encodeURIComponent(q)}`);
+        const res = await fetch(`/api/v1/places/autocomplete?q=${encodeURIComponent(q)}`);
         if (!res.ok) {
           suggestions = [];
           renderList();

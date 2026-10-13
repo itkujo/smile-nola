@@ -2,9 +2,9 @@
 /**
  * /build — host page for the package builder React island.
  *
- * Resolves an optional ?invite=<token> server-side by reading directly from
- * SQLite (same code path the public /api/package-builder/invite/<token>
- * endpoint uses). On unknown/expired tokens we silently fall back to the
+ * Resolves an optional ?invite=<token> server-side by calling the
+ * builder_invite_get operation in-process (same handler as
+ * GET /api/v1/builder/invites/{token}). On unknown/expired tokens we silently fall back to the
  * cold flow per spec §4.5.
  *
  * Why direct in-process calls instead of an internal fetch: the previous
@@ -24,8 +24,7 @@ import BaseLayout from "@/layouts/BaseLayout.astro";
 import { Builder } from "@/components/builder/Builder";
 import type { BuilderProps } from "@/components/builder/Builder";
 import LogoMark from "@/components/brand/LogoMark.astro";
-import { getInvite } from "@/lib/builder/invites";
-import { getDb, getInquiry } from "@/lib/db";
+import { callOrNull } from "@/lib/api-call";
 
 const token = Astro.url.searchParams.get("invite")?.trim() ?? "";
 
@@ -33,41 +32,11 @@ let invite: BuilderProps["invite"] = null;
 
 if (token) {
   try {
-    const db = getDb();
-    const inviteRow = getInvite(db, token);
-    if (inviteRow) {
-      // Expiry check — null means "never expires" (the v1 default).
-      let expired = false;
-      if (inviteRow.expires_at) {
-        const expMs = Date.parse(inviteRow.expires_at.replace(" ", "T") + "Z");
-        if (Number.isFinite(expMs) && expMs < Date.now()) expired = true;
-      }
-      if (!expired) {
-        const inquiry = getInquiry(inviteRow.inquiry_id);
-        if (inquiry) {
-          invite = {
-            token,
-            inquiryId: inquiry.id,
-            prefill: {
-              firstName: inquiry.first_name,
-              lastName: inquiry.last_name,
-              email: inquiry.email,
-              phone: inquiry.phone,
-              event: {
-                date: inquiry.event_date ?? null,
-                type: inquiry.event_type ?? null,
-                venue: inquiry.venue ?? null,
-                guestCount: inquiry.guest_count ?? null,
-              },
-            },
-          };
-        }
-      }
-    }
-    // Anything that didn't produce an invite above (unknown token, expired,
-    // dangling inquiry) silently falls through to the cold flow.
+    const found = await callOrNull("builder_invite_get", { token });
+    if (found) invite = { token, inquiryId: found.inquiryId, prefill: found.prefill };
+    // An unknown token or a dangling inquiry produced no invite: cold flow.
   } catch (err) {
-    // SQLite hiccup; log and degrade to cold flow rather than 500.
+    // Expired invite (conflict) or a SQLite hiccup: degrade to the cold flow rather than 500.
     // eslint-disable-next-line no-console
     console.warn("[build.astro] invite resolution failed", err);
   }
