@@ -167,6 +167,34 @@ describe("booth CSV", () => {
   });
 });
 
+describe("GET /booth/export.csv", () => {
+  it("answers text/csv with a filename, booth rows only", async () => {
+    await submit({ pocName: "Keep Me" });
+    const gone = await (await submit({ pocName: "Drop Me" })).json();
+    await router(req(`/booth/inquiries/${gone.id}`, { method: "DELETE", token: writeTok }));
+    db.prepare(
+      "INSERT INTO inquiries (source, first_name, last_name, email, phone) VALUES ('website','Web','Site','w@e.com','5555555')",
+    ).run();
+
+    const res = await router(req("/booth/export.csv", { token: readTok }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/csv");
+    expect(res.headers.get("content-disposition")).toMatch(/attachment; filename="smile-nola-booth-\d{4}-\d{2}-\d{2}\.csv"/);
+    const csv = await res.text();
+    expect(csv.split("\r\n").filter(Boolean)).toHaveLength(2); // header + Keep Me
+    expect(csv).toContain("Keep");
+    expect(csv).not.toContain("Drop");
+    expect(csv).not.toContain("Web");
+  });
+
+  it("needs read:booth", async () => {
+    expect((await router(req("/booth/export.csv"))).status).toBe(401);
+    expect((await router(req("/booth/export.csv", { token: writeTok }))).status).toBe(200); // write includes read
+    const other = createToken({ label: "o", scopes: ["read:inquiries"], expiresAt: null }).token;
+    expect((await router(req("/booth/export.csv", { token: other }))).status).toBe(403);
+  });
+});
+
 describe("GET /booth/sync/status", () => {
   it("reports the queue", async () => {
     await submit();
