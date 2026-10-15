@@ -1,0 +1,265 @@
+---
+/**
+ * /admin/tokens — make and revoke /api/v1 access tokens.
+ *
+ * Behind the admin middleware like every /admin/* page. Making and revoking
+ * go through the API itself (POST/DELETE /api/v1/me/tokens) with the admin
+ * session cookie, so this page uses the same operations scripts do.
+ */
+import AdminLayout from "@/layouts/AdminLayout.astro";
+import { listTokens } from "@/api/registry/tokens";
+import { SCOPE_RESOURCES, SPECIAL_SCOPES, SCOPES } from "@/api/registry/scopes";
+
+const tokens = listTokens({ take: 100 });
+const now = Date.now();
+
+function status(t: (typeof tokens)[number]): "revoked" | "expired" | "active" {
+  if (t.revokedAt) return "revoked";
+  if (t.expiresAt && Date.parse(t.expiresAt) <= now) return "expired";
+  return "active";
+}
+function fmt(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("en-US", {
+    timeZone: "America/Chicago",
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+const resources = Object.entries(SCOPE_RESOURCES);
+const specials = Object.keys(SPECIAL_SCOPES);
+---
+
+<AdminLayout title="API Tokens">
+  <header class="head">
+    <p class="eyebrow">— admin · api tokens —</p>
+    <h1 class="font-deco">keys for scripts and apps.</h1>
+    <p class="head-sub">
+      A token lets a script, another app or an AI client use the
+      <a href="/developers">Smile NOLA API</a> with the scopes you pick. It is shown once, when
+      you make it; only its hash is kept. Revoke a token the moment you stop trusting where it lives.
+    </p>
+  </header>
+
+  <section class="grid">
+    <div class="block">
+      <h2>Make a token</h2>
+      <form id="token-form" novalidate>
+        <label class="sn-field-wrap">
+          <span class="sn-field-label">Label *</span>
+          <input type="text" name="label" maxlength="80" placeholder="Zapier, booth sync, Claude…" required />
+          <span class="sn-underline"></span>
+        </label>
+
+        <fieldset class="scopes">
+          <legend class="sn-field-label">Scopes *</legend>
+          <table>
+            <thead><tr><th></th><th>read</th><th>write</th></tr></thead>
+            <tbody>
+              {resources.map(([res]) => (
+                <tr>
+                  <td>{res}</td>
+                  <td><input type="checkbox" name="scope" value={`read:${res}`} title={SCOPES[`read:${res}`]} /></td>
+                  <td><input type="checkbox" name="scope" value={`write:${res}`} title={SCOPES[`write:${res}`]} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {specials.map((s) => (
+            <label class="special">
+              <input type="checkbox" name="scope" value={s} />
+              <span><code>{s}</code> — {SCOPES[s]}</span>
+            </label>
+          ))}
+          <p class="hint">write includes read.</p>
+        </fieldset>
+
+        <label class="sn-field-wrap">
+          <span class="sn-field-label">Expires (optional)</span>
+          <input type="date" name="expires" />
+          <span class="sn-underline"></span>
+        </label>
+
+        <div class="actions">
+          <button type="submit" class="btn-gold">Make the token</button>
+          <span class="status" aria-live="polite"></span>
+        </div>
+      </form>
+
+      <div id="reveal" class="reveal" hidden>
+        <p><strong>Copy this token now.</strong> It will not be shown again.</p>
+        <code id="reveal-token"></code>
+        <button type="button" id="copy-btn" class="btn-gold">Copy</button>
+      </div>
+    </div>
+
+    <div class="block">
+      <h2>Tokens</h2>
+      {tokens.length === 0 ? (
+        <p class="empty">No tokens yet.</p>
+      ) : (
+        <ul class="list">
+          {tokens.map((t) => {
+            const st = status(t);
+            return (
+              <li class={`tok tok--${st}`}>
+                <div class="tok-head">
+                  <span class="tok-label">{t.label}</span>
+                  <span class={`pill pill--${st}`}>{st}</span>
+                </div>
+                <div class="tok-scopes">{t.scopes.map((s) => <code>{s}</code>)}</div>
+                <dl class="tok-meta">
+                  <div><dt>Made</dt><dd>{fmt(t.createdAt)}</dd></div>
+                  <div><dt>Last used</dt><dd>{fmt(t.lastUsedAt)}</dd></div>
+                  <div><dt>Expires</dt><dd>{fmt(t.expiresAt)}</dd></div>
+                  {t.revokedAt && <div><dt>Revoked</dt><dd>{fmt(t.revokedAt)}</dd></div>}
+                </dl>
+                {st !== "revoked" && (
+                  <button type="button" class="revoke" data-id={t.id} data-label={t.label}>Revoke</button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  </section>
+</AdminLayout>
+
+<script>
+  const form = document.getElementById("token-form") as HTMLFormElement | null;
+  const statusEl = form?.querySelector<HTMLElement>(".status") ?? null;
+  const reveal = document.getElementById("reveal");
+  const revealToken = document.getElementById("reveal-token");
+
+  async function apiError(res: Response): Promise<string> {
+    try {
+      const body = await res.json();
+      return body?.error?.message ?? `HTTP ${res.status}`;
+    } catch {
+      return `HTTP ${res.status}`;
+    }
+  }
+
+  form?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const label = String(fd.get("label") ?? "").trim();
+    const scopes = fd.getAll("scope").map(String);
+    const expires = String(fd.get("expires") ?? "");
+    // A date means "through the end of that day" in the browser's time zone.
+    const expiresAt = expires ? new Date(`${expires}T23:59:59`).toISOString() : null;
+    if (statusEl) statusEl.textContent = "Making…";
+    const res = await fetch("/api/v1/me/tokens", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label, scopes, expiresAt }),
+    });
+    if (!res.ok) {
+      if (statusEl) statusEl.textContent = await apiError(res);
+      return;
+    }
+    const made = await res.json();
+    if (statusEl) statusEl.textContent = "";
+    form.reset();
+    if (reveal && revealToken) {
+      revealToken.textContent = made.token;
+      reveal.hidden = false;
+    }
+  });
+
+  document.getElementById("copy-btn")?.addEventListener("click", async () => {
+    const t = revealToken?.textContent ?? "";
+    try {
+      await navigator.clipboard.writeText(t);
+      const btn = document.getElementById("copy-btn");
+      if (btn) btn.textContent = "Copied — reload to see it listed";
+    } catch {
+      // Clipboard blocked; the token is selectable on screen.
+    }
+  });
+
+  document.querySelectorAll<HTMLButtonElement>("button.revoke").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      if (!id || !confirm(`Revoke "${btn.dataset.label}"? It stops working at once.`)) return;
+      btn.disabled = true;
+      const res = await fetch(`/api/v1/me/tokens/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        alert(await apiError(res));
+        btn.disabled = false;
+        return;
+      }
+      location.reload();
+    });
+  });
+</script>
+
+<style>
+  .head { margin-bottom: 32px; }
+  .head .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .head h1 {
+    font-weight: 400;
+    font-size: clamp(28px, 3.8vw, 44px);
+    color: var(--sn-ivory);
+    margin: 8px 0 12px;
+    line-height: 1.05;
+  }
+  .head-sub { color: var(--sn-muted-stone); font-size: 0.95rem; margin: 0; max-width: 64ch; line-height: 1.6; }
+  .head-sub a { color: var(--sn-gold); }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 24px; }
+  @media (min-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); } }
+  .block { padding: 24px; background: var(--sn-soft-black); border: 1px solid rgba(212, 175, 55, 0.24); min-width: 0; }
+  h2 {
+    color: var(--sn-gold);
+    font-size: 0.72rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin: 0 0 22px;
+  }
+  form { display: grid; gap: 22px; }
+  .scopes { border: 0; padding: 0; margin: 0; color: var(--sn-ivory); }
+  .scopes table { border-collapse: collapse; margin: 8px 0 12px; }
+  .scopes th, .scopes td { padding: 4px 14px 4px 0; text-align: left; font-size: 0.9rem; }
+  .scopes th { color: var(--sn-muted-stone); font-weight: 400; font-size: 0.75rem; }
+  .scopes input, .special input { accent-color: var(--sn-gold); width: 16px; height: 16px; }
+  .special { display: flex; gap: 10px; align-items: flex-start; font-size: 0.88rem; color: var(--sn-muted-stone); }
+  .hint { font-size: 0.8rem; color: var(--sn-muted-stone); margin: 8px 0 0; }
+  .actions { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .status { color: var(--sn-champagne); font-size: 0.9rem; }
+  .reveal { margin-top: 24px; padding: 16px; border: 1px solid var(--sn-gold); display: grid; gap: 12px; }
+  .reveal p { margin: 0; color: var(--sn-ivory); }
+  .reveal code { color: var(--sn-gold); overflow-wrap: anywhere; font-size: 0.9rem; user-select: all; }
+  .empty { color: var(--sn-muted-stone); }
+  .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+  .tok { padding: 14px 0; border-bottom: 1px solid rgba(212, 175, 55, 0.15); }
+  .tok--revoked, .tok--expired { opacity: 0.55; }
+  .tok-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+  .tok-label { color: var(--sn-ivory); font-size: 1rem; }
+  .pill { font-size: 0.68rem; letter-spacing: 0.15em; text-transform: uppercase; padding: 2px 8px; border: 1px solid currentColor; }
+  .pill--active { color: #8fd18f; }
+  .pill--expired { color: var(--sn-amber); }
+  .pill--revoked { color: #f08a7a; }
+  .tok-scopes { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .tok-scopes code { font-size: 0.78rem; color: var(--sn-champagne); background: rgba(212, 175, 55, 0.08); padding: 1px 6px; }
+  .tok-meta { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0; font-size: 0.8rem; }
+  .tok-meta dt { color: var(--sn-muted-stone); display: inline; }
+  .tok-meta dd { color: var(--sn-ivory); display: inline; margin: 0 0 0 6px; }
+  .revoke {
+    margin-top: 10px;
+    background: none;
+    border: 1px solid #f08a7a;
+    color: #f08a7a;
+    padding: 4px 12px;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .revoke:disabled { opacity: 0.5; cursor: wait; }
+</style>
