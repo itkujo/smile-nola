@@ -27,7 +27,7 @@
     "better-sqlite3": "^11.7.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "resend": "^4.8.0",
+    "resend": "^6.34.1",
     "sharp": "^0.35.5",
     "tailwindcss": "^4.3.3",
     "zod": "^3.24.1"
