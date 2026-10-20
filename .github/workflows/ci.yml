@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: apps/site/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install (apps/site)
+        working-directory: apps/site
+        run: pnpm install --frozen-lockfile
+
+      - name: Test (apps/site)
+        working-directory: apps/site
+        run: pnpm test
+
+      - name: Build (apps/site)
+        working-directory: apps/site
+        run: pnpm build
+
+      - name: Audit (apps/site)
+        working-directory: apps/site
+        run: pnpm audit --audit-level=high
+
+      # intake is being deleted in DAN-331
+      - name: Audit (apps/intake)
+        working-directory: apps/intake
+        continue-on-error: true
+        run: pnpm audit --audit-level=high
+
+      # apps/knot-responder is not on main yet; the guard makes the step
+      # active (and hard-failing) as soon as its lockfile exists.
+      - name: Audit (apps/knot-responder)
+        if: ${{ hashFiles('apps/knot-responder/pnpm-lock.yaml') != '' }}
+        working-directory: apps/knot-responder
+        run: pnpm audit --audit-level=high
