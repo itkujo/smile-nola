@@ -1,0 +1,262 @@
+---
+/**
+ * /developers — the API reference, drawn from the operation registry at
+ * render time (src/api/registry). Same definitions as the router and
+ * /api/v1/openapi.json, so none of them can drift.
+ */
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import SiteHeader from "@/components/layout/SiteHeader.astro";
+import SiteFooter from "@/components/layout/SiteFooter.astro";
+import { getOperations, operationsByTag } from "@/api/registry/index";
+import { ERROR_CODES } from "@/api/registry/errors";
+import { ANY, SCOPES } from "@/api/registry/scopes";
+import { DEFAULT_LIMIT, MAX_LIMIT } from "@/api/registry/paging";
+import { API_RATE_LIMIT } from "@/api/registry/ratelimit";
+import { API_PREFIX } from "@/api/registry/router";
+import { publicOrigin, splitInput } from "@/api/registry/openapi";
+import { BODY_METHODS } from "@/api/registry/define";
+
+const ops = getOperations();
+const groups = [...operationsByTag(ops)];
+const baseUrl = publicOrigin(Astro.request) + API_PREFIX;
+
+function scopeLabel(scope: string | null): string {
+  if (scope === null) return "No token";
+  if (scope === ANY) return "Any token";
+  return scope;
+}
+
+function fieldsOf(op: (typeof ops)[number]) {
+  const { params, rest } = splitInput(op);
+  const where = BODY_METHODS.has(op.method) ? "body" : "query";
+  return [
+    ...Object.entries(params?.shape ?? {}).map(([name, s]) => ({ name, where: "path", optional: s.isOptional() })),
+    ...Object.entries(rest?.shape ?? {}).map(([name, s]) => ({ name, where, optional: s.isOptional() })),
+  ];
+}
+
+const errorExample = JSON.stringify(
+  { error: { code: "insufficient_scope", message: "This token lacks the write:inquiries scope." } },
+  null,
+  2,
+);
+const pageExample = JSON.stringify({ data: ["..."], nextCursor: "eyJ..." }, null, 2);
+---
+
+<BaseLayout title="Developers" description="The Smile NOLA API: base URL, tokens, scopes, errors, paging and every endpoint." reveal={false}>
+  <SiteHeader />
+  <main id="main" class="dev">
+    <header class="intro">
+      <p class="eyebrow">— developers —</p>
+      <h1 class="font-deco">The Smile NOLA API</h1>
+      <p class="lede">
+        Everything the admin does goes through this API: {ops.length} operations. Scripts, other
+        apps and AI clients use it with a token.
+      </p>
+      <ul class="facts">
+        <li><strong>Base URL:</strong> <code>{baseUrl}</code></li>
+        <li>
+          <strong>Spec:</strong> <a href={`${API_PREFIX}/openapi.json`}><code>GET {API_PREFIX}/openapi.json</code></a>
+          (OpenAPI 3.1, no token). This page and the spec are generated from the definitions the
+          server runs, so neither can drift.
+        </li>
+        <li>Bodies are JSON (<code>Content-Type: application/json</code>); anything else is a 415.</li>
+        <li>Times are ISO 8601 instants in UTC.</li>
+        <li>Every answer has an <code>X-Request-Id</code>. Quote it when something looks wrong.</li>
+        <li>No CORS. A token is a secret: call the API from your server, never from a browser.</li>
+      </ul>
+    </header>
+
+    <section id="auth">
+      <h2>Authentication</h2>
+      <p>Send a token: <code>Authorization: Bearer &lt;token&gt;</code>.</p>
+      <ul>
+        <li>
+          Make one at <a href="/admin/tokens">Admin › API tokens</a>: a label, the scopes and an
+          optional expiry. The token starts with <code>sn_</code> and is shown once; the site keeps
+          only its hash.
+        </li>
+        <li>A token acts with its scopes. <code>write:x</code> includes <code>read:x</code>.</li>
+        <li>
+          The admin pages call the API with their sign-in instead, which acts as every scope. A
+          signed-in request that changes something must come from this site; a token is never
+          affected by that rule.
+        </li>
+      </ul>
+    </section>
+
+    <section id="scopes">
+      <h2>Scopes</h2>
+      <dl class="table">
+        {Object.entries(SCOPES).map(([name, desc]) => (
+          <div class="row"><dt><code>{name}</code></dt><dd>{desc}</dd></div>
+        ))}
+      </dl>
+    </section>
+
+    <section id="errors">
+      <h2>Errors</h2>
+      <p>Always one shape. The message is written for a person and names the field when one is wrong.</p>
+      <pre><code>{errorExample}</code></pre>
+      <dl class="table">
+        {Object.entries(ERROR_CODES).map(([code, { status, description }]) => (
+          <div class="row">
+            <dt><span class="status">{status}</span> <code>{code}</code></dt>
+            <dd>{description}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+
+    <section id="paging">
+      <h2>Rate limits and paging</h2>
+      <p>
+        {API_RATE_LIMIT} requests a minute per token, or per address without one. Every answer
+        carries <code>RateLimit-Limit</code>, <code>RateLimit-Remaining</code> and
+        <code>RateLimit-Reset</code> (seconds); a 429 also has <code>Retry-After</code>. Counters
+        reset when the server restarts.
+      </p>
+      <p>
+        Lists take <code>?limit=</code> (1 to {MAX_LIMIT}, default {DEFAULT_LIMIT}) and
+        <code>?cursor=</code>, and answer:
+      </p>
+      <pre><code>{pageExample}</code></pre>
+      <p>Pass <code>nextCursor</code> back as <code>cursor</code> for the next page; it is <code>null</code> on the last. Cursors are opaque.</p>
+    </section>
+
+    <section id="endpoints">
+      <h2>Endpoints</h2>
+      {groups.map(([tag, list]) => (
+        <div class="group">
+          <h3>{tag}</h3>
+          {list.map((op) => {
+            const fields = fieldsOf(op);
+            return (
+              <details class="op" id={op.id}>
+                <summary>
+                  <span class={`method m-${op.method.toLowerCase()}`}>{op.method}</span>
+                  <code class="path">{op.path}</code>
+                  <span class="sum">{op.summary}</span>
+                  <span class="scope">{scopeLabel(op.scope)}</span>
+                </summary>
+                <div class="op-body">
+                  {op.description && <p>{op.description}</p>}
+                  <p class="meta">
+                    <code>{op.id}</code> · scope <code>{scopeLabel(op.scope)}</code>
+                    {op.agent && <span> · available to AI agents</span>}
+                  </p>
+                  {fields.length > 0 && (
+                    <ul class="fields">
+                      {fields.map((f) => (
+                        <li><code>{f.name}</code> <span class="where">{f.where}{f.optional ? ", optional" : ""}</span></li>
+                      ))}
+                    </ul>
+                  )}
+                  <pre><code>{`curl ${op.method === "GET" ? "" : `-X ${op.method} `}${baseUrl}${op.path.replace(/\{(\w+)\}/g, "1")}${op.scope === null ? "" : ` \\\n  -H "Authorization: Bearer $SN_TOKEN"`}${BODY_METHODS.has(op.method) ? ` \\\n  -H "Content-Type: application/json" -d '{...}'` : ""}`}</code></pre>
+                </div>
+              </details>
+            );
+          })}
+        </div>
+      ))}
+    </section>
+  </main>
+  <SiteFooter />
+</BaseLayout>
+
+<style>
+  .dev {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 120px 16px 96px;
+    color: var(--sn-ivory);
+    line-height: 1.6;
+  }
+  .eyebrow {
+    color: var(--sn-gold);
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  h1 {
+    font-weight: 400;
+    font-size: clamp(30px, 5vw, 52px);
+    margin: 8px 0 16px;
+    line-height: 1.05;
+  }
+  .lede { color: var(--sn-champagne); font-size: 1.05rem; max-width: 64ch; }
+  section { margin-top: 56px; }
+  h2 {
+    color: var(--sn-gold);
+    font-size: 0.75rem;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin: 0 0 18px;
+  }
+  h3 {
+    font-size: 1rem;
+    text-transform: lowercase;
+    color: var(--sn-champagne);
+    margin: 28px 0 8px;
+    font-weight: 500;
+  }
+  p, li, dd { color: var(--sn-muted-stone); }
+  ul { padding-left: 1.2em; }
+  .facts li { margin: 4px 0; }
+  a { color: var(--sn-gold); }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.88em;
+    color: var(--sn-ivory);
+    overflow-wrap: anywhere;
+  }
+  pre {
+    background: var(--sn-soft-black);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    margin: 12px 0;
+  }
+  .table { margin: 0; border-top: 1px solid rgba(212, 175, 55, 0.15); }
+  .row {
+    display: grid;
+    grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+    gap: 4px 20px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.15);
+  }
+  @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
+  dt { margin: 0; }
+  dd { margin: 0; }
+  .status { color: var(--sn-gold); font-variant-numeric: tabular-nums; margin-right: 6px; }
+
+  .op { border-bottom: 1px solid rgba(212, 175, 55, 0.15); }
+  .op summary {
+    display: grid;
+    grid-template-columns: 4.5rem minmax(0, auto) minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: baseline;
+    padding: 10px 0;
+    cursor: pointer;
+    list-style: none;
+  }
+  .op summary::-webkit-details-marker { display: none; }
+  @media (max-width: 640px) {
+    .op summary { grid-template-columns: 4rem minmax(0, 1fr); }
+    .op summary .sum, .op summary .scope { grid-column: 2; }
+  }
+  .method { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; color: var(--sn-gold); }
+  .m-post { color: #8fd18f; }
+  .m-patch, .m-put { color: var(--sn-amber); }
+  .m-delete { color: #f08a7a; }
+  .sum { color: var(--sn-muted-stone); }
+  .scope { font-size: 0.78rem; color: var(--sn-champagne); white-space: nowrap; }
+  .op-body { padding: 0 0 16px 0; }
+  .meta { font-size: 0.85rem; }
+  .fields { list-style: none; padding: 0; margin: 8px 0; }
+  .fields li { margin: 2px 0; }
+  .where { font-size: 0.8rem; color: var(--sn-muted-stone); }
+</style>

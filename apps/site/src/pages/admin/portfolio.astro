@@ -5,7 +5,7 @@
  * Two regions: the add/edit form (top) and the table of existing items
  * (bottom). The form submits as multipart/form-data so it can carry an
  * optional thumbnail file. Submit POSTs (new) or PATCHes (edit) to
- * /api/admin/portfolio and reloads the table inline.
+ * /api/v1/portfolio and reloads the table inline.
  *
  * Multi-collection: each item can belong to one OR many collections. The
  * order chips render in is always the canonical COLLECTIONS order
@@ -17,10 +17,11 @@
  * source so manual upload is the only way to get a real thumbnail.
  */
 import AdminLayout from "@/layouts/AdminLayout.astro";
-import { listPortfolio } from "@/lib/portfolio";
+import type { PortfolioRow } from "@/lib/portfolio";
+import { callOperation } from "@/lib/api-call";
 import { COLLECTIONS } from "@/content/collections";
 
-const items = listPortfolio({ featuredFirst: true });
+const items = (await callOperation<{ items: PortfolioRow[] }>("portfolio_list")).items;
 
 function shortName(slug: string): string {
   return COLLECTIONS.find((c) => c.slug === slug)?.shortName ?? slug;
@@ -315,19 +316,13 @@ function shortName(slug: string): string {
     }
 
     try {
-      const res = await fetch("/api/admin/portfolio", {
+      const res = await fetch(idVal ? `/api/v1/portfolio/${encodeURIComponent(idVal)}` : "/api/v1/portfolio", {
         method: idVal ? "PATCH" : "POST",
         body: fd, // multipart, browser sets the boundary
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        const detail =
-          data.details && Object.keys(data.details).length > 0
-            ? `: ${Object.entries(data.details)
-                .map(([k, v]) => `${k} — ${v}`)
-                .join(", ")}`
-            : "";
-        throw new Error(`${data.error || `Server responded ${res.status}`}${detail}`);
+        throw new Error(data.error?.message || `Server responded ${res.status}`);
       }
       const data = await res.json().catch(() => ({}));
       if (data.warning) {
@@ -410,14 +405,10 @@ function shortName(slug: string): string {
       btn.disabled = true;
       btn.textContent = "Deleting…";
       try {
-        const res = await fetch("/api/admin/portfolio", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: Number(id) }),
-        });
+        const res = await fetch(`/api/v1/portfolio/${encodeURIComponent(id)}`, { method: "DELETE" });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || `Server responded ${res.status}`);
+          throw new Error(data.error?.message || `Server responded ${res.status}`);
         }
         window.location.reload();
       } catch (err) {

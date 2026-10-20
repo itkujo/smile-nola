@@ -4,9 +4,10 @@
  * Same shape as /admin/portfolio.
  */
 import AdminLayout from "@/layouts/AdminLayout.astro";
-import { listTestimonials } from "@/lib/testimonials";
+import type { TestimonialRow } from "@/lib/testimonials";
+import { callOperation } from "@/lib/api-call";
 
-const items = listTestimonials();
+const items = (await callOperation<{ items: TestimonialRow[] }>("testimonials_list")).items;
 ---
 
 <AdminLayout title="Testimonials" section="testimonials">
@@ -129,14 +130,13 @@ const items = listTestimonials();
     try {
       let res: Response;
       if (idVal) {
-        payload.id = Number(idVal);
-        res = await fetch("/api/admin/testimonials", {
+        res = await fetch(`/api/v1/testimonials/${encodeURIComponent(idVal)}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
       } else {
-        res = await fetch("/api/admin/testimonials", {
+        res = await fetch("/api/v1/testimonials", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -144,7 +144,7 @@ const items = listTestimonials();
       }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `Server responded ${res.status}`);
+        throw new Error(data.error?.message || `Server responded ${res.status}`);
       }
       window.location.reload();
     } catch (err) {
@@ -182,14 +182,10 @@ const items = listTestimonials();
       btn.disabled = true;
       btn.textContent = "Deleting…";
       try {
-        const res = await fetch("/api/admin/testimonials", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: Number(id) }),
-        });
+        const res = await fetch(`/api/v1/testimonials/${encodeURIComponent(id)}`, { method: "DELETE" });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || `Server responded ${res.status}`);
+          throw new Error(data.error?.message || `Server responded ${res.status}`);
         }
         window.location.reload();
       } catch (err) {

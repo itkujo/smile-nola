@@ -25,7 +25,8 @@ import InquiryFormShort from "@/components/forms/InquiryFormShort.astro";
 import OtherCollections from "@/components/cards/OtherCollections.astro";
 import PackagesWidget from "@/components/cards/PackagesWidget.astro";
 import { collectionBySlug } from "@/content/collections";
-import { listPortfolio } from "@/lib/portfolio";
+import type { PortfolioRow } from "@/lib/portfolio";
+import { callOperation } from "@/lib/api-call";
 
 const { slug } = Astro.params;
 if (!slug) return Astro.redirect("/collections");
@@ -36,7 +37,7 @@ if (!collection) {
 }
 
 const initial = collection.shortName.charAt(0);
-const relatedVideos = listPortfolio({ collection: collection.slug });
+const relatedVideos = (await callOperation<{ items: PortfolioRow[] }>("portfolio_list", { collection: collection.slug })).items;
 
 function getEmbedSrc(
   provider: string | null,

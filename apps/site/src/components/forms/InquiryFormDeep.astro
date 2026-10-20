@@ -7,7 +7,7 @@
  * its per-collection question block reveals via progressive enhancement.
  * "Other" reveals a free-text additional-services field.
  *
- * Submits to /api/contact (POST, JSON), which validates against
+ * Submits to /api/v1/inquiries/contact (POST, JSON), which validates against
  * InquiryDeepSchema and inserts a row into the same `inquiries` table the
  * lightweight form writes to.
  */
@@ -96,7 +96,7 @@ const TIME_OPTIONS: Array<{ value: string; label: string }> = (() => {
 
 <form
   class="deep-form"
-  action="/api/contact"
+  action="/api/v1/inquiries/contact"
   method="post"
   id="contact-form"
   novalidate
@@ -851,7 +851,7 @@ const TIME_OPTIONS: Array<{ value: string; label: string }> = (() => {
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || `Server responded ${res.status}`);
+          throw new Error(data.error?.message || `Server responded ${res.status}`);
         }
 
         // Plausible: log a successful inquiry as a conversion. The script
@@ -918,7 +918,7 @@ const TIME_OPTIONS: Array<{ value: string; label: string }> = (() => {
   }
 
   // ============ Venue autocomplete (Google Places) ============
-  // Attaches to elements marked with [data-venue-ac]. Calls our /api/places
+  // Attaches to elements marked with [data-venue-ac]. Calls our /api/v1/places
   // proxy (server-side, key never reaches browser). Free-text fallback when
   // the proxy is down or the user types but doesn't pick.
   type Suggestion = { placeId: string; mainText: string; secondaryText: string };
@@ -1041,7 +1041,7 @@ const TIME_OPTIONS: Array<{ value: string; label: string }> = (() => {
       const s = suggestions[i];
       if (!s) return;
       try {
-        const res = await fetch(`/api/places/details?id=${encodeURIComponent(s.placeId)}`);
+        const res = await fetch(`/api/v1/places/details?id=${encodeURIComponent(s.placeId)}`);
         if (!res.ok) {
           input!.value = s.mainText;
           clearAddressFields();
@@ -1064,7 +1064,7 @@ const TIME_OPTIONS: Array<{ value: string; label: string }> = (() => {
         return;
       }
       try {
-        const res = await fetch(`/api/places/autocomplete?q=${encodeURIComponent(q)}`);
+        const res = await fetch(`/api/v1/places/autocomplete?q=${encodeURIComponent(q)}`);
         if (!res.ok) {
           suggestions = [];
           renderList();

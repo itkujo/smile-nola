@@ -196,6 +196,20 @@ export function bootstrapSchema(db: Database.Database): void {
       value      TEXT    NOT NULL,
       updated_at TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- Scoped bearer tokens for /api/v1 (src/api/registry/tokens.ts).
+    -- Only the sha256 of the token is stored; the token itself ("sn_...")
+    -- is shown once on creation. scopes is a JSON array of scope names.
+    CREATE TABLE IF NOT EXISTS api_tokens (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      label        TEXT    NOT NULL,
+      token_hash   TEXT    NOT NULL UNIQUE,
+      scopes       TEXT    NOT NULL DEFAULT '[]',
+      expires_at   TEXT,
+      created_at   TEXT    NOT NULL,
+      last_used_at TEXT,
+      revoked_at   TEXT
+    );
   `);
 
   migratePortfolioToMultiCollection(db);

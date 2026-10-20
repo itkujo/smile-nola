@@ -30,6 +30,7 @@ const NAV = [
   { href: "/admin/portfolio",        label: "Video Portfolio",  key: "portfolio"       },
   { href: "/admin/testimonials",     label: "Testimonials",     key: "testimonials"    },
   { href: "/admin/site-banner",      label: "Site Banner",      key: "site-banner"     },
+  { href: "/admin/booth",            label: "Booth",            key: "booth"           },
 ] as const;
 
 /**
@@ -120,11 +121,11 @@ const buildTooltip = `build ${rawSha}\n${buildTime}`;
     </main>
 
     <script>
-      // Logout: POST to /api/admin/logout, then redirect to /admin/login.
+      // Logout: POST to /api/v1/auth/logout, then redirect to /admin/login.
       document.querySelectorAll<HTMLButtonElement>("[data-logout]").forEach((btn) => {
         btn.addEventListener("click", async () => {
           try {
-            await fetch("/api/admin/logout", { method: "POST" });
+            await fetch("/api/v1/auth/logout", { method: "POST" });
           } catch { /* ignore */ }
           window.location.href = "/admin/login";
         });

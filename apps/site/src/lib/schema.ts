@@ -115,7 +115,7 @@ export const InquiryDeepSchema = z.object({
 
 export type InquiryDeepInput = z.infer<typeof InquiryDeepSchema>;
 
-/* ---- Package builder submission (POST /api/package-builder) --------------- */
+/* ---- Package builder submission (POST /api/v1/builder/submissions) --------------- */
 
 /**
  * Request body for the package builder. Shape locked by the inter-cluster
@@ -138,7 +138,7 @@ const builderClientSchema = z.object({
 });
 
 // Helper: same as optionalTrim() but also accepts explicit null, and always
-// transforms to `string | null`. The /api/package-builder contract sends null
+// transforms to `string | null`. The /api/v1/builder/submissions contract sends null
 // for empty optional fields (not missing keys, not empty strings), so the
 // schema must accept null at parse time.
 const nullableTrim = (max = 200) =>

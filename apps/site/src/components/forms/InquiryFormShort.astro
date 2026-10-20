@@ -3,7 +3,7 @@
  * InquiryFormShort — the lightweight, embedded-on-collection-pages inquiry
  * form. Five common fields + an optional message + a hidden collection slug.
  *
- * Submits via POST to /api/inquiry. That endpoint is built in Phase 6 — for
+ * Submits via POST to /api/v1/inquiries. That endpoint is built in Phase 6 — for
  * now the markup is ready but the server route returns 404. To keep the
  * surface honest, the submit button is disabled with a TODO note when
  * data-form-status="pending" — the Phase 6 commit will flip this on.
@@ -27,7 +27,7 @@ const {
 
 <form
   class="inquiry-form"
-  action="/api/inquiry"
+  action="/api/v1/inquiries"
   method="post"
   data-collection={collection}
   id="inquire"
@@ -42,7 +42,7 @@ const {
   <input type="hidden" name="source" value={`collection-${collection}`} />
 
   {/* Honeypot — hidden from humans, irresistible to dumb bots. Server-side
-      check at /api/inquiry rejects (silently) any submission where this is
+      check at /api/v1/inquiries rejects (silently) any submission where this is
       non-empty. */}
   <div class="sn-honeypot" aria-hidden="true">
     <label>
@@ -214,7 +214,7 @@ const {
   // swap the form for a thank-you state on success. Falls back to native
   // form submission if JS fails.
   //
-  // The /api/inquiry endpoint is wired up in Phase 6. Until that commit, the
+  // The /api/v1/inquiries endpoint is wired up in Phase 6. Until that commit, the
   // form will receive a 404 and surface the error in the error-region — which
   // is the right behavior for development and surfaces a clear signal.
 
@@ -288,7 +288,7 @@ const {
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || `Server responded ${res.status}`);
+          throw new Error(data.error?.message || `Server responded ${res.status}`);
         }
 
         // Plausible: log a successful inquiry as a conversion. The script

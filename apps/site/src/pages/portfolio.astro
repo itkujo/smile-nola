@@ -9,10 +9,11 @@ import SiteFooter from "@/components/layout/SiteFooter.astro";
 import AmbientGlow from "@/components/brand/AmbientGlow.astro";
 import DecoOrnament from "@/components/brand/DecoOrnament.astro";
 import GoldDivider from "@/components/brand/GoldDivider.astro";
-import { listPortfolio } from "@/lib/portfolio";
+import type { PortfolioRow } from "@/lib/portfolio";
+import { callOperation } from "@/lib/api-call";
 import { COLLECTIONS } from "@/content/collections";
 
-const items = listPortfolio({ featuredFirst: true });
+const items = (await callOperation<{ items: PortfolioRow[] }>("portfolio_list")).items;
 
 function shortName(slug: string): string {
   return COLLECTIONS.find((c) => c.slug === slug)?.shortName ?? slug;
