@@ -121,7 +121,9 @@ export function generateOpenApi(
           ? { description: "Done." }
           : {
               description: "Success.",
-              content: { "application/json": { schema: op.output } },
+              content: op.text
+                ? { [op.text.contentType]: { schema: op.output } }
+                : { "application/json": { schema: op.output } },
             },
     };
     for (const [st, codes] of errorCodesFor(op)) responses[String(st)] = errorResponse(codes);
@@ -143,7 +145,15 @@ export function generateOpenApi(
         ...(params ? { params } : {}),
         ...(rest && !isBody ? { query: rest } : {}),
         ...(rest && isBody
-          ? { body: { required: true, content: { "application/json": { schema: rest } } } }
+          ? {
+              body: {
+                required: true,
+                content: {
+                  "application/json": { schema: rest },
+                  ...(op.multipart ? { "multipart/form-data": { schema: rest } } : {}),
+                },
+              },
+            }
           : {}),
       },
       responses: responses as never,

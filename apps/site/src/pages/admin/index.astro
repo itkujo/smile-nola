@@ -4,9 +4,9 @@
  * Behind the middleware guard; only authed visitors see it.
  */
 import AdminLayout from "@/layouts/AdminLayout.astro";
-import { inquiryCounts } from "@/lib/db";
+import { callOperation } from "@/lib/api-call";
 
-const counts = inquiryCounts();
+const counts = await callOperation<{ new: number; contacted: number; closed: number; total: number }>("inquiries_counts");
 ---
 
 <AdminLayout title="Dashboard" section="dashboard">

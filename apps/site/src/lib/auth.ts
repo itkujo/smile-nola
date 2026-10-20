@@ -200,7 +200,7 @@ interface RateBucket {
 /**
  * Buckets are keyed by `${bucketKey}::${ip}` so different routes get isolated
  * counters on the same IP. A hammered `/admin/login` cannot lock out
- * `/api/package-builder` and vice versa.
+ * `/api/v1/builder/submissions` and vice versa.
  */
 const buckets = new Map<string, RateBucket>();
 
@@ -261,7 +261,7 @@ export function rateLimit(
 
 /**
  * Login-specific wrapper. Preserves the original (single-arg) API exactly so
- * `/api/admin/login` keeps working without edits. 5 attempts per 5 minutes.
+ * `/api/v1/auth/login` keeps working without edits. 5 attempts per 5 minutes.
  */
 export function loginRateLimit(
   ip: string,

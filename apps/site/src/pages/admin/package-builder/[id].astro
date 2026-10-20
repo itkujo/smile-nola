@@ -13,55 +13,46 @@
  *
  * Spec: docs/superpowers/specs/2026-05-11-package-builder-design.md §11.2
  *
- * Note: plan called getSubmission(id) / markInvoiceSent(id) / revertToNew(id);
- * the real exports all take (db, id). We pass getDb() explicitly.
+ * All reads and the status flip go through the builder_submission_get and
+ * builder_submission_update operations (no direct DB access).
  */
 import AdminLayout from "@/layouts/AdminLayout.astro";
-import {
-  getSubmission,
-  markInvoiceSent,
-  revertToNew,
-} from "@/lib/builder/submissions";
+import type { PackageBuilderSubmissionRow } from "@/lib/builder/submissions";
 import { getCollection, getPackage, getAddon } from "@/lib/builder/catalog";
 import type {
   BuilderSelections,
   BuilderWarning,
   CustomQuotedItem,
 } from "@/lib/builder/compute";
-import {
-  getDb,
-  getInquiry,
-  getVscoEntityId,
-  getVscoPushesForBuilder,
-} from "@/lib/db";
+import type { InquiryRow, VscoPushRow } from "@/lib/db";
+import { callOperation, callOrNull } from "@/lib/api-call";
 import { builderProjectName } from "@/lib/project-name";
 
-const db = getDb();
 const id = Number(Astro.params.id);
-const submission = Number.isFinite(id) ? getSubmission(db, id) : undefined;
-if (!submission) {
+const detail = Number.isFinite(id)
+  ? await callOrNull<{
+      submission: PackageBuilderSubmissionRow;
+      linkedInquiry: InquiryRow | null;
+      vscoPushes: VscoPushRow[];
+      linkedJobId: string | null;
+      linkedOrderId: string | null;
+    }>("builder_submission_get", { id })
+  : null;
+if (!detail) {
   return new Response("Submission not found", { status: 404 });
 }
+const { submission, linkedInquiry, vscoPushes, linkedJobId, linkedOrderId } = detail;
 
-// Load the linked inquiry so the visible project name matches the one in
-// the notification email (which pulls partner names from the linked row).
-const linkedInquiry =
-  submission.inquiry_id != null ? (getInquiry(submission.inquiry_id) ?? null) : null;
+// The linked inquiry makes the visible project name match the one in the
+// notification email (which pulls partner names from the linked row).
 const projectName = builderProjectName(submission, linkedInquiry);
 
 /* ============================================================================
  * VSCO push state — what the side-block needs to render
  * ========================================================================== */
-const vscoPushes = getVscoPushesForBuilder(submission.id);
-
-// Resolve the linked inquiry's VSCO Job + Order entities so the UI can
-// describe the current state precisely ("ready to push" vs "Order already
+// The linked inquiry's VSCO Job + Order entities (from the operation) let the
+// UI describe the current state precisely ("ready to push" vs "Order already
 // exists" vs "linked inquiry hasn't been qualified yet").
-const externalUuid = linkedInquiry?.external_uuid ?? null;
-const linkedJobId =
-  externalUuid != null ? getVscoEntityId(externalUuid, "job") : null;
-const linkedOrderId =
-  externalUuid != null ? getVscoEntityId(externalUuid, "order") : null;
 
 // Decide whether the manual-push button is meaningful right now.
 type VscoPushReadiness =
@@ -86,11 +77,11 @@ if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
   const action = String(form.get("action") ?? "");
   if (action === "mark_invoice_sent") {
-    markInvoiceSent(db, submission.id);
+    await callOperation("builder_submission_update", { id: submission.id, status: "invoice_sent" });
     return Astro.redirect(`/admin/package-builder/${submission.id}`, 303);
   }
   if (action === "revert") {
-    revertToNew(db, submission.id);
+    await callOperation("builder_submission_update", { id: submission.id, status: "new" });
     return Astro.redirect(`/admin/package-builder/${submission.id}`, 303);
   }
   return new Response("Unknown action", { status: 400 });
@@ -509,7 +500,7 @@ const groups: DisplayGroup[] = selections.collections.map((cid) => {
 
 <script>
   /**
-   * Copy invite link — admin-only. POSTs to /api/package-builder/invite,
+   * Copy invite link — admin-only. POSTs to /api/v1/builder/invites,
    * gets back a URL, copies it to clipboard, shows a small toast.
    */
   document.querySelectorAll<HTMLButtonElement>("[data-copy-invite]").forEach((btn) => {
@@ -521,14 +512,14 @@ const groups: DisplayGroup[] = selections.collections.map((cid) => {
       const originalLabel = btn.textContent ?? "Copy invite link";
       btn.textContent = "Copying…";
       try {
-        const res = await fetch("/api/package-builder/invite", {
+        const res = await fetch("/api/v1/builder/invites", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ inquiryId }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || `Server responded ${res.status}`);
+          throw new Error(data.error?.message || `Server responded ${res.status}`);
         }
         const data = (await res.json()) as { url: string };
         await navigator.clipboard.writeText(data.url);
@@ -590,12 +581,12 @@ const groups: DisplayGroup[] = selections.collections.map((cid) => {
       }
       try {
         const res = await fetch(
-          `/api/admin/package-builder/${submissionId}/push-vsco`,
+          `/api/v1/builder/submissions/${submissionId}/push-vsco`,
           { method: "POST" },
         );
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`);
+          throw new Error((data as { error?: { message?: string } }).error?.message ?? `HTTP ${res.status}`);
         }
         if (status) {
           status.textContent = "Sent. Reloading…";

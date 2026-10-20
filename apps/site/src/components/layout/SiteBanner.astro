@@ -23,9 +23,10 @@
  *   champagne — warm sale / promotion
  *   coral     — urgent / limited window
  */
-import { getBannerSettings, bannerContentHash } from "@/lib/site-settings";
+import { bannerContentHash, type BannerSettings } from "@/lib/site-settings";
+import { callOperation } from "@/lib/api-call";
 
-const banner = getBannerSettings();
+const banner = await callOperation<BannerSettings>("settings_banner_get");
 // Cheap fast-path: when disabled or message is blank, skip the entire
 // markup — no node in the DOM, no inline script work for visitors.
 const shouldRender = banner.enabled && banner.message.trim().length > 0;
