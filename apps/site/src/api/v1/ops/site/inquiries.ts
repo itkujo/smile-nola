@@ -278,6 +278,7 @@ export const inquiriesUpdate = defineOperation({
   method: "PATCH",
   path: "/inquiries/{id}",
   scope: "write:inquiries",
+  agent: true,
   input: z.object({
     id: IdParam,
     status: z.enum(["new", "contacted", "closed"]).optional(),

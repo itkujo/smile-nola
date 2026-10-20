@@ -78,6 +78,7 @@ export const boothInquiriesList = defineOperation({
   method: "GET",
   path: "/booth/inquiries",
   scope: "read:booth",
+  agent: true,
   input: PagingInput,
   output: pageOf(BoothInquirySchema),
   handler({ input }) {

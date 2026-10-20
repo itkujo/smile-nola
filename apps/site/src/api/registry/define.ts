@@ -85,8 +85,14 @@ export interface OperationSpec<I extends InputSchema, O extends OutputSchema> {
    * not JSON. The output schema must be z.string().
    */
   text?: { contentType: string };
-  /** Offer this operation to AI agents (MCP) once that exists. */
+  /**
+   * Offer this operation to AI agents as an MCP tool at /api/v1/mcp. Never set it on
+   * anything that sends email, pushes to VSCO, mints or revokes tokens, logs in,
+   * uploads or deletes.
+   */
   agent?: boolean;
+  /** The MCP tool description, written for a model. Falls back to description, then summary. */
+  toolDescription?: string;
   handler: (
     ctx: HandlerContext<z.output<I>>,
   ) => Promise<z.input<O> | ResponseExtras<z.input<O>>> | z.input<O> | ResponseExtras<z.input<O>>;
