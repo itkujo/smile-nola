@@ -92,7 +92,7 @@ jobs:
             latest=auto
 
       - name: Build and push (multi-arch)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           # Build context = apps/site/ (the booth is the site image run in booth mode).
           context: ./apps/site
